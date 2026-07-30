@@ -31,7 +31,7 @@ Built for people who live in Gantt charts — PMs, schedulers, and engineers who
 
 ### 💿 Grab the Windows installer
 
-👉 **[Download SuperGantt_1.0.0_x64-setup.exe](https://github.com/yeswolf/supergannt/releases/download/v1.0.0/SuperGantt_1.0.0_x64-setup.exe)** from [Releases](https://github.com/yeswolf/supergannt/releases/latest)
+👉 **[Download SuperGantt_1.0.1_x64-setup.exe](https://github.com/yeswolf/supergannt/releases/download/v1.0.1/SuperGantt_1.0.1_x64-setup.exe)** from [Releases](https://github.com/yeswolf/supergannt/releases/latest)
 
 > Slim NSIS install (~31 MB). Portable Node / JRE are fetched on first need into `%LOCALAPPDATA%\SuperGantt\runtime`.
 

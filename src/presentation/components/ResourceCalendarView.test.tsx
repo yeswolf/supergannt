@@ -13,6 +13,19 @@ describe('ResourceCalendarView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New calendar for resource…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Change Working Time…' }))
   })
+
+  it('switches between month and year scale', () => {
+    renderWithWorkspace(<ResourceCalendarView />)
+    const scale = screen.getByRole('group', { name: 'Calendar scale' })
+    fireEvent.click(within(scale).getByRole('button', { name: 'Year' }))
+    expect(screen.getByRole('grid', { name: 'Resource calendar year' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next year' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Previous year' }))
+    const jan = screen.getByRole('button', { name: /January \d+/ })
+    fireEvent.click(jan)
+    expect(screen.getByRole('grid', { name: 'Resource calendar month' })).toBeInTheDocument()
+    fireEvent.click(within(scale).getByRole('button', { name: 'Month' }))
+  })
 })
 
 describe('CalendarView resource scope', () => {

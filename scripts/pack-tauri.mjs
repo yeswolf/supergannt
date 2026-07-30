@@ -178,7 +178,7 @@ async function main() {
     await cp(bundleDir, outDir, { recursive: true })
   }
 
-  const setup = path.join(outDir, 'SuperGantt_1.0.0_x64-setup.exe')
+  const setup = path.join(outDir, 'SuperGantt_1.0.1_x64-setup.exe')
   if (await exists(setup)) {
     const st = await stat(setup)
     console.log(`Installer: ${setup} (${(st.size / 1024 / 1024).toFixed(1)} MB)`)
