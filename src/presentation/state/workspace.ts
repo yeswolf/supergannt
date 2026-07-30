@@ -26,6 +26,7 @@ export type AppView =
   | 'taskUsage'
   | 'resourceUsage'
   | 'calendar'
+  | 'resourceCalendar'
   | 'reports'
 
 export interface AppServices {
@@ -123,6 +124,8 @@ export type WorkspaceAction =
       resourceId: string
       patch: Parameters<typeof ResourceUseCases.updateResource>[2]
     }
+  | { type: 'setResourceCalendar'; resourceId: string; calendarId: string }
+  | { type: 'ensureResourceCalendar'; resourceId: string }
   | { type: 'deleteResource'; resourceId: string }
   | { type: 'assignResource'; taskId: string; resourceId: string; units?: number }
   | { type: 'unassignResource'; assignmentId: string }
@@ -365,6 +368,42 @@ export function workspaceReducer(
           action.resourceId,
           action.patch,
         ),
+      }
+    case 'setResourceCalendar':
+      try {
+        return {
+          ...state,
+          project: ResourceUseCases.setResourceCalendar(
+            state.project,
+            action.resourceId,
+            action.calendarId,
+          ),
+          statusMessage: 'Resource calendar updated.',
+        }
+      } catch (error) {
+        return {
+          ...state,
+          statusMessage:
+            error instanceof Error ? error.message : 'Could not set resource calendar.',
+        }
+      }
+    case 'ensureResourceCalendar':
+      try {
+        return {
+          ...state,
+          project: ResourceUseCases.ensureResourceCalendar(
+            state.project,
+            ids,
+            action.resourceId,
+          ),
+          statusMessage: 'Resource calendar ready for exceptions.',
+        }
+      } catch (error) {
+        return {
+          ...state,
+          statusMessage:
+            error instanceof Error ? error.message : 'Could not create resource calendar.',
+        }
       }
     case 'deleteResource':
       return {

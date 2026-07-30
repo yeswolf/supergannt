@@ -205,6 +205,6 @@ describe('entities', () => {
     expect(() => Project.create({ ...project.toProps(), name: ' ' })).toThrow()
     expect(() =>
       Project.create({ ...project.toProps(), calendars: [], calendarId: asCalendarId('x') }).getCalendar(),
-    ).toThrow(/calendar/)
+    ).toThrow(/calendar/i)
   })
 })

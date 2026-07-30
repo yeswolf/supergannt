@@ -18,6 +18,7 @@ const VIEWS: { id: AppView; label: string; icon: RibbonIconName }[] = [
   { id: 'taskUsage', label: 'Task Usage', icon: 'taskUsage' },
   { id: 'resourceUsage', label: 'Resource Usage', icon: 'resourceUsage' },
   { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+  { id: 'resourceCalendar', label: 'Resource Calendar', icon: 'calendar' },
   { id: 'reports', label: 'Reports', icon: 'reports' },
 ]
 
@@ -349,6 +350,11 @@ export function Toolbar() {
                   onClick={() => dispatch({ type: 'setView', view: 'resourceUsage' })}
                 />
                 <Cmd
+                  icon="calendar"
+                  label="Resource Calendar"
+                  onClick={() => dispatch({ type: 'setView', view: 'resourceCalendar' })}
+                />
+                <Cmd
                   icon="rbs"
                   label="RBS"
                   onClick={() => dispatch({ type: 'setView', view: 'rbs' })}
@@ -365,6 +371,12 @@ export function Toolbar() {
                   label="Calendar"
                   large
                   onClick={() => dispatch({ type: 'setView', view: 'calendar' })}
+                />
+                <Cmd
+                  icon="calendar"
+                  label="Resource Calendar"
+                  large
+                  onClick={() => dispatch({ type: 'setView', view: 'resourceCalendar' })}
                 />
               </Group>
               <Group label="Schedule">
@@ -406,7 +418,7 @@ export function Toolbar() {
               </Group>
               <Group label="Resource Views">
                 {VIEWS.filter((v) =>
-                  ['resources', 'rbs', 'resourceUsage'].includes(v.id),
+                  ['resources', 'rbs', 'resourceUsage', 'resourceCalendar'].includes(v.id),
                 ).map((item) => (
                   <Cmd
                     key={item.id}
@@ -447,7 +459,9 @@ export function Toolbar() {
                 ) {
                   setRibbon('task')
                 } else if (
-                  ['resources', 'rbs', 'resourceUsage'].includes(item.id)
+                  ['resources', 'rbs', 'resourceUsage', 'resourceCalendar'].includes(
+                    item.id,
+                  )
                 ) {
                   setRibbon('resource')
                 } else if (item.id === 'reports') {

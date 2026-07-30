@@ -110,11 +110,26 @@ export class Project {
   }
 
   getCalendar(): WorkCalendar {
-    const calendar = this.props.calendars.find((c) => c.id === this.props.calendarId)
+    return this.getCalendarById(this.props.calendarId)
+  }
+
+  getCalendarById(calendarId: string): WorkCalendar {
+    const calendar = this.props.calendars.find((c) => c.id === calendarId)
     if (!calendar) {
-      throw new Error('Project calendar not found')
+      throw new Error('Calendar not found')
     }
     return calendar
+  }
+
+  /** Resource calendar, or project calendar when unset / missing. */
+  getResourceCalendar(resourceId: string): WorkCalendar {
+    const resource = this.props.resources.find((r) => r.id === resourceId)
+    if (!resource) {
+      throw new Error('Resource not found')
+    }
+    const calendarId = resource.calendarId ?? this.props.calendarId
+    const found = this.props.calendars.find((c) => c.id === calendarId)
+    return found ?? this.getCalendar()
   }
 
   totalCost(): Money {

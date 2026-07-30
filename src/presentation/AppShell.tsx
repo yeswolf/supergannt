@@ -9,6 +9,7 @@ import { WbsView } from './components/WbsView'
 import { RbsView } from './components/RbsView'
 import { TaskUsageView, ResourceUsageView } from './components/UsageViews'
 import { CalendarView } from './components/CalendarView'
+import { ResourceCalendarView } from './components/ResourceCalendarView'
 import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
 import { openPlanFile } from './openPlanFile'
@@ -29,6 +30,7 @@ const VIEW_LABELS: Record<string, string> = {
   taskUsage: 'Task Usage',
   resourceUsage: 'Resource Usage',
   calendar: 'Calendar',
+  resourceCalendar: 'Resource Calendar',
   reports: 'Reports',
 }
 
@@ -64,6 +66,7 @@ export function AppShell() {
         {view === 'taskUsage' ? <TaskUsageView /> : null}
         {view === 'resourceUsage' ? <ResourceUsageView /> : null}
         {view === 'calendar' ? <CalendarView /> : null}
+        {view === 'resourceCalendar' ? <ResourceCalendarView /> : null}
         {view === 'reports' ? <ReportsView /> : null}
       </main>
       <footer className={styles.statusBar} role="status">

@@ -16,6 +16,10 @@ describe('ResourceView', () => {
     const typeSelect = screen.getAllByLabelText('Resource type')[0]!
     fireEvent.change(typeSelect, { target: { value: 'material' } })
 
+    const calendarSelect = screen.getAllByLabelText(/calendar$/)[0]!
+    expect(calendarSelect).toBeInTheDocument()
+    fireEvent.change(calendarSelect, { target: { value: '__new__' } })
+
     fireEvent.click(screen.getByRole('button', { name: 'Add Resource' }))
     expect(screen.getAllByLabelText('Resource name').length).toBeGreaterThan(nameInputs.length)
 

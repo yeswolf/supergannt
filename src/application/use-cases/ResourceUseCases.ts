@@ -1,9 +1,11 @@
 import { Resource } from '../../domain/entities/Resource'
 import { Assignment } from '../../domain/entities/Assignment'
+import { WorkCalendar } from '../../domain/entities/WorkCalendar'
 import { Money } from '../../domain/value-objects/Money'
 import { Duration } from '../../domain/value-objects/Duration'
 import {
   asAssignmentId,
+  asCalendarId,
   asResourceId,
   asTaskId,
 } from '../../domain/value-objects/Ids'
@@ -50,8 +52,14 @@ export function updateResource(
     maxUnits: number
     standardRate: number
     notes: string
+    calendarId: string | null
   }>,
 ): Project {
+  if (patch.calendarId !== undefined && patch.calendarId !== null) {
+    if (!project.calendars.some((c) => c.id === patch.calendarId)) {
+      throw new Error('Calendar not found')
+    }
+  }
   const resources = project.resources.map((r) => {
     if (r.id !== resourceId) return r
     return r.with({
@@ -65,9 +73,66 @@ export function updateResource(
           ? Money.of(patch.standardRate, project.currency)
           : r.standardRate,
       notes: patch.notes ?? r.notes,
+      calendarId: patch.calendarId !== undefined ? patch.calendarId : r.calendarId,
     })
   })
   return refreshProject(project.with({ resources }).markDirty())
+}
+
+/** Assign an existing project calendar to a resource (MS Project Base Calendar). */
+export function setResourceCalendar(
+  project: Project,
+  resourceId: string,
+  calendarId: string,
+): Project {
+  return updateResource(project, resourceId, { calendarId })
+}
+
+/**
+ * Ensure the resource has a dedicated calendar (clone of its current / project calendar).
+ * Matches MS Project “resource calendar” that can hold personal exceptions.
+ */
+export function ensureResourceCalendar(
+  project: Project,
+  ids: IdGenerator,
+  resourceId: string,
+): Project {
+  const resource = project.resources.find((r) => r.id === resourceId)
+  if (!resource) throw new Error('Resource not found')
+
+  const currentId = resource.calendarId ?? project.calendarId
+  const base = project.calendars.find((c) => c.id === currentId) ?? project.getCalendar()
+  const othersUsing = project.resources.filter(
+    (r) => r.id !== resourceId && (r.calendarId ?? project.calendarId) === base.id,
+  )
+  const isProjectCal = base.id === project.calendarId
+  const ownedName = `${resource.name} Calendar`
+  // Already has a private calendar for this resource → reuse.
+  if (
+    !isProjectCal &&
+    othersUsing.length === 0 &&
+    resource.calendarId === base.id &&
+    base.name === ownedName
+  ) {
+    return project
+  }
+
+  const calendar = WorkCalendar.create({
+    id: asCalendarId(ids.calendarId()),
+    name: ownedName,
+    isBase: false,
+    workDays: base.workDays.map((d) => ({ ...d })),
+    exceptions: base.exceptions.map((e) => ({
+      ...e,
+      date: new Date(e.date.getTime()),
+    })),
+  })
+
+  return updateResource(
+    project.with({ calendars: [...project.calendars, calendar] }),
+    resourceId,
+    { calendarId: calendar.id },
+  )
 }
 
 export function deleteResource(project: Project, resourceId: string): Project {

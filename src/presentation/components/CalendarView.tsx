@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as CalendarUseCases from '../../application/use-cases/CalendarUseCases'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './CalendarView.module.css'
@@ -42,11 +42,22 @@ function monthCells(year: number, month: number): (Date | null)[] {
 }
 
 export function CalendarView() {
-  const { project, services } = useWorkspaceState()
+  const { project, selectedResourceId, services } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
-  const [selectedId, setSelectedId] = useState<string>(project.calendarId)
+  const [owner, setOwner] = useState<'project' | string>(
+    () => selectedResourceId ?? 'project',
+  )
+  const selectedResource =
+    owner === 'project' ? undefined : project.resources.find((r) => r.id === owner)
+  const defaultCalId = selectedResource
+    ? (selectedResource.calendarId ?? project.calendarId)
+    : project.calendarId
+  const [calendarId, setCalendarId] = useState(defaultCalId)
+  const activeCalendarId = project.calendars.some((c) => c.id === calendarId)
+    ? calendarId
+    : defaultCalId
   const calendar =
-    project.calendars.find((c) => c.id === selectedId) ?? project.getCalendar()
+    project.calendars.find((c) => c.id === activeCalendarId) ?? project.getCalendar()
   const [tab, setTab] = useState<Tab>('calendar')
   const [cursor, setCursor] = useState(() => {
     const s = project.startDate
@@ -56,6 +67,12 @@ export function CalendarView() {
   const [exceptionDate, setExceptionDate] = useState('')
   const [exceptionName, setExceptionName] = useState('Holiday')
   const [exceptionWorking, setExceptionWorking] = useState(false)
+
+  useEffect(() => {
+    if (selectedResource?.calendarId) {
+      setCalendarId(selectedResource.calendarId)
+    }
+  }, [selectedResource?.calendarId])
 
   const cells = useMemo(
     () => monthCells(cursor.year, cursor.month),
@@ -84,22 +101,60 @@ export function CalendarView() {
     return weekday.working ? styles.dayWorking : styles.dayOff
   }
 
+  const onOwnerChange = (value: string) => {
+    setOwner(value)
+    if (value === 'project') {
+      setCalendarId(project.calendarId)
+      return
+    }
+    const resource = project.resources.find((r) => r.id === value)
+    setCalendarId(resource?.calendarId ?? project.calendarId)
+    dispatch({ type: 'selectResource', resourceId: value })
+  }
+
   return (
     <div className={styles.panel}>
       <div className={styles.heading}>
         <h2>Change Working Time</h2>
         <p>
-          Click any day to mark a holiday / non-working day, or to make a weekend
-          working. Click again to clear the exception (ProjectLibre calendar).
+          Edit the project calendar or a resource calendar (MS Project). Click any day
+          to mark a holiday / non-working day, or to make a weekend working. Click again
+          to clear the exception.
         </p>
       </div>
 
       <div className={styles.toolbar}>
         <label>
+          For
+          <select
+            value={owner}
+            aria-label="Calendar applies to"
+            onChange={(e) => onOwnerChange(e.target.value)}
+          >
+            <option value="project">Project</option>
+            {project.resources.map((r) => (
+              <option key={r.id} value={r.id}>
+                Resource: {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Calendar
           <select
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
+            value={activeCalendarId}
+            aria-label="Calendar"
+            onChange={(e) => {
+              const nextId = e.target.value
+              setCalendarId(nextId)
+              if (selectedResource) {
+                dispatch({
+                  type: 'setResourceCalendar',
+                  resourceId: selectedResource.id,
+                  calendarId: nextId,
+                })
+              }
+            }}
           >
             {project.calendars.map((c) => (
               <option key={c.id} value={c.id}>
@@ -111,26 +166,45 @@ export function CalendarView() {
         </label>
         <button
           type="button"
-          onClick={() =>
-            apply(
-              CalendarUseCases.addCalendar(project, services.ids, 'Custom Calendar'),
-              'Calendar added.',
+          onClick={() => {
+            const before = project.calendars.length
+            const next = CalendarUseCases.addCalendar(
+              project,
+              services.ids,
+              'Custom Calendar',
             )
-          }
+            apply(next, 'Calendar added.')
+            const created = next.calendars[before]
+            if (created) setCalendarId(created.id)
+          }}
         >
           Create New Calendar…
         </button>
-        <button
-          type="button"
-          onClick={() =>
-            apply(
-              CalendarUseCases.setProjectCalendar(project, calendar.id),
-              'Project calendar updated.',
-            )
-          }
-        >
-          Use for project
-        </button>
+        {selectedResource ? (
+          <button
+            type="button"
+            onClick={() => {
+              dispatch({
+                type: 'ensureResourceCalendar',
+                resourceId: selectedResource.id,
+              })
+            }}
+          >
+            New calendar for resource…
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              apply(
+                CalendarUseCases.setProjectCalendar(project, calendar.id),
+                'Project calendar updated.',
+              )
+            }
+          >
+            Use for project
+          </button>
+        )}
         <label>
           Exception name
           <input

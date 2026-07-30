@@ -93,6 +93,50 @@ describe('CalendarUseCases', () => {
   })
 })
 
+describe('Resource calendars', () => {
+  it('assigns and clones resource calendars with personal exceptions', () => {
+    const ids = new SeqIds()
+    let project = createEmptyProject(ids)
+    project = ResourceUseCases.addResource(project, ids, { name: 'Alex' })
+    const resourceId = project.resources[0]!.id
+    expect(project.resources[0]!.calendarId).toBe(project.calendarId)
+
+    project = CalendarUseCases.addCalendar(project, ids, 'Night Shift')
+    const night = project.calendars.find((c) => c.name === 'Night Shift')!
+    project = ResourceUseCases.setResourceCalendar(project, resourceId, night.id)
+    expect(project.resources[0]!.calendarId).toBe(night.id)
+    expect(project.getResourceCalendar(resourceId).id).toBe(night.id)
+
+    project = ResourceUseCases.ensureResourceCalendar(project, ids, resourceId)
+    const personal = project.resources[0]!.calendarId!
+    expect(personal).not.toBe(project.calendarId)
+    expect(personal).not.toBe(night.id)
+    expect(project.getResourceCalendar(resourceId).name).toContain('Alex')
+
+    const vacation = new Date(2026, 7, 3)
+    project = CalendarUseCases.addCalendarException(project, personal, {
+      date: vacation,
+      working: false,
+      name: 'Vacation',
+    })
+    expect(project.getResourceCalendar(resourceId).exceptions).toHaveLength(1)
+    expect(project.getCalendar().exceptions).toHaveLength(0)
+  })
+
+  it('reuses a dedicated resource calendar on ensure', () => {
+    const ids = new SeqIds()
+    let project = createEmptyProject(ids)
+    project = ResourceUseCases.addResource(project, ids, { name: 'Sam' })
+    const resourceId = project.resources[0]!.id
+    project = ResourceUseCases.ensureResourceCalendar(project, ids, resourceId)
+    const first = project.resources[0]!.calendarId!
+    const count = project.calendars.length
+    project = ResourceUseCases.ensureResourceCalendar(project, ids, resourceId)
+    expect(project.resources[0]!.calendarId).toBe(first)
+    expect(project.calendars).toHaveLength(count)
+  })
+})
+
 describe('ViewModels', () => {
   it('builds WBS/RBS/usage/histogram with hour slots', () => {
     const ids = new SeqIds()

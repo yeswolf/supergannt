@@ -13,7 +13,8 @@ export function ResourceView() {
         <h2>Resources</h2>
         <p>
           Select a task in Gantt/Task Sheet, then use Assign here — or use toolbar{' '}
-          <strong>Assign</strong> / Task Info → Resources from any view.
+          <strong>Assign</strong> / Task Info → Resources from any view. Base{' '}
+          <strong>Calendar</strong> drives resource availability (MS Project).
         </p>
         <button type="button" onClick={() => dispatch({ type: 'addResource' })}>
           Add Resource
@@ -28,6 +29,7 @@ export function ResourceView() {
               <th>Group</th>
               <th>Max Units</th>
               <th>Std Rate</th>
+              <th>Calendar</th>
               <th>Assigned</th>
               <th>Work (h)</th>
               <th>Cost</th>
@@ -37,6 +39,7 @@ export function ResourceView() {
           <tbody>
             {project.resources.map((resource) => {
               const util = utilization.find((u) => u.resourceId === resource.id)
+              const calendarId = resource.calendarId ?? project.calendarId
               return (
                 <tr
                   key={resource.id}
@@ -126,6 +129,36 @@ export function ResourceView() {
                         })
                       }
                     />
+                  </td>
+                  <td>
+                    <select
+                      value={calendarId}
+                      aria-label={`${resource.name} calendar`}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value === '__new__') {
+                          dispatch({
+                            type: 'ensureResourceCalendar',
+                            resourceId: resource.id,
+                          })
+                          return
+                        }
+                        dispatch({
+                          type: 'setResourceCalendar',
+                          resourceId: resource.id,
+                          calendarId: value,
+                        })
+                      }}
+                    >
+                      {project.calendars.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                          {c.id === project.calendarId ? ' (project)' : ''}
+                        </option>
+                      ))}
+                      <option value="__new__">New calendar for resource…</option>
+                    </select>
                   </td>
                   <td>{util?.assignedUnits.toFixed(1) ?? '0'}</td>
                   <td>{util?.workHours.toFixed(1) ?? '0'}</td>

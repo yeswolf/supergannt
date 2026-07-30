@@ -92,6 +92,43 @@ const SCHEDULING_TYPE_TO_MSPDI: Record<TaskSchedulingType, number> = {
   fixedWork: 2,
 }
 
+function parseMspdiWorkDays(rawCalendar: {
+  WeekDays?: { WeekDay?: unknown }
+}) {
+  const weekDays = asArray(rawCalendar.WeekDays?.WeekDay)
+  const byType = new Map<number, { working: boolean; startHour: number; endHour: number }>()
+  for (const wd of weekDays as Array<Record<string, unknown>>) {
+    const dayType = Number(wd.DayType ?? 0)
+    if (dayType < 1 || dayType > 7) continue
+    const working = String(wd.DayWorking) === '1' || wd.DayWorking === true
+    const times = asArray(
+      (wd.WorkingTimes as { WorkingTime?: unknown } | undefined)?.WorkingTime,
+    ) as Array<Record<string, unknown>>
+    let startHour = 8
+    let endHour = 16
+    if (times.length > 0) {
+      const from = String(times[0]?.FromTime ?? '08:00:00')
+      const to = String(times[times.length - 1]?.ToTime ?? '16:00:00')
+      startHour = Number(from.split(':')[0] ?? 8)
+      endHour = Number(to.split(':')[0] ?? 16)
+    }
+    byType.set(dayType, { working, startHour, endHour })
+  }
+  return Array.from({ length: 7 }, (_, dayOfWeek) => {
+    const mapped = byType.get(dayOfWeek + 1)
+    if (mapped) {
+      return {
+        dayOfWeek,
+        working: mapped.working,
+        startHour: mapped.startHour,
+        endHour: mapped.endHour,
+      }
+    }
+    const working = dayOfWeek >= 1 && dayOfWeek <= 5
+    return { dayOfWeek, working, startHour: 8, endHour: 16 }
+  })
+}
+
 export class MspdiCodec implements ProjectFileCodec {
   readonly supportedExtensions = ['.xml', '.mspdi'] as const
 
@@ -109,7 +146,7 @@ export class MspdiCodec implements ProjectFileCodec {
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
       isArray: (name) =>
-        ['Task', 'Resource', 'Assignment', 'PredecessorLink', 'WeekDay', 'Calendar'].includes(
+        ['Task', 'Resource', 'Assignment', 'PredecessorLink', 'WeekDay', 'Calendar', 'WorkingTime'].includes(
           name,
         ),
     })
@@ -120,8 +157,33 @@ export class MspdiCodec implements ProjectFileCodec {
     }
 
     const currency = String(root.CurrencySymbol ? 'USD' : root.CurrencyCode || 'USD')
-    const calendarId = asCalendarId(this.ids.calendarId())
-    const calendars = [WorkCalendar.standard(calendarId)]
+
+    const calendarUidToId = new Map<number, string>()
+    const rawCalendars = asArray(root.Calendars?.Calendar)
+    let calendars = rawCalendars
+      .filter((c) => Number(c.UID) > 0)
+      .map((c) => {
+        const id = asCalendarId(this.ids.calendarId())
+        calendarUidToId.set(Number(c.UID), id)
+        return WorkCalendar.create({
+          id,
+          name: String(c.Name ?? 'Calendar'),
+          isBase: String(c.IsBaseCalendar) === '1' || c.IsBaseCalendar === true,
+          workDays: parseMspdiWorkDays(c),
+          exceptions: [],
+        })
+      })
+    if (calendars.length === 0) {
+      const calendarId = asCalendarId(this.ids.calendarId())
+      calendars = [WorkCalendar.standard(calendarId)]
+      calendarUidToId.set(1, calendarId)
+    }
+    const projectCalendarUid = Number(root.CalendarUID ?? 1) || 1
+    const calendarId = asCalendarId(
+      calendarUidToId.get(projectCalendarUid) ??
+        calendarUidToId.values().next().value ??
+        calendars[0]!.id,
+    )
 
     const taskUidToId = new Map<number, string>()
     const rawTasks = asArray(root.Tasks?.Task)
@@ -190,6 +252,9 @@ export class MspdiCodec implements ProjectFileCodec {
       .map((r) => {
         const id = asResourceId(this.ids.resourceId())
         resourceUidToId.set(Number(r.UID), id)
+        const resourceCalendarUid = Number(r.CalendarUID ?? projectCalendarUid)
+        const resourceCalendarId =
+          calendarUidToId.get(resourceCalendarUid) ?? calendarId
         return Resource.create({
           id,
           name: String(r.Name ?? 'Resource'),
@@ -200,7 +265,7 @@ export class MspdiCodec implements ProjectFileCodec {
           standardRate: Money.of(Number(r.StandardRate ?? 0), currency),
           overtimeRate: Money.of(Number(r.OvertimeRate ?? 0), currency),
           costPerUse: Money.of(Number(r.CostPerUse ?? 0), currency),
-          calendarId,
+          calendarId: resourceCalendarId,
           notes: String(r.Notes ?? ''),
         })
       })
@@ -252,6 +317,9 @@ export class MspdiCodec implements ProjectFileCodec {
     project.tasks.forEach((t, i) => taskUid.set(t.id, i + 1))
     const resourceUid = new Map<string, number>()
     project.resources.forEach((r, i) => resourceUid.set(r.id, i + 1))
+    const calendarUid = new Map<string, number>()
+    project.calendars.forEach((c, i) => calendarUid.set(c.id, i + 1))
+    const projectCalendarUid = calendarUid.get(project.calendarId) ?? 1
 
     const depsBySuccessor = new Map<string, Dependency[]>()
     for (const dep of project.dependencies) {
@@ -270,7 +338,7 @@ export class MspdiCodec implements ProjectFileCodec {
         ScheduleFromStart: 1,
         StartDate: formatDate(project.startDate),
         FinishDate: formatDate(project.finishDate),
-        CalendarUID: 1,
+        CalendarUID: projectCalendarUid,
         CurrencyCode: project.currency,
         Tasks: {
           Task: [
@@ -328,6 +396,9 @@ export class MspdiCodec implements ProjectFileCodec {
               StandardRate: resource.standardRate.amount,
               OvertimeRate: resource.overtimeRate.amount,
               CostPerUse: resource.costPerUse.amount,
+              CalendarUID:
+                calendarUid.get(resource.calendarId ?? project.calendarId) ??
+                projectCalendarUid,
               Notes: resource.notes,
             })),
           ],
@@ -343,19 +414,27 @@ export class MspdiCodec implements ProjectFileCodec {
           })),
         },
         Calendars: {
-          Calendar: [
-            {
-              UID: 1,
-              Name: project.getCalendar().name,
-              IsBaseCalendar: 1,
-              WeekDays: {
-                WeekDay: project.getCalendar().workDays.map((d) => ({
-                  DayType: d.dayOfWeek + 1,
-                  DayWorking: d.working ? 1 : 0,
-                })),
-              },
+          Calendar: project.calendars.map((cal) => ({
+            UID: calendarUid.get(cal.id),
+            Name: cal.name,
+            IsBaseCalendar: cal.isBase || cal.id === project.calendarId ? 1 : 0,
+            WeekDays: {
+              WeekDay: cal.workDays.map((d) => ({
+                DayType: d.dayOfWeek + 1,
+                DayWorking: d.working ? 1 : 0,
+                ...(d.working
+                  ? {
+                      WorkingTimes: {
+                        WorkingTime: {
+                          FromTime: `${String(d.startHour).padStart(2, '0')}:00:00`,
+                          ToTime: `${String(d.endHour).padStart(2, '0')}:00:00`,
+                        },
+                      },
+                    }
+                  : {}),
+              })),
             },
-          ],
+          })),
         },
       },
     }
