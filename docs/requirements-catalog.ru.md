@@ -101,7 +101,7 @@
 | ID | Pri | Требование | Откуда |
 |----|-----|------------|--------|
 | E1 | MUST | Docker-runnable | Исходный бриф |
-| E2 | MUST | Desktop launch (Electron) | Исходный бриф + «verify electron» |
+| E2 | MUST | Desktop launch (Tauri / WebView2) | Исходный бриф + desktop verify |
 | E3 | MUST | Команда упаковки инсталлера | «сделай-ка команду для паковки» |
 | E4 | MUST | Сборка exe/инсталлера по запросу | «собери-ка мне exe» / «инсталлер собери» |
 | E5 | MUST | После установки exe не показывает 404 | «после установки экзешник показывает 404» |
@@ -138,7 +138,7 @@
 | G3 | Task Info OK order Advanced→Resources→General→Predecessors |
 | G4 | setTaskAssignments no-op при том же наборе resource/units |
 | G5 | FS link очищает soft pins; OK не возвращает их после |
-| G6 | Electron probe: ready = health + HTML |
+| G6 | Desktop probe: ready = health + HTML |
 | G7 | ICO с PNG-alpha; углы A=0 |
 | G8 | openPlanFile: loader + FileReader fallback + single-flight |
 | G9 | Histogram height ∝ hours |
@@ -160,7 +160,7 @@
 1. [`docs/README.md`](./README.md)  
 2. Этот каталог (трассировка)  
 3. Глава предметной области (`02` файлы / `03` schedule / `04` UI / `05` pack)  
-4. `07` инварианты регрессий перед правкой Task Info / Network / Electron  
+4. `07` инварианты регрессий перед правкой Task Info / Network / desktop pack  
 5. ADR при спорных решениях  
 
 При изменении поведения — обновляй соответствующую главу и строку каталога в том же PR/коммите.

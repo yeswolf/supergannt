@@ -1,0 +1,31 @@
+[package]
+name = "supergannt"
+version = "1.0.0"
+description = "SuperGantt — MS Project / ProjectLibre alternative (Tauri / WebView2)"
+authors = ["SuperGantt"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "supergannt_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2.12", default-features = false, features = ["tls"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+rfd = "0.15"
+base64 = "0.22"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+

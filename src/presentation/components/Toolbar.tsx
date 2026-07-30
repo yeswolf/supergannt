@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { getDesktopApi } from '../desktop/desktopBridge'
+import { useRef, useState, type ReactNode } from 'react'
+import { saveBlobToDisk } from '../desktop/saveBlob'
 import { openPlanFile } from '../openPlanFile'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import type { AppView } from '../state/workspace'
@@ -28,15 +28,6 @@ const RIBBON_TABS: { id: RibbonTab; label: string }[] = [
   { id: 'project', label: 'Project' },
   { id: 'view', label: 'View' },
 ]
-
-function downloadBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 function Cmd({
   label,
@@ -116,11 +107,15 @@ export function Toolbar() {
   const onSave = async (format: 'mspdi' | 'mpx' | 'mpp' = 'mspdi') => {
     try {
       const result = await services.files.saveFile(project, undefined, format)
-      downloadBlob(result.blob, result.fileName)
+      const savedPath = await saveBlobToDisk(result.blob, result.fileName)
+      if (savedPath == null) {
+        dispatch({ type: 'setStatus', message: 'Save cancelled' })
+        return
+      }
       dispatch({
         type: 'setProject',
         project: result.project,
-        message: `Saved ${result.fileName}`,
+        message: `Saved ${savedPath}`,
       })
     } catch (error) {
       dispatch({
@@ -133,9 +128,14 @@ export function Toolbar() {
   const onExportPdf = async () => {
     try {
       const { exportProjectPdf } = await import('../../infrastructure/pdf/exportProjectPdf')
+      const fileName = `${project.name || 'project'}.pdf`
       const blob = await exportProjectPdf(project)
-      downloadBlob(blob, `${project.name || 'project'}.pdf`)
-      dispatch({ type: 'setStatus', message: `Exported ${project.name || 'project'}.pdf` })
+      const savedPath = await saveBlobToDisk(blob, fileName)
+      if (savedPath == null) {
+        dispatch({ type: 'setStatus', message: 'Export cancelled' })
+        return
+      }
+      dispatch({ type: 'setStatus', message: `Exported ${savedPath}` })
     } catch (error) {
       dispatch({
         type: 'setStatus',
@@ -143,115 +143,6 @@ export function Toolbar() {
       })
     }
   }
-
-  const menuHandlerRef = useRef<(command: string) => void>(() => {})
-  menuHandlerRef.current = (command: string) => {
-    const ganttZoom = (dir: 'in' | 'out') => {
-      window.dispatchEvent(
-        new CustomEvent('supergantt:gantt-zoom', { detail: dir }),
-      )
-    }
-
-    switch (command) {
-      case 'file.new.blank':
-        dispatch({ type: 'newProject' })
-        return
-      case 'file.new.sample':
-        dispatch({ type: 'loadDemo' })
-        return
-      case 'file.open':
-        if (!isBusy) fileRef.current?.click()
-        return
-      case 'file.save.mspdi':
-        void onSave('mspdi')
-        return
-      case 'file.save.mpp':
-        void onSave('mpp')
-        return
-      case 'file.save.mpx':
-        void onSave('mpx')
-        return
-      case 'file.exportPdf':
-        void onExportPdf()
-        return
-      case 'task.insert.task':
-        dispatch({ type: 'addTask', afterTaskId: selectedTaskId ?? undefined })
-        return
-      case 'task.insert.milestone':
-        dispatch({
-          type: 'addMilestone',
-          afterTaskId: selectedTaskId ?? undefined,
-        })
-        return
-      case 'task.structure.indent':
-        if (selectedTaskId) dispatch({ type: 'indentTask', taskId: selectedTaskId })
-        return
-      case 'task.structure.outdent':
-        if (selectedTaskId) dispatch({ type: 'outdentTask', taskId: selectedTaskId })
-        return
-      case 'task.structure.delete':
-        if (selectedTaskId) dispatch({ type: 'deleteTask', taskId: selectedTaskId })
-        return
-      case 'task.schedule.link':
-        if (canLink) dispatch({ type: 'linkSelection' })
-        return
-      case 'task.schedule.unlink':
-        if (canUnlink) dispatch({ type: 'unlinkSelection' })
-        return
-      case 'task.schedule.info':
-        if (selectedTaskId) dispatch({ type: 'openTaskInfo' })
-        return
-      case 'task.assign.resources':
-      case 'resource.assign.toTask':
-        if (selectedTaskId) dispatch({ type: 'openAssignDialog' })
-        return
-      case 'task.zoom.in':
-        ganttZoom('in')
-        return
-      case 'task.zoom.out':
-        ganttZoom('out')
-        return
-      case 'resource.insert.add':
-        dispatch({ type: 'addResource' })
-        dispatch({ type: 'setView', view: 'resources' })
-        return
-      case 'resource.view.resources':
-        dispatch({ type: 'setView', view: 'resources' })
-        return
-      case 'resource.view.resourceUsage':
-        dispatch({ type: 'setView', view: 'resourceUsage' })
-        return
-      case 'resource.view.rbs':
-        dispatch({ type: 'setView', view: 'rbs' })
-        return
-      case 'project.properties.calendar':
-        dispatch({ type: 'setView', view: 'calendar' })
-        return
-      case 'project.schedule.setBaseline':
-        dispatch({ type: 'setBaseline' })
-        return
-      case 'project.schedule.clearBaseline':
-        dispatch({ type: 'clearBaseline' })
-        return
-      case 'project.reports.reports':
-        dispatch({ type: 'setView', view: 'reports' })
-        return
-      default: {
-        if (command.startsWith('view.set.')) {
-          const viewId = command.slice('view.set.'.length) as AppView
-          dispatch({ type: 'setView', view: viewId })
-        }
-      }
-    }
-  }
-
-  useEffect(() => {
-    const desktop = getDesktopApi()
-    if (!desktop?.onMenuCommand) return
-    return desktop.onMenuCommand((command) => {
-      menuHandlerRef.current(command)
-    })
-  }, [])
 
   return (
     <header className={styles.chrome}>
