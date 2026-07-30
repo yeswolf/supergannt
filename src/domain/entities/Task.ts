@@ -2,6 +2,9 @@ import type { Duration } from '../value-objects/Duration'
 import type { Money } from '../value-objects/Money'
 import type { TaskId } from '../value-objects/Ids'
 import { applyMilestoneRules } from '../services/MilestonePolicy'
+import type { TaskSchedulingType } from '../services/EffortScheduling'
+
+export type { TaskSchedulingType }
 
 export type TaskConstraintType =
   | 'asSoonAsPossible'
@@ -39,6 +42,10 @@ export interface TaskProps {
   fixedCost: Money
   cost: Money
   workHours: number
+  /** ProjectLibre/MS Project task type (default fixedUnits). */
+  schedulingType: TaskSchedulingType
+  /** When true, add/remove resources holds work and adjusts duration (except fixed duration). */
+  effortDriven: boolean
   parentId: TaskId | null
   baseline: TaskBaseline | null
   collapsed: boolean
@@ -57,10 +64,19 @@ export class Task {
     if (props.outlineLevel < 0) {
       throw new Error('Outline level cannot be negative')
     }
-    const normalized: TaskProps = {
+    const schedulingType = props.schedulingType ?? 'fixedUnits'
+    // ProjectLibre/MS Project: Fixed Work is always effort-driven.
+    const effortDriven =
+      schedulingType === 'fixedWork' ? true : (props.effortDriven ?? true)
+    const withType: TaskProps = {
       ...props,
+      schedulingType,
+      effortDriven,
+    }
+    const normalized: TaskProps = {
+      ...withType,
       name: props.name.trim(),
-      ...applyMilestoneRules(props),
+      ...applyMilestoneRules(withType),
     }
     if (
       normalized.finish.getTime() < normalized.start.getTime() &&
@@ -141,6 +157,14 @@ export class Task {
 
   get workHours(): number {
     return this.props.workHours
+  }
+
+  get schedulingType(): TaskSchedulingType {
+    return this.props.schedulingType ?? 'fixedUnits'
+  }
+
+  get effortDriven(): boolean {
+    return this.props.effortDriven ?? true
   }
 
   get parentId(): TaskId | null {

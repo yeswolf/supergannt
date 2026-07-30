@@ -56,6 +56,8 @@ export interface WorkspaceState {
   taskInfoTab: 'general' | 'predecessors' | 'resources' | 'advanced'
   assignDialogOpen: boolean
   statusMessage: string | null
+  /** Non-null while a plan file is being opened/imported. */
+  busyMessage: string | null
   services: AppServices
 }
 
@@ -71,6 +73,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     assignDialogOpen: false,
     statusMessage:
       'Select a task, then Assign (toolbar) or edit the Resources column / Task Info → Resources.',
+    busyMessage: null,
     services,
   }
 }
@@ -89,6 +92,7 @@ export type WorkspaceAction =
   | { type: 'closeAssignDialog' }
   | { type: 'setProject'; project: Project; message?: string }
   | { type: 'setStatus'; message: string | null }
+  | { type: 'setBusy'; message: string | null }
   | { type: 'newProject' }
   | { type: 'loadDemo' }
   | { type: 'addTask'; afterTaskId?: string }
@@ -197,6 +201,8 @@ export function workspaceReducer(
       }
     case 'setStatus':
       return { ...state, statusMessage: action.message }
+    case 'setBusy':
+      return { ...state, busyMessage: action.message }
     case 'newProject':
       return {
         ...state,

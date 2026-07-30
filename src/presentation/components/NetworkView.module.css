@@ -1,5 +1,6 @@
 .panel {
   height: 100%;
+  min-height: 0;
   overflow: auto;
   padding: 1rem 1.15rem;
   background: var(--msp-surface);
@@ -18,18 +19,57 @@
   font-size: 0.84rem;
 }
 
-.canvas {
-  display: grid;
-  gap: 0.75rem;
+.diagram {
+  position: relative;
   margin-bottom: 1.25rem;
+  overflow: auto;
+}
+
+.canvas {
+  position: relative;
+  z-index: 1;
+}
+
+.links {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: visible;
+  background: transparent;
+}
+
+.link {
+  fill: none;
+  stroke: var(--msp-text-secondary);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.arrowHead {
+  fill: var(--msp-text-secondary);
+}
+
+.linkLabel {
+  fill: var(--msp-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--msp-surface);
+  stroke-width: 3px;
 }
 
 .node {
+  position: absolute;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   text-align: left;
-  padding: 0.75rem 0.85rem;
+  padding: 0.65rem 0.75rem;
+  overflow: hidden;
   border: 1px solid var(--msp-border);
   background: var(--msp-surface);
   color: var(--msp-text);
@@ -45,6 +85,9 @@
 
 .node strong {
   font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .node span {
@@ -67,15 +110,3 @@
   background: var(--msp-row-selected);
 }
 
-.edges {
-  margin: 0;
-  padding-left: 1.1rem;
-  color: var(--msp-text-secondary);
-  font-size: 0.86rem;
-}
-
-.edges em {
-  font-style: normal;
-  font-weight: 600;
-  color: var(--msp-accent);
-}

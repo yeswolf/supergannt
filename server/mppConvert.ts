@@ -5,17 +5,23 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { convert as convertMppjs } from '@byteink/mppjs'
+import { ensureJavaBin } from './ensureJava.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const JAR_PATH = path.join(__dirname, 'java', 'target', 'mpp-convert.jar')
-const RUNTIME_JAVA = path.join(
-  __dirname,
-  '.runtime',
-  'jdk',
-  'bin',
-  process.platform === 'win32' ? 'java.exe' : 'java',
-)
+
+async function convertWithMppjs(inputPath: string, outputPath: string): Promise<void> {
+  // Optional fallback for local/dev when JAR is missing. Not shipped in the
+  // Electron installer (native binary is ~60MB+ and duplicates the JAR path).
+  const mod = await import('@byteink/mppjs')
+  await mod.convert(inputPath, outputPath)
+}
+
+function resolveJarPath(): string {
+  return (
+    process.env.SUPERGANNT_JAR?.trim() ||
+    path.join(__dirname, 'java', 'target', 'mpp-convert.jar')
+  )
+}
 
 function isAwtCrash(message: string): boolean {
   return /UnsatisfiedLinkError|No awt|java\.awt\.Color|awt in java\.library\.path/i.test(
@@ -32,25 +38,14 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+/** Find Java 17+ on the machine, or download Temurin JRE into the runtime folder. */
 async function resolveJavaBin(): Promise<string | null> {
-  const candidates = [
-    process.env.SUPERGANNT_JAVA,
-    process.env.JAVA_HOME
-      ? path.join(
-          process.env.JAVA_HOME,
-          'bin',
-          process.platform === 'win32' ? 'java.exe' : 'java',
-        )
-      : null,
-    RUNTIME_JAVA,
-    'java',
-  ].filter(Boolean) as string[]
-
-  for (const bin of candidates) {
-    const version = await readJavaVersion(bin)
-    if (version != null && version >= 17) return bin
+  try {
+    return await ensureJavaBin()
+  } catch (error) {
+    console.error('[mpp] ensureJava failed:', error)
+    return null
   }
-  return null
 }
 
 export async function getMppEngineStatus(): Promise<{
@@ -60,7 +55,7 @@ export async function getMppEngineStatus(): Promise<{
   mppWrite: boolean
 }> {
   const javaBin = await resolveJavaBin()
-  const hasJar = await fileExists(JAR_PATH)
+  const hasJar = await fileExists(resolveJarPath())
   const ready = Boolean(javaBin && hasJar)
   return {
     engine: ready
@@ -72,26 +67,11 @@ export async function getMppEngineStatus(): Promise<{
   }
 }
 
-function readJavaVersion(bin: string): Promise<number | null> {
-  return new Promise((resolve) => {
-    const child = spawn(bin, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let err = ''
-    child.stderr.on('data', (c) => {
-      err += c.toString('utf8')
-    })
-    child.stdout.on('data', (c) => {
-      err += c.toString('utf8')
-    })
-    child.on('error', () => resolve(null))
-    child.on('close', () => {
-      const m = /version\s+"(\d+)(?:\.\d+)?/i.exec(err)
-      if (!m) {
-        resolve(null)
-        return
-      }
-      resolve(Number(m[1]))
-    })
-  })
+function resolveTemplatePath(): string | undefined {
+  return (
+    process.env.SUPERGANNT_MPP_TEMPLATE?.trim() ||
+    path.join(__dirname, 'java', 'templates', 'blank.mpp')
+  )
 }
 
 function runProcess(
@@ -100,7 +80,14 @@ function runProcess(
   timeoutMs = 180_000,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        SUPERGANNT_MPP_TEMPLATE:
+          process.env.SUPERGANNT_MPP_TEMPLATE?.trim() || resolveTemplatePath() || '',
+      },
+    })
     let stderr = ''
     child.stderr.on('data', (c) => {
       stderr += c.toString('utf8')
@@ -121,26 +108,25 @@ function runProcess(
   })
 }
 
-async function requireJavaJar(): Promise<string> {
+async function requireJavaJar(): Promise<{ javaBin: string; jarPath: string }> {
   const javaBin = await resolveJavaBin()
-  if (!javaBin || !(await fileExists(JAR_PATH))) {
+  const jarPath = resolveJarPath()
+  if (!javaBin || !(await fileExists(jarPath))) {
     throw new Error(
-      `MPP engine missing. Run: npm run mpp:setup (JDK 17+ + mpp-convert.jar)`,
+      `MPP engine missing. Need Java 17+ and mpp-convert.jar. ` +
+        `Run: npm run mpp:setup (or wait for auto JRE download on first launch).`,
     )
   }
-  return javaBin
+  return { javaBin, jarPath }
 }
 
 async function convertWithJavaToXml(
   javaBin: string,
+  jarPath: string,
   inputPath: string,
   outputPath: string,
 ): Promise<void> {
-  await runProcess(javaBin, ['-jar', JAR_PATH, 'to-xml', inputPath, outputPath])
-}
-
-async function convertWithMppjs(inputPath: string, outputPath: string): Promise<void> {
-  await convertMppjs(inputPath, outputPath)
+  await runProcess(javaBin, ['-jar', jarPath, 'to-xml', inputPath, outputPath])
 }
 
 /**
@@ -162,14 +148,15 @@ export async function convertMppBufferToXml(
       : `${safeBase}.mpp`,
   )
   const outputPath = path.join(workDir, `${safeBase}.xml`)
+  const jarPath = resolveJarPath()
 
   try {
     await writeFile(inputPath, bytes)
     const javaBin = await resolveJavaBin()
-    const hasJar = await fileExists(JAR_PATH)
+    const hasJar = await fileExists(jarPath)
 
     if (javaBin && hasJar) {
-      await convertWithJavaToXml(javaBin, inputPath, outputPath)
+      await convertWithJavaToXml(javaBin, jarPath, inputPath, outputPath)
       return await readFile(outputPath, 'utf8')
     }
 
@@ -179,14 +166,14 @@ export async function convertMppBufferToXml(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (isAwtCrash(message) && javaBin && hasJar) {
-        await convertWithJavaToXml(javaBin, inputPath, outputPath)
+        await convertWithJavaToXml(javaBin, jarPath, inputPath, outputPath)
         return await readFile(outputPath, 'utf8')
       }
       if (isAwtCrash(message)) {
         throw new Error(
           'MPP conversion failed: the native MPXJ binary crashed loading AWT ' +
-            '(Gantt view colors). Fix: install JDK 17+, then run `npm run mpp:setup`, ' +
-            'and restart the API. Details: ' +
+            '(Gantt view colors). Java 17+ will be downloaded automatically on next try, ' +
+            'or run `npm run mpp:setup`. Details: ' +
             message,
         )
       }
@@ -204,7 +191,7 @@ export async function convertXmlToMppBuffer(
   xml: string,
   originalName = 'project.xml',
 ): Promise<Buffer> {
-  const javaBin = await requireJavaJar()
+  const { javaBin, jarPath } = await requireJavaJar()
   const workDir = path.join(tmpdir(), `supergannt-mpp-write-${randomUUID()}`)
   await mkdir(workDir, { recursive: true })
   const safeBase =
@@ -215,7 +202,7 @@ export async function convertXmlToMppBuffer(
 
   try {
     await writeFile(inputPath, xml, 'utf8')
-    await runProcess(javaBin, ['-jar', JAR_PATH, 'to-mpp', inputPath, outputPath])
+    await runProcess(javaBin, ['-jar', jarPath, 'to-mpp', inputPath, outputPath])
     return await readFile(outputPath)
   } finally {
     await rm(workDir, { recursive: true, force: true })

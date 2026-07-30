@@ -224,6 +224,17 @@ export const Icons = {
       <rect x="14" y="20" width="10" height="3.5" rx="1" fill="#5b9bd5" />
     </Svg>
   ),
+  /** Title-bar / product mark — matches app icon motif */
+  app: (p?: IconProps) => (
+    <Svg {...p}>
+      <rect x="2" y="2" width="28" height="28" rx="7" fill="#0f6cbd" />
+      <rect x="5" y="8" width="12" height="4" rx="2" fill="#fff" />
+      <rect x="8" y="14" width="16" height="4" rx="2" fill="#fff" />
+      <rect x="12" y="20" width="9" height="4" rx="2" fill="#fff" />
+      <path d="M23 24v3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M23 27.5l2 2-2 2-2-2 2-2Z" fill="#fff" />
+    </Svg>
+  ),
   taskSheet: (p?: IconProps) => (
     <Svg {...p}>
       <rect x="5" y="5" width="22" height="22" rx="2" fill="#fff" stroke="#0f6cbd" strokeWidth="1.2" />

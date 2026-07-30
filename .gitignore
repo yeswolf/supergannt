@@ -16,6 +16,9 @@ coverage
 server/.runtime
 server/java/target
 testdata/mpp/_download
+dist-server
+build-desktop
+release
 
 # Editor directories and files
 .vscode/*

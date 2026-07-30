@@ -26,6 +26,8 @@ function baseProps(hours: number): TaskProps {
     fixedCost: Money.zero(),
     cost: Money.zero(),
     workHours: hours,
+    schedulingType: 'fixedUnits',
+    effortDriven: true,
     parentId: null,
     baseline: null,
     collapsed: false,

@@ -30,6 +30,15 @@
   --msp-radius: 4px;
   --msp-font: 'Source Sans 3', 'Segoe UI', 'Segoe UI Variable', sans-serif;
   --msp-font-display: 'Source Sans 3', 'Segoe UI', sans-serif;
+  /* Ribbon command icons — one size for every tab so the ribbon never jumps */
+  --msp-icon-ribbon: 2.75rem;
+  --msp-icon-ribbon-large: 2.75rem; /* alias kept for older refs; same as ribbon */
+  --msp-icon-view: 1.7rem;
+  --msp-icon-brand: 1.75rem;
+  --msp-ribbon-cmd-height: 5.15rem;
+  --msp-ribbon-body-height: 6.85rem;
+  --msp-ribbon-icon-slot: 2.85rem;
+  --msp-ribbon-label-height: 1.85rem;
 
   color: var(--msp-text);
   background: var(--msp-bg);

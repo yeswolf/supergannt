@@ -1,6 +1,7 @@
 import { Resource } from '../../domain/entities/Resource'
 import { Assignment } from '../../domain/entities/Assignment'
 import { Money } from '../../domain/value-objects/Money'
+import { Duration } from '../../domain/value-objects/Duration'
 import {
   asAssignmentId,
   asResourceId,
@@ -10,6 +11,12 @@ import type { ResourceType } from '../../domain/entities/Resource'
 import type { Project } from '../../domain/entities/Project'
 import type { IdGenerator } from '../ports/IdGenerator'
 import { refreshProject } from '../services/ProjectRefresh'
+import {
+  detectAssignmentChangeKind,
+  recalculateForAssignmentChange,
+  roundHours,
+  totalAssignmentUnits,
+} from '../../domain/services/EffortScheduling'
 
 export function addResource(
   project: Project,
@@ -65,8 +72,25 @@ export function updateResource(
 
 export function deleteResource(project: Project, resourceId: string): Project {
   const resources = project.resources.filter((r) => r.id !== resourceId)
-  const assignments = project.assignments.filter((a) => a.resourceId !== resourceId)
-  return refreshProject(project.with({ resources, assignments }).markDirty())
+  const affectedTaskIds = new Set(
+    project.assignments
+      .filter((a) => a.resourceId === resourceId)
+      .map((a) => a.taskId),
+  )
+  let next: Project = project.with({
+    resources,
+    assignments: project.assignments.filter((a) => a.resourceId !== resourceId),
+  })
+  for (const taskId of affectedTaskIds) {
+    next = applyAssignmentRecalc(
+      next,
+      taskId,
+      project.assignments.filter((a) => a.taskId === taskId),
+      next.assignments.filter((a) => a.taskId === taskId),
+      'membership',
+    )
+  }
+  return refreshProject(next.markDirty())
 }
 
 export function assignResource(
@@ -76,26 +100,38 @@ export function assignResource(
   resourceId: string,
   units = 1,
 ): Project {
-  const existing = project.assignments.find(
-    (a) => a.taskId === taskId && a.resourceId === resourceId,
-  )
+  const previous = project.assignments.filter((a) => a.taskId === taskId)
+  const existing = previous.find((a) => a.resourceId === resourceId)
+
+  let nextAssignments: Assignment[]
+  let kind: 'units' | 'membership'
   if (existing) {
-    const assignments = project.assignments.map((a) =>
+    kind = 'units'
+    nextAssignments = project.assignments.map((a) =>
       a.id === existing.id ? a.with({ units }) : a,
     )
-    return refreshProject(project.with({ assignments }).markDirty())
+  } else {
+    kind = 'membership'
+    const assignment = Assignment.create({
+      id: asAssignmentId(ids.assignmentId()),
+      taskId: asTaskId(taskId),
+      resourceId: asResourceId(resourceId),
+      units,
+      workHours: 0,
+      cost: Money.zero(project.currency),
+    })
+    nextAssignments = [...project.assignments, assignment]
   }
 
-  const assignment = Assignment.create({
-    id: asAssignmentId(ids.assignmentId()),
-    taskId: asTaskId(taskId),
-    resourceId: asResourceId(resourceId),
-    units,
-    workHours: 0,
-    cost: Money.zero(project.currency),
-  })
+  const withAssignments = project.with({ assignments: nextAssignments })
   return refreshProject(
-    project.with({ assignments: [...project.assignments, assignment] }).markDirty(),
+    applyAssignmentRecalc(
+      withAssignments,
+      taskId,
+      previous,
+      nextAssignments.filter((a) => a.taskId === taskId),
+      kind,
+    ).markDirty(),
   )
 }
 
@@ -103,8 +139,20 @@ export function unassignResource(
   project: Project,
   assignmentId: string,
 ): Project {
-  const assignments = project.assignments.filter((a) => a.id !== assignmentId)
-  return refreshProject(project.with({ assignments }).markDirty())
+  const removed = project.assignments.find((a) => a.id === assignmentId)
+  if (!removed) return project
+  const previous = project.assignments.filter((a) => a.taskId === removed.taskId)
+  const nextAssignments = project.assignments.filter((a) => a.id !== assignmentId)
+  const withAssignments = project.with({ assignments: nextAssignments })
+  return refreshProject(
+    applyAssignmentRecalc(
+      withAssignments,
+      removed.taskId,
+      previous,
+      nextAssignments.filter((a) => a.taskId === removed.taskId),
+      'membership',
+    ).markDirty(),
+  )
 }
 
 /** Replace all resources on a task (ProjectLibre Resources tab / Resource Names column). */
@@ -114,8 +162,30 @@ export function setTaskAssignments(
   taskId: string,
   links: readonly { resourceId: string; units: number }[],
 ): Project {
+  const previous = project.assignments.filter((a) => a.taskId === taskId)
+  const cleaned = links.filter((l) => l.resourceId)
+  // Task Info OK re-saves the Resources tab even when untouched. Recreating
+  // assignments + triangle recalc would overwrite a duration just set on General.
+  const unchanged =
+    cleaned.length === previous.length &&
+    cleaned.every((link) =>
+      previous.some(
+        (a) =>
+          a.resourceId === link.resourceId &&
+          Math.abs(a.units - link.units) < 1e-9,
+      ),
+    ) &&
+    previous.every((a) =>
+      cleaned.some(
+        (link) =>
+          link.resourceId === a.resourceId &&
+          Math.abs(link.units - a.units) < 1e-9,
+      ),
+    )
+  if (unchanged) return project
+
   const kept = project.assignments.filter((a) => a.taskId !== taskId)
-  const created = links.map((link) =>
+  const created = cleaned.map((link) =>
     Assignment.create({
       id: asAssignmentId(ids.assignmentId()),
       taskId: asTaskId(taskId),
@@ -125,8 +195,17 @@ export function setTaskAssignments(
       cost: Money.zero(project.currency),
     }),
   )
+  const kind = detectAssignmentChangeKind(previous, created)
+  const nextAssignments = [...kept, ...created]
+  const withAssignments = project.with({ assignments: nextAssignments })
   return refreshProject(
-    project.with({ assignments: [...kept, ...created] }).markDirty(),
+    applyAssignmentRecalc(
+      withAssignments,
+      taskId,
+      previous,
+      created,
+      kind,
+    ).markDirty(),
   )
 }
 
@@ -143,4 +222,68 @@ export function formatTaskResourceNames(
     })
     .filter(Boolean)
     .join(', ')
+}
+
+/**
+ * Apply ProjectLibre triangle rules to the task after its assignment set changes.
+ */
+function applyAssignmentRecalc(
+  project: Project,
+  taskId: string,
+  previous: readonly Assignment[],
+  nextForTask: readonly Assignment[],
+  kind: 'units' | 'membership',
+): Project {
+  const task = project.tasks.find((t) => t.id === taskId)
+  if (!task || task.summary || task.milestone) {
+    return project
+  }
+
+  const result = recalculateForAssignmentChange({
+    schedulingType: task.schedulingType,
+    effortDriven: task.effortDriven,
+    durationHours: task.duration.toHours(),
+    workHours: task.workHours,
+    previous: previous.map((a) => ({ units: a.units, workHours: a.workHours })),
+    next: nextForTask.map((a) => ({ units: a.units, workHours: a.workHours })),
+    kind,
+  })
+
+  const unitsForStamp =
+    result.nextUnits && result.nextUnits.length === nextForTask.length
+      ? result.nextUnits
+      : nextForTask.map((a) => a.units)
+  const unitsTotal = totalAssignmentUnits(unitsForStamp.map((u) => ({ units: u })))
+  let allocated = 0
+  const stamp = new Map<string, { units: number; workHours: number }>()
+  nextForTask.forEach((a, i) => {
+    const units = unitsForStamp[i]!
+    const isLast = i === nextForTask.length - 1
+    const workHours =
+      unitsTotal <= 0 || result.workHours <= 0
+        ? 0
+        : isLast
+          ? roundHours(result.workHours - allocated)
+          : roundHours(result.workHours * (units / unitsTotal))
+    allocated += workHours
+    stamp.set(a.id, { units, workHours })
+  })
+
+  const assignments = project.assignments.map((a) => {
+    const patch = stamp.get(a.id)
+    return patch ? a.with(patch) : a
+  })
+
+  const tasks = project.tasks.map((t) => {
+    if (t.id !== taskId) return t
+    return t.with({
+      duration: Duration.hours(result.durationHours),
+      workHours: result.workHours,
+      finish: project
+        .getCalendar()
+        .addWorkingHours(t.start, result.durationHours),
+    })
+  })
+
+  return project.with({ tasks, assignments })
 }

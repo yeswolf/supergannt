@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 import { asTaskId } from '../../domain/value-objects/Ids'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import {
@@ -68,6 +68,14 @@ export function AssignResourcesDialog() {
     dispatch({ type: 'closeAssignDialog' })
   }
 
+  const onDialogKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+    const target = e.target as HTMLElement
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON') return
+    e.preventDefault()
+    save()
+  }
+
   return (
     <div
       className={styles.backdrop}
@@ -80,6 +88,7 @@ export function AssignResourcesDialog() {
         aria-modal="true"
         aria-labelledby="assign-title"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={onDialogKeyDown}
       >
         <header className={styles.header}>
           <h2 id="assign-title">Assign Resources — {task.name}</h2>

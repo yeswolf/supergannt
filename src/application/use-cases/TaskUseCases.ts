@@ -3,10 +3,51 @@ import { Duration } from '../../domain/value-objects/Duration'
 import { Money } from '../../domain/value-objects/Money'
 import { asTaskId } from '../../domain/value-objects/Ids'
 import type { TaskConstraintType } from '../../domain/entities/Task'
+import type { TaskSchedulingType } from '../../domain/services/EffortScheduling'
 import type { Project } from '../../domain/entities/Project'
+import type { Assignment } from '../../domain/entities/Assignment'
 import type { IdGenerator } from '../ports/IdGenerator'
 import { refreshProject } from '../services/ProjectRefresh'
 import { applyMilestoneRules } from '../../domain/services/MilestonePolicy'
+import {
+  recalculateForDurationChange,
+  recalculateForWorkChange,
+  roundHours,
+  totalAssignmentUnits,
+} from '../../domain/services/EffortScheduling'
+
+function stampTaskAssignmentWork(
+  assignments: readonly Assignment[],
+  taskId: string,
+  workHours: number,
+  nextUnits?: readonly number[],
+): Assignment[] {
+  const mine = assignments.filter((a) => a.taskId === taskId)
+  if (mine.length === 0) return [...assignments]
+  const unitsList =
+    nextUnits && nextUnits.length === mine.length
+      ? [...nextUnits]
+      : mine.map((a) => a.units)
+  const unitsTotal = totalAssignmentUnits(unitsList.map((u) => ({ units: u })))
+  let allocated = 0
+  const stamp = new Map<string, { units: number; workHours: number }>()
+  mine.forEach((a, i) => {
+    const units = unitsList[i]!
+    const isLast = i === mine.length - 1
+    const share =
+      unitsTotal <= 0 || workHours <= 0
+        ? 0
+        : isLast
+          ? roundHours(workHours - allocated)
+          : roundHours(workHours * (units / unitsTotal))
+    allocated += share
+    stamp.set(a.id, { units, workHours: share })
+  })
+  return assignments.map((a) => {
+    const patch = stamp.get(a.id)
+    return patch ? a.with(patch) : a
+  })
+}
 
 export interface AddTaskInput {
   name?: string
@@ -16,6 +57,8 @@ export interface AddTaskInput {
   /** @deprecated use durationHours */
   durationDays?: number
   milestone?: boolean
+  schedulingType?: TaskSchedulingType
+  effortDriven?: boolean
 }
 
 function resolveHours(input: AddTaskInput): number {
@@ -51,6 +94,10 @@ export function addTask(
     fixedCost: Money.zero(project.currency),
     cost: Money.zero(project.currency),
     workHours: hours,
+    schedulingType: input.schedulingType ?? ('fixedUnits' as const),
+    effortDriven:
+      input.effortDriven ??
+      (input.schedulingType === 'fixedDuration' ? false : true),
     parentId: null,
     baseline: null,
     collapsed: false,
@@ -94,9 +141,15 @@ export function updateTask(
     workHours: number
     constraintType: TaskConstraintType
     constraintDate: Date | null
+    schedulingType: TaskSchedulingType
+    effortDriven: boolean
   }>,
 ): Project {
   const calendar = project.getCalendar()
+  const taskAssignments = project.assignments.filter((a) => a.taskId === taskId)
+
+  let nextAssignments: Assignment[] = [...project.assignments]
+
   const tasks = project.tasks.map((task) => {
     if (task.id !== taskId) return task
 
@@ -118,11 +171,64 @@ export function updateTask(
       nextHours = Math.max(0, Math.round(hours * 100) / 100)
     }
 
+    let nextWork = patch.workHours ?? task.workHours
+    const schedulingType = patch.schedulingType ?? task.schedulingType
+    const effortDriven = patch.effortDriven ?? task.effortDriven
+
+    const durationEdited =
+      patch.durationHours !== undefined ||
+      patch.durationDays !== undefined ||
+      (patch.finish !== undefined &&
+        patch.durationHours === undefined &&
+        patch.durationDays === undefined &&
+        patch.workHours === undefined)
+    const workEdited = patch.workHours !== undefined && !durationEdited
+
+    if (!task.summary && patch.milestone !== true) {
+      if (workEdited) {
+        const result = recalculateForWorkChange({
+          schedulingType,
+          durationHours: task.duration.toHours(),
+          workHours: nextWork,
+          assignments: taskAssignments.map((a) => ({
+            units: a.units,
+            workHours: a.workHours,
+          })),
+        })
+        nextHours = result.durationHours
+        nextWork = result.workHours
+        nextAssignments = stampTaskAssignmentWork(
+          project.assignments,
+          taskId,
+          result.workHours,
+          result.nextUnits,
+        )
+      } else if (durationEdited) {
+        const result = recalculateForDurationChange({
+          schedulingType,
+          workHours: task.workHours,
+          durationHours: nextHours,
+          assignments: taskAssignments.map((a) => ({
+            units: a.units,
+            workHours: a.workHours,
+          })),
+        })
+        nextHours = result.durationHours
+        nextWork = result.workHours
+        nextAssignments = stampTaskAssignmentWork(
+          project.assignments,
+          taskId,
+          result.workHours,
+          result.nextUnits,
+        )
+      }
+    }
+
     const nextDuration = Duration.hours(nextHours)
 
     // Keep finish consistent with start+duration when start moves or duration changes
     // without an explicit finish (scheduler will refine, but Task.create needs finish >= start).
-    if (patch.finish === undefined) {
+    if (patch.finish === undefined || durationEdited || workEdited) {
       nextFinish = calendar.addWorkingHours(nextStart, nextHours)
     } else if (nextFinish.getTime() < nextStart.getTime()) {
       nextFinish = calendar.addWorkingHours(nextStart, nextHours)
@@ -156,7 +262,9 @@ export function updateTask(
           : task.fixedCost,
       start: nextStart,
       finish: nextFinish,
-      workHours: patch.workHours ?? nextHours,
+      workHours: nextWork,
+      schedulingType,
+      effortDriven,
       constraintType,
       constraintDate,
     }
@@ -168,7 +276,9 @@ export function updateTask(
       }),
     })
   })
-  return refreshProject(project.with({ tasks }).markDirty())
+  return refreshProject(
+    project.with({ tasks, assignments: nextAssignments }).markDirty(),
+  )
 }
 
 export function deleteTask(project: Project, taskId: string): Project {

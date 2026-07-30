@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 import type { LinkType } from '../../domain/entities/Dependency'
 import type { TaskConstraintType } from '../../domain/entities/Task'
 import { asTaskId } from '../../domain/value-objects/Ids'
@@ -134,7 +134,7 @@ export function TaskInformationDialog() {
     dispatch({
       type: 'setPredecessorLinks',
       taskId: task.id,
-      links,
+      links: links.filter((l) => l.predecessorId),
     })
   }
 
@@ -156,6 +156,34 @@ export function TaskInformationDialog() {
     if (tab === 'advanced') applyAdvanced()
   }
 
+  /**
+   * ProjectLibre Task Information OK applies every tab. Order matters:
+   * - Advanced/resources before General so duration hours are not wiped by
+   *   assignment triangle recalc when the Resources tab is unchanged.
+   * - Predecessors last so FS can clear soft pins and shift the bar without
+   *   Advanced re-applying SNLT/SNET afterward.
+   */
+  const applyAllTabs = () => {
+    applyAdvanced()
+    applyResources()
+    applyGeneral()
+    applyPredecessors()
+  }
+
+  const confirmOk = () => {
+    applyAllTabs()
+    dispatch({ type: 'closeTaskInfo' })
+  }
+
+  const onDialogKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+    const target = e.target as HTMLElement
+    // Multiline notes: Enter inserts a newline; buttons keep their own activation.
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON') return
+    e.preventDefault()
+    confirmOk()
+  }
+
   return (
     <div
       className={styles.backdrop}
@@ -168,6 +196,7 @@ export function TaskInformationDialog() {
         aria-modal="true"
         aria-labelledby="task-info-title"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={onDialogKeyDown}
       >
         <header className={styles.header}>
           <h2 id="task-info-title">Task Information</h2>
@@ -422,13 +451,7 @@ export function TaskInformationDialog() {
         </div>
 
         <footer className={styles.footer}>
-          <button
-            type="button"
-            onClick={() => {
-              applyCurrentTab()
-              dispatch({ type: 'closeTaskInfo' })
-            }}
-          >
+          <button type="button" onClick={confirmOk}>
             OK
           </button>
           <button type="button" onClick={() => dispatch({ type: 'closeTaskInfo' })}>

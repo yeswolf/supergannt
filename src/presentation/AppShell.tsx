@@ -1,3 +1,4 @@
+import type { DragEvent } from 'react'
 import { Toolbar } from './components/Toolbar'
 import { GanttView } from './components/GanttView'
 import { TaskSheetView } from './components/TaskSheetView'
@@ -10,8 +11,13 @@ import { TaskUsageView, ResourceUsageView } from './components/UsageViews'
 import { CalendarView } from './components/CalendarView'
 import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
-import { useWorkspaceState } from './state/WorkspaceContext'
+import { openPlanFile } from './openPlanFile'
+import { useWorkspaceDispatch, useWorkspaceState } from './state/WorkspaceContext'
 import styles from './AppShell.module.css'
+
+function isFileDrag(e: DragEvent): boolean {
+  return Array.from(e.dataTransfer.types).includes('Files')
+}
 
 const VIEW_LABELS: Record<string, string> = {
   gantt: 'Gantt Chart',
@@ -27,10 +33,26 @@ const VIEW_LABELS: Record<string, string> = {
 }
 
 export function AppShell() {
-  const { view, project, statusMessage } = useWorkspaceState()
+  const { view, project, statusMessage, busyMessage, services } = useWorkspaceState()
+  const dispatch = useWorkspaceDispatch()
 
   return (
-    <div className={styles.app}>
+    <div
+      className={styles.app}
+      aria-busy={busyMessage ? true : undefined}
+      onDragOver={(e) => {
+        if (!isFileDrag(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      }}
+      onDrop={(e) => {
+        if (!isFileDrag(e)) return
+        e.preventDefault()
+        if (busyMessage) return
+        const file = e.dataTransfer.files?.[0]
+        if (file) void openPlanFile(file, services, dispatch)
+      }}
+    >
       <Toolbar />
       <main className={styles.main}>
         {view === 'gantt' ? <GanttView /> : null}
@@ -46,7 +68,7 @@ export function AppShell() {
       </main>
       <footer className={styles.statusBar} role="status">
         <span>
-          {statusMessage ?? `${VIEW_LABELS[view] ?? view} · Ready`}
+          {busyMessage ?? statusMessage ?? `${VIEW_LABELS[view] ?? view} · Ready`}
         </span>
         <div className={styles.statusMeta}>
           <span>
@@ -63,6 +85,15 @@ export function AppShell() {
       </footer>
       <TaskInformationDialog />
       <AssignResourcesDialog />
+      {busyMessage ? (
+        <div className={styles.busyOverlay} role="alertdialog" aria-live="assertive" aria-busy="true">
+          <div className={styles.busyCard}>
+            <div className={styles.busySpinner} aria-hidden />
+            <p className={styles.busyTitle}>Opening plan</p>
+            <p className={styles.busyDetail}>{busyMessage}</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

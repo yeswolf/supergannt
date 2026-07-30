@@ -17,6 +17,7 @@ import {
 import type { LinkType } from '../../domain/entities/Dependency'
 import type { ResourceType } from '../../domain/entities/Resource'
 import type { TaskConstraintType, TaskBaseline } from '../../domain/entities/Task'
+import type { TaskSchedulingType } from '../../domain/services/EffortScheduling'
 
 interface SerializedProject {
   id: string
@@ -117,6 +118,8 @@ export function deserializeProject(raw: string): Project {
       fixedCost: reviveMoney(t.fixedCost as unknown as { amount: number; currency: string }),
       cost: reviveMoney(t.cost as unknown as { amount: number; currency: string }),
       workHours: t.workHours,
+      schedulingType: (t.schedulingType as TaskSchedulingType | undefined) ?? 'fixedUnits',
+      effortDriven: t.effortDriven ?? true,
       parentId: t.parentId ? asTaskId(t.parentId) : null,
       baseline: reviveBaseline(t.baseline),
       collapsed: t.collapsed,

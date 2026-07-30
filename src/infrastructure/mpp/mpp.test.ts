@@ -58,23 +58,32 @@ describe('MppCodec', () => {
     const converter: MppToXmlConverter = {
       convert: vi.fn(async () => xml),
     }
-    const fakeMpp = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 1, 2, 3])
-    const codec = new MppCodec(ids, converter, {
-      convert: vi.fn(async () => fakeMpp),
-    })
+    const sourceMpp = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 1, 2, 3])
+    const writtenMpp = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 9, 9, 9])
+    const writer = { convert: vi.fn(async () => writtenMpp) }
+    const codec = new MppCodec(ids, converter, writer)
     expect(codec.canHandle('plan.mpp')).toBe(true)
     expect(codec.canHandle('plan.mpt')).toBe(true)
     expect(codec.canHandle('plan.xml')).toBe(false)
 
-    const parsed = await codec.parse(new ArrayBuffer(8), 'website.mpp')
+    const parsed = await codec.parse(sourceMpp.buffer, 'website.mpp')
     expect(converter.convert).toHaveBeenCalled()
     expect(parsed.tasks.length).toBe(sample.tasks.length)
     expect(parsed.fileName).toBe('website.mpp')
 
-    const saved = await codec.serialize(parsed)
+    // Untouched plan → exact source bytes (identity save)
+    const identity = await codec.serialize(parsed)
+    expect(identity.extension).toBe('.mpp')
+    expect(identity.content).toBeInstanceOf(Uint8Array)
+    expect((identity.content as Uint8Array)[0]).toBe(0xd0)
+    expect(writer.convert).not.toHaveBeenCalled()
+
+    // Dirty plan → OLE writer path
+    const saved = await codec.serialize(parsed.markDirty())
     expect(saved.extension).toBe('.mpp')
     expect(saved.content).toBeInstanceOf(Uint8Array)
     expect((saved.content as Uint8Array)[0]).toBe(0xd0)
+    expect(writer.convert).toHaveBeenCalled()
   })
 })
 

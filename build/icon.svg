@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SuperGantt">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1a86d9"/>
+      <stop offset="0.55" stop-color="#0f6cbd"/>
+      <stop offset="1" stop-color="#2b579a"/>
+    </linearGradient>
+    <linearGradient id="bar1" x1="148" y1="0" x2="400" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d6ebff"/>
+    </linearGradient>
+    <linearGradient id="bar2" x1="148" y1="0" x2="340" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e8f3fc"/>
+      <stop offset="1" stop-color="#9dc3eb"/>
+    </linearGradient>
+    <linearGradient id="bar3" x1="148" y1="0" x2="372" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#cfe4f9"/>
+    </linearGradient>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0b3b6e" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <!-- App tile -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <rect x="18" y="18" width="476" height="476" rx="96" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="4"/>
+
+  <!-- Left spine (task list hint) -->
+  <rect x="96" y="118" width="36" height="276" rx="10" fill="#0b4f8c" fill-opacity="0.45"/>
+  <circle cx="114" cy="168" r="7" fill="#fff" fill-opacity="0.9"/>
+  <circle cx="114" cy="256" r="7" fill="#fff" fill-opacity="0.75"/>
+  <circle cx="114" cy="344" r="7" fill="#fff" fill-opacity="0.9"/>
+
+  <!-- Gantt bars -->
+  <g filter="url(#soft)">
+    <rect x="152" y="148" width="236" height="40" rx="12" fill="url(#bar1)"/>
+    <rect x="152" y="236" width="176" height="40" rx="12" fill="url(#bar2)"/>
+    <rect x="152" y="324" width="208" height="40" rx="12" fill="url(#bar3)"/>
+  </g>
+
+  <!-- Progress accents -->
+  <rect x="152" y="148" width="92" height="40" rx="12" fill="#ffffff" fill-opacity="0.35"/>
+  <rect x="152" y="236" width="64" height="40" rx="12" fill="#ffffff" fill-opacity="0.28"/>
+  <rect x="152" y="324" width="118" height="40" rx="12" fill="#ffffff" fill-opacity="0.32"/>
+
+  <!-- Milestone diamond -->
+  <path d="M392 256l22 22-22 22-22-22 22-22Z" fill="#fff" stroke="#d6ebff" stroke-width="3"/>
+</svg>

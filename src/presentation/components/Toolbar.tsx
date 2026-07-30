@@ -1,4 +1,6 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { getDesktopApi } from '../desktop/desktopBridge'
+import { openPlanFile } from '../openPlanFile'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import type { AppView } from '../state/workspace'
 import { Icons, type RibbonIconName } from './icons/RibbonIcons'
@@ -97,29 +99,18 @@ export function Toolbar() {
     selectedTaskId,
     selectedTaskIds,
     services,
+    busyMessage,
   } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const fileRef = useRef<HTMLInputElement>(null)
   const [ribbon, setRibbon] = useState<RibbonTab>('task')
   const canLink = selectedTaskIds.length >= 2
   const canUnlink = selectedTaskIds.length > 0 || Boolean(selectedTaskId)
+  const isBusy = Boolean(busyMessage)
 
-  const onOpen = async (file: File) => {
-    try {
-      const isBinary = /\.(mpp|mpt)$/i.test(file.name)
-      const content = isBinary ? await file.arrayBuffer() : await file.text()
-      const opened = await services.files.openFile(content, file.name)
-      dispatch({
-        type: 'setProject',
-        project: opened,
-        message: `Opened ${file.name}`,
-      })
-    } catch (error) {
-      dispatch({
-        type: 'setStatus',
-        message: error instanceof Error ? error.message : 'Failed to open file',
-      })
-    }
+  const onOpen = (file: File) => {
+    if (isBusy) return
+    void openPlanFile(file, services, dispatch)
   }
 
   const onSave = async (format: 'mspdi' | 'mpx' | 'mpp' = 'mspdi') => {
@@ -153,11 +144,120 @@ export function Toolbar() {
     }
   }
 
+  const menuHandlerRef = useRef<(command: string) => void>(() => {})
+  menuHandlerRef.current = (command: string) => {
+    const ganttZoom = (dir: 'in' | 'out') => {
+      window.dispatchEvent(
+        new CustomEvent('supergantt:gantt-zoom', { detail: dir }),
+      )
+    }
+
+    switch (command) {
+      case 'file.new.blank':
+        dispatch({ type: 'newProject' })
+        return
+      case 'file.new.sample':
+        dispatch({ type: 'loadDemo' })
+        return
+      case 'file.open':
+        if (!isBusy) fileRef.current?.click()
+        return
+      case 'file.save.mspdi':
+        void onSave('mspdi')
+        return
+      case 'file.save.mpp':
+        void onSave('mpp')
+        return
+      case 'file.save.mpx':
+        void onSave('mpx')
+        return
+      case 'file.exportPdf':
+        void onExportPdf()
+        return
+      case 'task.insert.task':
+        dispatch({ type: 'addTask', afterTaskId: selectedTaskId ?? undefined })
+        return
+      case 'task.insert.milestone':
+        dispatch({
+          type: 'addMilestone',
+          afterTaskId: selectedTaskId ?? undefined,
+        })
+        return
+      case 'task.structure.indent':
+        if (selectedTaskId) dispatch({ type: 'indentTask', taskId: selectedTaskId })
+        return
+      case 'task.structure.outdent':
+        if (selectedTaskId) dispatch({ type: 'outdentTask', taskId: selectedTaskId })
+        return
+      case 'task.structure.delete':
+        if (selectedTaskId) dispatch({ type: 'deleteTask', taskId: selectedTaskId })
+        return
+      case 'task.schedule.link':
+        if (canLink) dispatch({ type: 'linkSelection' })
+        return
+      case 'task.schedule.unlink':
+        if (canUnlink) dispatch({ type: 'unlinkSelection' })
+        return
+      case 'task.schedule.info':
+        if (selectedTaskId) dispatch({ type: 'openTaskInfo' })
+        return
+      case 'task.assign.resources':
+      case 'resource.assign.toTask':
+        if (selectedTaskId) dispatch({ type: 'openAssignDialog' })
+        return
+      case 'task.zoom.in':
+        ganttZoom('in')
+        return
+      case 'task.zoom.out':
+        ganttZoom('out')
+        return
+      case 'resource.insert.add':
+        dispatch({ type: 'addResource' })
+        dispatch({ type: 'setView', view: 'resources' })
+        return
+      case 'resource.view.resources':
+        dispatch({ type: 'setView', view: 'resources' })
+        return
+      case 'resource.view.resourceUsage':
+        dispatch({ type: 'setView', view: 'resourceUsage' })
+        return
+      case 'resource.view.rbs':
+        dispatch({ type: 'setView', view: 'rbs' })
+        return
+      case 'project.properties.calendar':
+        dispatch({ type: 'setView', view: 'calendar' })
+        return
+      case 'project.schedule.setBaseline':
+        dispatch({ type: 'setBaseline' })
+        return
+      case 'project.schedule.clearBaseline':
+        dispatch({ type: 'clearBaseline' })
+        return
+      case 'project.reports.reports':
+        dispatch({ type: 'setView', view: 'reports' })
+        return
+      default: {
+        if (command.startsWith('view.set.')) {
+          const viewId = command.slice('view.set.'.length) as AppView
+          dispatch({ type: 'setView', view: viewId })
+        }
+      }
+    }
+  }
+
+  useEffect(() => {
+    const desktop = getDesktopApi()
+    if (!desktop?.onMenuCommand) return
+    return desktop.onMenuCommand((command) => {
+      menuHandlerRef.current(command)
+    })
+  }, [])
+
   return (
     <header className={styles.chrome}>
       <div className={styles.titleBar}>
         <div className={styles.brandMark} aria-hidden>
-          <Icons.gantt />
+          <Icons.app />
         </div>
         <div className={styles.brand}>SuperGantt</div>
         <div className={styles.titleDivider} />
@@ -199,6 +299,7 @@ export function Toolbar() {
                   label="Open…"
                   primary
                   large
+                  disabled={isBusy}
                   onClick={() => fileRef.current?.click()}
                 />
               </Group>

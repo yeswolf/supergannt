@@ -65,6 +65,8 @@ function task(
     fixedCost: Money.zero(),
     cost: Money.zero(),
     workHours: durationHours,
+    schedulingType: 'fixedUnits',
+    effortDriven: true,
     parentId: null,
     baseline: null,
     collapsed: false,

@@ -48,6 +48,8 @@ function sampleTask(overrides: Partial<ReturnType<Task['toProps']>> = {}) {
     fixedCost: Money.zero(),
     cost: Money.zero(),
     workHours: 0,
+    schedulingType: 'fixedUnits',
+    effortDriven: true,
     parentId: null,
     baseline: null,
     collapsed: false,

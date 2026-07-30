@@ -1,4 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="12" fill="#0f766e"/>
-  <path d="M12 44h10V28H12v16Zm15 0h10V18H27v26Zm15 0h10V34H42v10Z" fill="#5eead4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SuperGantt">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3b9aef"/>
+      <stop offset="0.55" stop-color="#0f6cbd"/>
+      <stop offset="1" stop-color="#2b579a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- Staggered Gantt bars -->
+  <rect x="10" y="16" width="28" height="8" rx="4" fill="#fff"/>
+  <rect x="18" y="28" width="34" height="8" rx="4" fill="#fff"/>
+  <rect x="26" y="40" width="20" height="8" rx="4" fill="#fff"/>
+  <!-- Milestone -->
+  <path d="M48 48v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+  <path d="M48 56l3.2 3.2L48 62.4l-3.2-3.2L48 56Z" fill="#fff"/>
 </svg>

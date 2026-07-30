@@ -53,6 +53,8 @@ function taskDraft(
     fixedCost: Money.of(input.fixedCost ?? 0, input.currency),
     cost: Money.of(input.fixedCost ?? 0, input.currency),
     workHours: hours,
+    schedulingType: 'fixedUnits',
+    effortDriven: true,
     parentId: null,
     baseline: null,
     collapsed: false,

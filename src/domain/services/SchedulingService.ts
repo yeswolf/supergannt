@@ -120,7 +120,17 @@ export function scheduleProject(
     }
 
     earliestStart = calendar.snapToWorkStart(earliestStart)
+    const dependencyFloor = earliestStart
     earliestStart = applyConstraintStart(task, earliestStart, durationHours, calendar)
+    // Soft constraints must not pull a task before its dependency-driven start
+    // (FS/SS/FF/SF). Hard MSO/MFO may still pin earlier (planning conflict).
+    if (
+      task.constraintType !== 'mustStartOn' &&
+      task.constraintType !== 'mustFinishOn' &&
+      earliestStart.getTime() < dependencyFloor.getTime()
+    ) {
+      earliestStart = dependencyFloor
+    }
 
     const finish =
       durationHours === 0
@@ -132,7 +142,8 @@ export function scheduleProject(
       start: earliestStart,
       finish,
       duration: Duration.hours(durationHours),
-      workHours: durationHours,
+      // Keep assignment-driven work; only fill when unset.
+      workHours: task.workHours > 0 ? task.workHours : durationHours,
     })
 
     const updated = task.with({
@@ -140,7 +151,7 @@ export function scheduleProject(
       finish: normalized.finish ?? finish,
       duration: normalized.duration ?? Duration.hours(durationHours),
       milestone: normalized.milestone ?? task.milestone,
-      workHours: normalized.workHours ?? durationHours,
+      workHours: normalized.workHours ?? (task.workHours > 0 ? task.workHours : durationHours),
     })
     scheduled.set(taskId, updated)
     visiting.delete(taskId)

@@ -56,11 +56,18 @@ export function TaskUsageView() {
   )
 }
 
+const HISTOGRAM_HEIGHT_PX = 120
+
 export function ResourceUsageView() {
   const { project } = useWorkspaceState()
   const rows = buildResourceUsage(project)
   const histogram = buildResourceHistogram(project)
   const dates = uniqueDates(rows)
+  // Peak of load vs capacity in view; use px heights (%, against min-height, never resolved).
+  const maxScale = Math.max(
+    1,
+    ...histogram.map((b) => Math.max(b.hours, b.capacity)),
+  )
 
   return (
     <div className={styles.panel}>
@@ -110,7 +117,7 @@ export function ResourceUsageView() {
               className={bucket.overallocated ? styles.histOver : styles.histBar}
               title={`${bucket.resourceName} ${bucket.date}: ${bucket.hours.toFixed(1)}h / ${bucket.capacity}h`}
               style={{
-                height: `${Math.min(100, (bucket.hours / Math.max(bucket.capacity, 1)) * 100)}%`,
+                height: `${Math.max(2, (bucket.hours / maxScale) * HISTOGRAM_HEIGHT_PX)}px`,
               }}
             >
               <span>{bucket.hours.toFixed(0)}h</span>

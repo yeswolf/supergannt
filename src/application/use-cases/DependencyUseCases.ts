@@ -7,6 +7,38 @@ import type { IdGenerator } from '../ports/IdGenerator'
 import { refreshProject } from '../services/ProjectRefresh'
 import { parsePredecessorsField } from '../services/PredecessorNotation'
 
+/**
+ * After a predecessor is added/changed, let the link drive the successor bar
+ * (ProjectLibre ASAP). Soft pins (SNET/SNLT/FNET/FNLT/ALAP) can otherwise keep
+ * the successor stuck on its old dates — e.g. SNLT at current start blocks FS
+ * push-out. Hard locks (MSO/MFO) are kept.
+ */
+function withLinkDrivenSuccessor(
+  project: Project,
+  successorId: string,
+): Project {
+  const tasks = project.tasks.map((task) => {
+    if (task.id !== successorId) return task
+    if (
+      task.constraintType === 'mustStartOn' ||
+      task.constraintType === 'mustFinishOn'
+    ) {
+      return task
+    }
+    if (
+      task.constraintType === 'asSoonAsPossible' &&
+      task.constraintDate == null
+    ) {
+      return task
+    }
+    return task.with({
+      constraintType: 'asSoonAsPossible',
+      constraintDate: null,
+    })
+  })
+  return project.with({ tasks })
+}
+
 export function linkTasks(
   project: Project,
   ids: IdGenerator,
@@ -30,7 +62,10 @@ export function linkTasks(
   })
 
   return refreshProject(
-    project.with({ dependencies: [...withoutDup, dependency] }).markDirty(),
+    withLinkDrivenSuccessor(
+      project.with({ dependencies: [...withoutDup, dependency] }),
+      successorId,
+    ).markDirty(),
   )
 }
 
@@ -81,7 +116,12 @@ export function updateDependency(
       lag: lagHours !== undefined ? Duration.hours(lagHours) : d.lag,
     })
   })
-  return refreshProject(project.with({ dependencies }).markDirty())
+  const updated = dependencies.find((d) => d.id === dependencyId)
+  const base = project.with({ dependencies })
+  const next = updated
+    ? withLinkDrivenSuccessor(base, updated.successorId)
+    : base
+  return refreshProject(next.markDirty())
 }
 
 /**
@@ -110,9 +150,14 @@ export function setPredecessorsFromNotation(
       lag: Duration.hours(p.lagHours),
     }),
   )
-  return refreshProject(
-    project.with({ dependencies: [...kept, ...created] }).markDirty(),
-  )
+  const next =
+    created.length > 0
+      ? withLinkDrivenSuccessor(
+          project.with({ dependencies: [...kept, ...created] }),
+          successorId,
+        )
+      : project.with({ dependencies: [...kept, ...created] })
+  return refreshProject(next.markDirty())
 }
 
 export function setPredecessorLinks(
@@ -122,7 +167,8 @@ export function setPredecessorLinks(
   links: readonly { predecessorId: string; type: LinkType; lagHours: number }[],
 ): Project {
   const kept = project.dependencies.filter((d) => d.successorId !== successorId)
-  const created = links.map((p) => {
+  const cleaned = links.filter((p) => p.predecessorId)
+  const created = cleaned.map((p) => {
     if (p.predecessorId === successorId) {
       throw new Error('A task cannot depend on itself')
     }
@@ -134,7 +180,12 @@ export function setPredecessorLinks(
       lag: Duration.hours(p.lagHours),
     })
   })
-  return refreshProject(
-    project.with({ dependencies: [...kept, ...created] }).markDirty(),
-  )
+  const next =
+    created.length > 0
+      ? withLinkDrivenSuccessor(
+          project.with({ dependencies: [...kept, ...created] }),
+          successorId,
+        )
+      : project.with({ dependencies: [...kept, ...created] })
+  return refreshProject(next.markDirty())
 }

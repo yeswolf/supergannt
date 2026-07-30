@@ -73,6 +73,11 @@ describe('use cases', () => {
     project = ResourceUseCases.assignResource(project, ids, taskId, resourceId, 0.75)
     expect(project.assignments).toHaveLength(1)
     expect(project.assignments[0]!.units).toBe(0.75)
+    // Fixed Units: units 1→0.75 holds work, duration = 8 / 0.75
+    expect(project.tasks.find((t) => t.id === taskId)!.duration.toHours()).toBeCloseTo(
+      8 / 0.75,
+      2,
+    )
     expect(ResourceUseCases.formatTaskResourceNames(project, taskId)).toContain('[0.75]')
 
     project = TaskUseCases.updateTask(project, taskId, {
@@ -82,6 +87,33 @@ describe('use cases', () => {
     expect(project.tasks.find((t) => t.id === taskId)!.milestone).toBe(true)
     project = TaskUseCases.deleteTask(project, 'missing-id')
     expect(project.tasks.length).toBe(2)
+  })
+
+  it('recalculates duration when adding a second effort-driven resource', () => {
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, { name: 'Build', durationHours: 16 })
+    const taskId = project.tasks[0]!.id
+    project = ResourceUseCases.addResource(project, ids, { name: 'A' })
+    project = ResourceUseCases.addResource(project, ids, { name: 'B' })
+    const [r1, r2] = project.resources
+    project = ResourceUseCases.assignResource(project, ids, taskId, r1!.id, 1)
+    expect(project.tasks[0]!.duration.toHours()).toBe(16)
+    project = ResourceUseCases.assignResource(project, ids, taskId, r2!.id, 1)
+    expect(project.tasks[0]!.duration.toHours()).toBe(8)
+    expect(project.tasks[0]!.workHours).toBe(16)
+  })
+
+  it('fixed duration units change grows work without changing duration', () => {
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, { name: 'Meeting', durationHours: 8 })
+    const taskId = project.tasks[0]!.id
+    project = TaskUseCases.updateTask(project, taskId, { schedulingType: 'fixedDuration' })
+    project = ResourceUseCases.addResource(project, ids, { name: 'Facilitator' })
+    const resourceId = project.resources[0]!.id
+    project = ResourceUseCases.assignResource(project, ids, taskId, resourceId, 1)
+    project = ResourceUseCases.assignResource(project, ids, taskId, resourceId, 2)
+    expect(project.tasks[0]!.duration.toHours()).toBe(8)
+    expect(project.tasks[0]!.workHours).toBe(16)
   })
 
   it('adds updates deletes tasks and hierarchy', () => {
@@ -162,6 +194,42 @@ describe('use cases', () => {
     await files.persistDraft(saved.project)
     const draft = await files.loadDraft()
     expect(draft?.name).toBe(opened.name)
+  })
+
+  it('recalculates duration when assignment units change (Fixed Units)', () => {
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, {
+      name: 'Build',
+      durationHours: 40,
+    })
+    const taskId = project.tasks[0]!.id
+    project = ResourceUseCases.addResource(project, ids, { name: 'Dev' })
+    const resourceId = project.resources[0]!.id
+    project = ResourceUseCases.assignResource(project, ids, taskId, resourceId, 1)
+    expect(project.tasks[0]!.duration.toHours()).toBe(40)
+    expect(project.tasks[0]!.workHours).toBe(40)
+
+    project = ResourceUseCases.assignResource(project, ids, taskId, resourceId, 0.5)
+    expect(project.tasks[0]!.duration.toHours()).toBe(80)
+    expect(project.tasks[0]!.workHours).toBe(40)
+  })
+
+  it('shortens duration when adding a second resource (effort-driven)', () => {
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, {
+      name: 'Build',
+      durationHours: 40,
+      effortDriven: true,
+    })
+    const taskId = project.tasks[0]!.id
+    project = ResourceUseCases.addResource(project, ids, { name: 'Dev' })
+    project = ResourceUseCases.addResource(project, ids, { name: 'QA' })
+    const r1 = project.resources[0]!.id
+    const r2 = project.resources[1]!.id
+    project = ResourceUseCases.assignResource(project, ids, taskId, r1, 1)
+    project = ResourceUseCases.assignResource(project, ids, taskId, r2, 1)
+    expect(project.tasks[0]!.duration.toHours()).toBe(20)
+    expect(project.tasks[0]!.workHours).toBe(40)
   })
 
   it('builds reports', () => {

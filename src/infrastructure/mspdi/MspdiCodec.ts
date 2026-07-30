@@ -19,6 +19,7 @@ import {
 import type { LinkType } from '../../domain/entities/Dependency'
 import type { ResourceType } from '../../domain/entities/Resource'
 import type { IdGenerator } from '../../application/ports/IdGenerator'
+import type { TaskSchedulingType } from '../../domain/services/EffortScheduling'
 
 function asArray<T>(value: T | T[] | undefined | null): T[] {
   if (value == null) return []
@@ -76,6 +77,19 @@ const RESOURCE_TYPE_MAP: Record<number, ResourceType> = {
   0: 'material',
   1: 'work',
   2: 'cost',
+}
+
+/** MSPDI Task/Type: 0 Fixed Units, 1 Fixed Duration, 2 Fixed Work */
+const SCHEDULING_TYPE_MAP: Record<number, TaskSchedulingType> = {
+  0: 'fixedUnits',
+  1: 'fixedDuration',
+  2: 'fixedWork',
+}
+
+const SCHEDULING_TYPE_TO_MSPDI: Record<TaskSchedulingType, number> = {
+  fixedUnits: 0,
+  fixedDuration: 1,
+  fixedWork: 2,
 }
 
 export class MspdiCodec implements ProjectFileCodec {
@@ -139,6 +153,11 @@ export class MspdiCodec implements ProjectFileCodec {
           fixedCost: Money.of(Number(t.FixedCost ?? 0), currency),
           cost: Money.of(Number(t.Cost ?? 0), currency),
           workHours: parseMspdiDuration(t.Work).toHours(),
+          schedulingType: SCHEDULING_TYPE_MAP[Number(t.Type ?? 0)] ?? 'fixedUnits',
+          effortDriven:
+            t.EffortDriven === undefined
+              ? Number(t.Type ?? 0) !== 1
+              : String(t.EffortDriven) === '1' || t.EffortDriven === true,
           parentId: null,
           baseline: null,
           collapsed: false,
@@ -284,6 +303,8 @@ export class MspdiCodec implements ProjectFileCodec {
                 FixedCost: task.fixedCost.amount,
                 Cost: task.cost.amount,
                 Work: formatMspdiDuration(Duration.of(task.workHours / 8, 'd')),
+                Type: SCHEDULING_TYPE_TO_MSPDI[task.schedulingType],
+                EffortDriven: task.effortDriven ? 1 : 0,
                 PredecessorLink: links.map((link) => ({
                   PredecessorUID: taskUid.get(link.predecessorId),
                   Type: LINK_TYPE_TO_MSPDI[link.type],

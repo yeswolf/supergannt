@@ -39,10 +39,13 @@ Then open **http://localhost:5173**.
 |---------|----------------|
 | `npm run dev` | Web UI + MPP API |
 | `npm run desktop:dev` | Same, plus Electron shell |
+| `npm run desktop:pack` | Windows installer (`.exe`) under `release/` |
 | `npm run docker:up` | All-in-one container on port **8080** |
 | `npm test` | Unit + integration tests |
 
-> **First-time MPP setup:** `npm run mpp:setup` installs/finds JDK 17+, builds `mpp-convert.jar`, and avoids AWT crashes some native MPXJ builds hit when reading Gantt colors.
+> **Java / MPP:** On first MPP open the app searches for JDK/JRE 17+ on the machine. If none is found, it downloads **Eclipse Temurin 21 JRE** into the app runtime folder (`server/.runtime` in dev, or `%APPDATA%/supergannt/runtime` in the desktop build).
+>
+> For local development you can still run `npm run mpp:setup` once to build `mpp-convert.jar`.
 
 ---
 

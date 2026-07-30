@@ -20,6 +20,10 @@ describe('workspaceReducer', () => {
     expect(s.selectedResourceId).toBe('r')
     s = workspaceReducer(s, { type: 'setStatus', message: 'ok' })
     expect(s.statusMessage).toBe('ok')
+    s = workspaceReducer(s, { type: 'setBusy', message: 'Opening plan.xml…' })
+    expect(s.busyMessage).toBe('Opening plan.xml…')
+    s = workspaceReducer(s, { type: 'setBusy', message: null })
+    expect(s.busyMessage).toBeNull()
   })
 
   it('creates projects and mutates tasks/resources', () => {
@@ -61,12 +65,19 @@ describe('workspaceReducer', () => {
     })
     s = workspaceReducer(s, { type: 'addTask' })
     const second = s.project.tasks[1]!.id
+    const succBefore = s.project.tasks.find((t) => t.id === second)!.start.getTime()
     s = workspaceReducer(s, {
       type: 'linkTasks',
       predecessorId: taskId,
       successorId: second,
     })
     expect(s.project.dependencies.length).toBe(1)
+    const pred = s.project.tasks.find((t) => t.id === taskId)!
+    const succ = s.project.tasks.find((t) => t.id === second)!
+    expect(succ.start.getTime()).toBeGreaterThan(succBefore)
+    expect(succ.start.getTime()).toBe(
+      s.project.getCalendar().snapToWorkStart(pred.finish).getTime(),
+    )
     s = workspaceReducer(s, {
       type: 'unlinkDependency',
       dependencyId: s.project.dependencies[0]!.id,
