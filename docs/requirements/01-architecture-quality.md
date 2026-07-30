@@ -9,7 +9,7 @@ The codebase MUST remain layered. Violations are bugs, not style nits.
 | Layer | Path | Allowed to know | Must not know |
 |-------|------|-----------------|---------------|
 | Domain | `src/domain` | Itself | Application, infrastructure, React, HTTP, file codecs as frameworks |
-| Application | `src/application` | Domain, ports | React components, concrete HTTP/Electron details (only via ports) |
+| Application | `src/application` | Domain, ports | React components, concrete HTTP/desktop details (only via ports) |
 | Infrastructure | `src/infrastructure` | Domain, application ports | Presentation |
 | Presentation | `src/presentation` | Application use-cases / workspace façade | Direct low-level codec hacks when a use-case exists |
 | Server | `server/` | Conversion / API concerns | Domain UI state |
@@ -33,7 +33,7 @@ MUST maximize reuse for:
 - XML (fast-xml-parser or equivalent)
 - PDF (jsPDF / autotable)
 - Test runners (Vitest, Testing Library)
-- Desktop shell (Electron + electron-builder)
+- Desktop shell (Tauri / WebView2)
 
 ### 2.2 When a library is missing
 

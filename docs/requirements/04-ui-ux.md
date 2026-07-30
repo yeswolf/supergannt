@@ -17,7 +17,7 @@
 - Application icon MUST be a proper branded mark (Gantt bars + milestone motif on blue rounded tile).
 - Icon assets:
   - Web favicon SVG + PNG (`public/favicon.svg`, `public/app-icon.png`).
-  - Electron window icon (`electron/icon.png`).
+  - Tauri window / tray icons (`src-tauri/icons/*`).
   - Installer / shortcut ICO with **alpha** (`build/icon.ico`) — corners outside the rounded tile MUST be **transparent**, never opaque black.
   - ICO MUST embed PNG images with alpha (Vista+ style). BMP-only ICOs that paint transparent as black are unacceptable.
 

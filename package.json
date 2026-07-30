@@ -3,9 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "author": "SuperGantt",
-  "description": "Modern MS Project / ProjectLibre alternative — open and save .mpp in the browser or desktop",
+  "description": "Modern MS Project / ProjectLibre alternative — open and save .mpp in the browser or desktop (Tauri / WebView2)",
   "type": "module",
-  "main": "electron/main.mjs",
   "scripts": {
     "dev": "concurrently --kill-others-on-fail \"npm:server\" \"npm:dev:web\"",
     "dev:web": "vite",
@@ -19,13 +18,9 @@
     "test:coverage": "vitest run --coverage",
     "mpp:setup": "node scripts/setup-mpp.mjs",
     "mpp:fixtures": "node scripts/fetch-mpp-fixtures.mjs",
-    "desktop": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron electron/main.mjs",
-    "desktop:dev": "concurrently --kill-others-on-fail \"npm:dev\" \"wait-on http://localhost:5173 && npm run desktop\"",
-    "desktop:build": "node scripts/pack-desktop.mjs --dir",
-    "desktop:pack": "node scripts/pack-desktop.mjs",
-    "desktop:pack:dir": "node scripts/pack-desktop.mjs --dir",
     "tauri:stage": "node scripts/pack-tauri.mjs --stage",
     "tauri:pack": "node scripts/pack-tauri.mjs",
+    "desktop:pack": "node scripts/pack-tauri.mjs",
     "server:bundle": "node scripts/bundle-server.mjs",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up --build"
@@ -57,80 +52,14 @@
     "@vitest/coverage-v8": "^3.2.4",
     "concurrently": "^9.2.0",
     "cross-env": "^7.0.3",
-    "electron": "^37.2.0",
-    "electron-builder": "^26.0.12",
     "esbuild": "^0.25.12",
     "jsdom": "^26.1.0",
     "oxlint": "^1.71.0",
+    "playwright-core": "^1.62.0",
     "tsx": "^4.23.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
-    "vitest": "^3.2.4",
-    "wait-on": "^8.0.4"
-  },
-  "build": {
-    "appId": "com.supergannt.app",
-    "productName": "SuperGantt",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "icon": "build/icon.png",
-    "files": [
-      "electron/**/*",
-      "package.json",
-      "!**/node_modules/**"
-    ],
-    "extraResources": [
-      {
-        "from": "build-desktop/server",
-        "to": "server"
-      },
-      {
-        "from": "build-desktop/mpp",
-        "to": "mpp"
-      },
-      {
-        "from": "build-desktop/ui",
-        "to": "ui"
-      }
-    ],
-    "asar": true,
-    "compression": "maximum",
-    "electronLanguages": [
-      "en-US"
-    ],
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Office",
-      "icon": "build/icon.png"
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "build/icon.ico",
-      "artifactName": "SuperGantt-Setup-${version}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "SuperGantt",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
-      "differentialPackage": false
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "build/icon.png"
-    }
+    "vitest": "^3.2.4"
   },
   "optionalDependencies": {
     "@byteink/mppjs-darwin-arm64": "^0.1.5",

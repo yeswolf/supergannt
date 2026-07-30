@@ -221,7 +221,7 @@ pub fn boot_api(resources: &Path) -> Result<(u16, Child), String> {
   let node = ensure_node(resources)?;
   let runtime_dir = dirs_runtime()?;
 
-  // Avoid inheriting ELECTRON_* / odd desktop env that can confuse Node.
+  // Avoid inheriting odd desktop env vars that can confuse Node.
   let mut cmd = Command::new(&node);
   cmd.arg(&server)
     .current_dir(resources)

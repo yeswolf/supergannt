@@ -11,7 +11,7 @@ const isProd = process.env.NODE_ENV === 'production'
 const staticRootEnv = process.env.SUPERGANNT_STATIC_ROOT?.trim()
 /** Serve UI when packaged (STATIC_ROOT) or NODE_ENV=production (./dist). */
 const serveUi = Boolean(staticRootEnv || isProd)
-/** Absolute UI root — relative paths resolve from process cwd (resources/ in Electron). */
+/** Absolute UI root — relative paths resolve from process cwd (resources/ when packaged). */
 const staticRoot = path.resolve(staticRootEnv || './dist')
 const indexHtmlPath = path.join(staticRoot, 'index.html')
 
@@ -106,7 +106,7 @@ if (serveUi) {
   )
   app.get('/favicon.svg', serveStatic({ root: staticRoot, path: 'favicon.svg' }))
   app.get('/icons.svg', serveStatic({ root: staticRoot, path: 'icons.svg' }))
-  // SPA: read index.html directly — serveStatic's on-miss next() became a bare 404 in Electron.
+  // SPA: read index.html directly — serveStatic's on-miss next() became a bare 404 when packaged.
   app.get('*', async (c, next) => {
     if (c.req.path.startsWith('/api/')) return next()
     return serveIndexHtml(c)
@@ -128,7 +128,7 @@ server.on('error', (error: NodeJS.ErrnoException) => {
           console.error(`Port ${port} is in use by something else. Free it and retry.`)
           process.exit(1)
         }
-        // Do not "reuse" a health-only API (e.g. `npm run server`) — that yields UI 404 in Electron.
+        // Do not "reuse" a health-only API (e.g. `npm run server`) — that yields UI 404 in desktop.
         if (serveUi) {
           const ui = await fetch(`http://127.0.0.1:${port}/`)
           const ct = ui.headers.get('content-type') ?? ''

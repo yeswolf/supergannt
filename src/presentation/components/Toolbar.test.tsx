@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { act, screen, waitFor, within, fireEvent } from '@testing-library/react'
+import { screen, waitFor, within, fireEvent } from '@testing-library/react'
 import { renderWithWorkspace } from '../../test/workspaceTestUtils'
 import { Toolbar } from './Toolbar'
 
@@ -81,42 +81,5 @@ describe('Toolbar', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     expect(input).toBeTruthy()
     fireEvent.click(ribbonCmd('Open…'))
-  })
-
-  it('handles Electron desktop menu commands', async () => {
-    let menuHandler: ((command: string) => void) | undefined
-    window.superGanttDesktop = {
-      platform: 'win32',
-      isDesktop: true,
-      onMenuCommand(handler) {
-        menuHandler = handler
-        return () => {
-          menuHandler = undefined
-        }
-      },
-    }
-
-    renderWithWorkspace(<Toolbar />)
-    expect(menuHandler).toBeTypeOf('function')
-
-    await act(async () => {
-      menuHandler!('file.new.sample')
-      menuHandler!('view.set.network')
-    })
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Network Diagram' }).className).toMatch(
-        /Active|active/,
-      )
-    })
-
-    await act(async () => {
-      menuHandler!('task.insert.milestone')
-      menuHandler!('resource.insert.add')
-      menuHandler!('project.schedule.setBaseline')
-      menuHandler!('file.save.mspdi')
-    })
-    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
-
-    delete window.superGanttDesktop
   })
 })

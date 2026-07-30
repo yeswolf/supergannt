@@ -1,5 +1,5 @@
 /**
- * Bundle the Hono MPP API for Electron (Node via ELECTRON_RUN_AS_NODE).
+ * Bundle the Hono MPP API for the Tauri desktop sidecar (Node runtime).
  */
 import * as esbuild from 'esbuild'
 import { mkdir } from 'node:fs/promises'

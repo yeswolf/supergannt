@@ -38,7 +38,7 @@ async function pngsToIco(paths) {
 const files = [16, 24, 32, 48, 64, 128, 256].map((s) => `build/icons/icon-${s}.png`)
 const ico = await pngsToIco(files)
 await writeFile('build/icon.ico', ico)
-await copyFile('build/icon.ico', 'electron/icon.ico')
+await copyFile('build/icon.ico', 'src-tauri/icons/icon.ico')
 
 let found = 0
 for (let i = 0; i < ico.length - 4; i++) {

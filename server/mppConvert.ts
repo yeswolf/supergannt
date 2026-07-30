@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 async function convertWithMppjs(inputPath: string, outputPath: string): Promise<void> {
   // Optional fallback for local/dev when JAR is missing. Not shipped in the
-  // Electron installer (native binary is ~60MB+ and duplicates the JAR path).
+  // Slim / desktop pack (native binary is large and duplicates the JAR path).
   const mod = await import('@byteink/mppjs')
   await mod.convert(inputPath, outputPath)
 }

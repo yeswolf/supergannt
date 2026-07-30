@@ -10,6 +10,41 @@ struct ApiState {
   child: Mutex<Option<std::process::Child>>,
 }
 
+fn extension_filters(default_name: &str) -> Vec<(&'static str, Vec<&'static str>)> {
+  let ext = std::path::Path::new(default_name)
+    .extension()
+    .and_then(|e| e.to_str())
+    .unwrap_or("")
+    .to_ascii_lowercase();
+  match ext.as_str() {
+    "xml" | "mspdi" => vec![("MSPDI XML", vec!["xml", "mspdi"]), ("All files", vec!["*"])],
+    "mpp" | "mpt" => vec![("Microsoft Project", vec!["mpp", "mpt"]), ("All files", vec!["*"])],
+    "mpx" => vec![("MPX", vec!["mpx"]), ("All files", vec!["*"])],
+    "pdf" => vec![("PDF", vec!["pdf"]), ("All files", vec!["*"])],
+    _ => vec![("All files", vec!["*"])],
+  }
+}
+
+/// Native Save dialog + write bytes. Returns absolute path, or null if cancelled.
+#[tauri::command]
+fn save_file(default_name: String, contents_base64: String) -> Result<Option<String>, String> {
+  use base64::Engine;
+  let bytes = base64::engine::general_purpose::STANDARD
+    .decode(contents_base64.as_bytes())
+    .map_err(|e| format!("invalid file payload: {e}"))?;
+
+  let mut dialog = rfd::FileDialog::new().set_file_name(&default_name);
+  for (name, exts) in extension_filters(&default_name) {
+    dialog = dialog.add_filter(name, &exts);
+  }
+
+  let Some(path) = dialog.save_file() else {
+    return Ok(None);
+  };
+  std::fs::write(&path, &bytes).map_err(|e| format!("write {}: {e}", path.display()))?;
+  Ok(Some(path.display().to_string()))
+}
+
 fn show_boot_error(message: &str) {
   let log = std::env::temp_dir().join("supergannt-tauri-boot-error.txt");
   let _ = std::fs::write(&log, message);
@@ -55,6 +90,7 @@ pub fn run() {
     .manage(ApiState {
       child: Mutex::new(None),
     })
+    .invoke_handler(tauri::generate_handler![save_file])
     .setup(|app| {
       // Boot (and first-launch Node download) off the UI thread so the splash
       // stays responsive and we never deadlock waiting on child processes.
