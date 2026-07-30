@@ -1,0 +1,242 @@
+.panel {
+  height: 100%;
+  overflow: auto;
+  padding: 1rem 1.15rem;
+  background: var(--msp-surface);
+}
+
+.heading h2 {
+  margin: 0;
+  font-family: var(--msp-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.heading p {
+  margin: 0.25rem 0 1rem;
+  color: var(--msp-text-secondary);
+  font-size: 0.84rem;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  align-items: end;
+}
+
+.toolbar label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--msp-text-secondary);
+  font-weight: 500;
+}
+
+.toolbar select,
+.toolbar button,
+.toolbar input,
+.exceptionForm input,
+.exceptionForm button,
+.exceptions button,
+.monthNav button {
+  font: inherit;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+  background: var(--msp-surface);
+  color: var(--msp-text);
+}
+
+.toolbar button,
+.exceptionForm button,
+.exceptions button,
+.monthNav button {
+  background: var(--msp-accent);
+  border-color: var(--msp-accent);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+}
+
+.tabs button {
+  appearance: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0.5rem 0.85rem;
+  font: inherit;
+  cursor: pointer;
+  color: var(--msp-text-secondary);
+  margin-bottom: -1px;
+}
+
+.tabActive {
+  background: var(--msp-surface) !important;
+  color: var(--msp-accent) !important;
+  border-bottom-color: var(--msp-accent) !important;
+  font-weight: 600 !important;
+}
+
+.monthPanel {
+  max-width: 52rem;
+}
+
+.monthNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.monthNav h3 {
+  margin: 0;
+  font-family: var(--msp-font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+}
+
+.weekdayHeader {
+  text-align: center;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--msp-text-secondary);
+  padding: 0.35rem;
+}
+
+.dayCell {
+  appearance: none;
+  border: 1px solid var(--msp-border);
+  min-height: 4.2rem;
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  border-radius: var(--msp-radius);
+  background: var(--msp-surface);
+}
+
+.dayCell:hover {
+  outline: 2px solid var(--msp-accent);
+  outline-offset: -1px;
+}
+
+.dayPad {
+  min-height: 4.2rem;
+}
+
+.dayNum {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.dayLabel {
+  font-size: 0.68rem;
+  line-height: 1.2;
+  opacity: 0.9;
+}
+
+.dayWorking {
+  background: #e8f3fc;
+  color: #0c3b5e;
+}
+
+.dayOff {
+  background: #f3f2f1;
+  color: #616161;
+}
+
+.dayHoliday {
+  background: #fde7e9;
+  color: #79140d;
+}
+
+.dayWorkingEx {
+  background: #dff6dd;
+  color: #0e700e;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+}
+
+.legend > span {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--msp-border);
+  border-radius: var(--msp-radius);
+}
+
+.week {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 1.25rem;
+}
+
+.day {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.65rem;
+  background: var(--msp-surface);
+  border: 1px solid var(--msp-border);
+  border-radius: var(--msp-radius);
+  font-size: 0.84rem;
+}
+
+.day input[type='number'] {
+  width: 100%;
+}
+
+.exceptions h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.exceptionForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  align-items: center;
+}
+
+.exceptions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.exceptions li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--msp-surface);
+  border: 1px solid var(--msp-border);
+  border-radius: var(--msp-radius);
+}

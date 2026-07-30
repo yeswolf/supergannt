@@ -1,0 +1,194 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.dialog {
+  width: min(680px, 100%);
+  max-height: min(90vh, 740px);
+  display: flex;
+  flex-direction: column;
+  background: var(--msp-surface);
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  background: var(--msp-accent);
+  color: #fff;
+}
+
+.header h2 {
+  margin: 0;
+  font-family: var(--msp-font-display);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.close:hover {
+  opacity: 1;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 0.65rem;
+  border-bottom: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+}
+
+.tabs button {
+  appearance: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0.55rem 0.85rem;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--msp-text-secondary);
+  margin-bottom: -1px;
+}
+
+.tabs button:hover {
+  color: var(--msp-text);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.tabActive {
+  color: var(--msp-accent) !important;
+  border-bottom-color: var(--msp-accent) !important;
+  font-weight: 600 !important;
+  background: var(--msp-surface) !important;
+}
+
+.body {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  background: var(--msp-surface);
+}
+
+.form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form label {
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.84rem;
+  color: var(--msp-text-secondary);
+  font-weight: 500;
+}
+
+.form input,
+.form select,
+.form textarea,
+.predTable select,
+.predTable input {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--msp-border-strong);
+  background: var(--msp-surface);
+  border-radius: var(--msp-radius);
+  color: var(--msp-text);
+}
+
+.form input:focus,
+.form select:focus,
+.form textarea:focus {
+  outline: none;
+  border-color: var(--msp-accent);
+  box-shadow: 0 0 0 2px var(--msp-accent-soft);
+}
+
+.meta,
+.hint {
+  margin: 0;
+  color: var(--msp-text-secondary);
+  font-size: 0.82rem;
+}
+
+.predTab {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.predTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.predTable th,
+.predTable td {
+  border-bottom: 1px solid var(--msp-border);
+  padding: 0.35rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.predTable th {
+  background: var(--msp-surface-alt);
+  font-weight: 600;
+  color: var(--msp-text-secondary);
+  font-size: 0.75rem;
+}
+
+.predTable button,
+.predTab > button,
+.footer button {
+  appearance: none;
+  border: 1px solid var(--msp-accent-border);
+  background: var(--msp-accent);
+  color: #fff;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--msp-radius);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.7rem 0.9rem;
+  border-top: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+}
+
+.footer button:nth-child(2) {
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  border-color: var(--msp-border-strong);
+}
+
+.warn {
+  color: var(--msp-danger);
+  font-size: 0.75rem;
+}

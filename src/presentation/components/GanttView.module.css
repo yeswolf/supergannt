@@ -1,0 +1,150 @@
+.wrap {
+  height: 100%;
+  min-height: 420px;
+  background: var(--msp-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.viewBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.85rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--msp-surface-alt);
+  border-bottom: 1px solid var(--msp-border);
+}
+
+.viewGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.viewGroup button {
+  appearance: none;
+  border: 1px solid var(--msp-border);
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  padding: 0.28rem 0.5rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--msp-radius);
+}
+
+.viewGroup button:hover:not(:disabled) {
+  border-color: var(--msp-accent);
+  background: var(--msp-accent-soft);
+  color: var(--msp-accent-hover);
+}
+
+.viewGroup button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scaleActive {
+  background: var(--msp-accent) !important;
+  border-color: var(--msp-accent) !important;
+  color: #fff !important;
+}
+
+.scaleLabel {
+  margin-left: 0.25rem;
+  font-size: 0.76rem;
+  color: var(--msp-text-secondary);
+}
+
+.hintInline {
+  margin: 0;
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--msp-text-muted);
+}
+
+.chart {
+  flex: 1;
+  min-height: 0;
+  background: var(--msp-surface);
+}
+
+.wrap :global(.gantt_container) {
+  border: none !important;
+  background: var(--msp-surface) !important;
+}
+
+.wrap :global(.gantt_grid_scale),
+.wrap :global(.gantt_task_scale) {
+  background: #f0f0f0 !important;
+  border-bottom: 1px solid var(--msp-border) !important;
+  color: var(--msp-text-secondary) !important;
+}
+
+.wrap :global(.gantt_task_line) {
+  border-radius: 2px;
+  background: var(--msp-gantt-bar) !important;
+  border-color: var(--msp-gantt-bar-progress) !important;
+}
+
+.wrap :global(.gantt_task_progress) {
+  background: var(--msp-gantt-bar-progress) !important;
+}
+
+.wrap :global(.super-critical) {
+  background: var(--msp-gantt-critical) !important;
+  border-color: #a4262c !important;
+}
+
+.wrap :global(.super-critical .gantt_task_progress) {
+  background: #a4262c !important;
+}
+
+.wrap :global(.gantt_row.odd),
+.wrap :global(.gantt_task_row.odd) {
+  background: var(--msp-surface-alt) !important;
+}
+
+.wrap :global(.gantt_selected),
+.wrap :global(.gantt_row.gantt_selected),
+.wrap :global(.gantt_task_row.gantt_selected) {
+  background: var(--msp-row-selected) !important;
+}
+
+/* Milestone diamonds */
+.wrap :global(.gantt_task_line.gantt_milestone),
+.wrap :global(.gantt_task_line.super-milestone) {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.wrap :global(.gantt_task_line.gantt_milestone .gantt_task_content),
+.wrap :global(.gantt_task_line.super-milestone .gantt_task_content) {
+  visibility: visible !important;
+  background: var(--msp-accent) !important;
+  border: 2px solid var(--msp-accent-hover) !important;
+  border-radius: 2px !important;
+  color: transparent !important;
+  transform: rotate(45deg);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+.wrap :global(.gantt_task_line.gantt_milestone.super-critical .gantt_task_content),
+.wrap :global(.gantt_task_line.super-milestone.super-critical .gantt_task_content) {
+  background: var(--msp-gantt-critical) !important;
+  border-color: #a4262c !important;
+}
+
+.wrap :global(.gantt_link_arrow),
+.wrap :global(.gantt_line_wrapper div) {
+  background-color: #605e5c !important;
+  border-color: #605e5c !important;
+}

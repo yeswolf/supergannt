@@ -1,0 +1,81 @@
+.panel {
+  height: 100%;
+  overflow: auto;
+  padding: 1rem 1.15rem;
+  background: var(--msp-surface);
+}
+
+.heading h2 {
+  margin: 0 0 0.25rem;
+  font-family: var(--msp-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.heading p {
+  margin: 0 0 1rem;
+  color: var(--msp-text-secondary);
+  font-size: 0.84rem;
+}
+
+.canvas {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: left;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--msp-border);
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  cursor: pointer;
+  border-radius: var(--msp-radius);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.node:hover {
+  border-color: var(--msp-accent);
+  background: var(--msp-accent-soft);
+}
+
+.node strong {
+  font-size: 0.9rem;
+}
+
+.node span {
+  font-size: 0.76rem;
+  color: var(--msp-text-secondary);
+}
+
+.critical {
+  border-color: #f1aeb5;
+  background: var(--msp-danger-soft);
+}
+
+.milestone {
+  border-style: dashed;
+}
+
+.selected {
+  outline: 2px solid var(--msp-accent);
+  outline-offset: -1px;
+  background: var(--msp-row-selected);
+}
+
+.edges {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--msp-text-secondary);
+  font-size: 0.86rem;
+}
+
+.edges em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--msp-accent);
+}

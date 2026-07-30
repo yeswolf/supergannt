@@ -1,0 +1,39 @@
+.app {
+  height: 100%;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--msp-bg);
+  color: var(--msp-text);
+}
+
+.main {
+  min-height: 0;
+  overflow: hidden;
+  background: var(--msp-surface);
+  border-top: 1px solid var(--msp-border);
+}
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.28rem 0.85rem;
+  background: var(--msp-surface-alt);
+  border-top: 1px solid var(--msp-border);
+  font-size: 0.78rem;
+  color: var(--msp-text-secondary);
+  min-height: 1.75rem;
+}
+
+.statusBar strong {
+  color: var(--msp-text);
+  font-weight: 600;
+}
+
+.statusMeta {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}

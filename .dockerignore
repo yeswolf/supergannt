@@ -1,0 +1,11 @@
+.git
+.gitignore
+node_modules
+dist
+release
+coverage
+samples
+*.md
+.vscode
+.idea
+agent-transcripts

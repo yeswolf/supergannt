@@ -1,0 +1,195 @@
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--msp-surface);
+}
+
+.heading {
+  padding: 0.75rem 1rem 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--msp-border);
+  background: linear-gradient(180deg, var(--msp-surface-alt), var(--msp-surface));
+}
+
+.heading h2 {
+  margin: 0;
+  font-family: var(--msp-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--msp-text);
+  letter-spacing: -0.01em;
+}
+
+.heading p {
+  margin: 0.15rem 0 0;
+  color: var(--msp-text-secondary);
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+.heading button,
+.rowActions button {
+  appearance: none;
+  border: 1px solid var(--msp-accent-border);
+  background: var(--msp-accent);
+  color: #fff;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--msp-radius);
+}
+
+.heading button:hover,
+.rowActions button:hover {
+  background: var(--msp-accent-hover);
+}
+
+.rowActions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.rowActions button {
+  background: var(--msp-surface);
+  color: var(--msp-accent);
+  border-color: var(--msp-accent-border);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.55rem;
+}
+
+.rowActions button:hover {
+  background: var(--msp-accent-soft);
+}
+
+.tableWrap {
+  overflow: auto;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--msp-surface);
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid var(--msp-border);
+  border-right: 1px solid var(--msp-border);
+  padding: 0.35rem 0.45rem;
+  text-align: left;
+  font-size: 0.82rem;
+  vertical-align: middle;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: #f0f0f0;
+  z-index: 1;
+  font-weight: 600;
+  color: var(--msp-text-secondary);
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.table tbody tr:nth-child(even) {
+  background: var(--msp-surface-alt);
+}
+
+.table tbody tr:hover {
+  background: var(--msp-row-hover);
+}
+
+.table input,
+.table select {
+  width: 100%;
+  min-width: 4rem;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  padding: 0.2rem 0.25rem;
+  border-radius: 2px;
+  color: var(--msp-text);
+}
+
+.table input:focus,
+.table select:focus {
+  outline: none;
+  border-color: var(--msp-accent);
+  background: var(--msp-surface);
+  box-shadow: 0 0 0 1px var(--msp-accent-soft);
+}
+
+.selected {
+  background: var(--msp-row-selected) !important;
+}
+
+.resourceCell {
+  appearance: none;
+  width: 100%;
+  min-width: 8rem;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  padding: 0.2rem 0.25rem;
+  cursor: pointer;
+  color: var(--msp-text);
+  border-radius: 2px;
+}
+
+.resourceCell:hover:not(:disabled) {
+  border-color: var(--msp-accent);
+  background: var(--msp-surface);
+}
+
+.resourceCell:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.danger {
+  background: var(--msp-danger-soft) !important;
+}
+
+.histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+  min-height: 120px;
+  padding: 0.75rem;
+  background: var(--msp-surface);
+  border: 1px solid var(--msp-border);
+  border-radius: var(--msp-radius);
+}
+
+.histBar,
+.histOver {
+  flex: 1;
+  min-width: 18px;
+  max-width: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--msp-gantt-bar);
+  color: #fff;
+  font-size: 0.65rem;
+  padding: 0.15rem;
+}
+
+.histOver {
+  background: var(--msp-danger);
+}

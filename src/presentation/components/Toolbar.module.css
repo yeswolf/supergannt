@@ -1,0 +1,310 @@
+.chrome {
+  display: flex;
+  flex-direction: column;
+  background: var(--msp-ribbon);
+  border-bottom: 1px solid var(--msp-border);
+  box-shadow: var(--msp-shadow);
+  z-index: 5;
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.75rem;
+  background: linear-gradient(180deg, #1282d4 0%, var(--msp-titlebar) 100%);
+  color: var(--msp-titlebar-text);
+  min-height: 2.35rem;
+}
+
+.brandMark {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  font-size: 1.15rem;
+  line-height: 0;
+  overflow: hidden;
+}
+
+.brandMark svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.brand {
+  font-family: var(--msp-font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.titleDivider {
+  width: 1px;
+  height: 1rem;
+  background: rgba(255, 255, 255, 0.35);
+  margin: 0 0.15rem;
+}
+
+.projectName {
+  flex: 1;
+  min-width: 8rem;
+  max-width: 28rem;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid transparent;
+  border-radius: var(--msp-radius);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+}
+
+.projectName:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.projectName:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.dirty {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.95;
+  white-space: nowrap;
+}
+
+.ribbon {
+  background: var(--msp-ribbon);
+}
+
+.ribbonTabs {
+  display: flex;
+  gap: 0;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+}
+
+.ribbonTab,
+.ribbonTabActive {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--msp-text);
+  padding: 0.45rem 0.9rem 0.5rem;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.ribbonTab:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.ribbonTabActive {
+  color: var(--msp-accent);
+  border-bottom-color: var(--msp-accent);
+  font-weight: 600;
+  background: var(--msp-surface);
+}
+
+.ribbonBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  padding: 0.4rem 0.35rem 0.3rem;
+  min-height: 5.6rem;
+  background: var(--msp-surface);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0 0.55rem 0.15rem;
+  border-right: 1px solid var(--msp-border);
+  min-width: 5.5rem;
+}
+
+.group:last-child {
+  border-right: none;
+}
+
+.groupBody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: flex-start;
+  padding-bottom: 0.35rem;
+}
+
+.groupCaption {
+  text-align: center;
+  font-size: 0.68rem;
+  color: var(--msp-text-muted);
+  padding-top: 0.15rem;
+  border-top: 1px solid transparent;
+}
+
+.cmd,
+.cmdPrimary {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--msp-text);
+  padding: 0.28rem 0.4rem 0.32rem;
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+  border-radius: var(--msp-radius);
+  min-width: 3.6rem;
+  max-width: 5.8rem;
+  text-align: center;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+
+.cmdLarge {
+  min-width: 4.4rem;
+  padding: 0.3rem 0.45rem 0.35rem;
+}
+
+.cmdLarge .cmdIcon {
+  font-size: 2rem;
+}
+
+.cmdIcon {
+  display: grid;
+  place-items: center;
+  font-size: 1.55rem;
+  line-height: 0;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7));
+}
+
+.cmdIcon svg {
+  display: block;
+}
+
+.cmd:hover:not(:disabled),
+.cmdPrimary:hover:not(:disabled) {
+  background: var(--msp-row-hover);
+  border-color: var(--msp-border);
+}
+
+.cmd:hover:not(:disabled) .cmdIcon,
+.cmdPrimary:hover:not(:disabled) .cmdIcon {
+  transform: translateY(-1px);
+}
+
+.cmdPrimary {
+  background: var(--msp-accent-soft);
+  border-color: var(--msp-accent-border);
+  color: var(--msp-accent-hover);
+  font-weight: 600;
+}
+
+.cmdPrimary:hover:not(:disabled) {
+  background: #d6ebfb;
+  border-color: var(--msp-accent);
+}
+
+.cmd:disabled,
+.cmdPrimary:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.cmd:disabled .cmdIcon,
+.cmdPrimary:disabled .cmdIcon {
+  filter: grayscale(0.55);
+  transform: none;
+}
+
+.cmdLabel {
+  display: block;
+  line-height: 1.15;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.viewStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.35rem 0.65rem;
+  background: var(--msp-bg);
+  border-top: 1px solid var(--msp-border);
+}
+
+.viewChip,
+.viewChipActive {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--msp-text-secondary);
+  padding: 0.22rem 0.55rem 0.22rem 0.35rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--msp-radius);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.viewChipIcon {
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  line-height: 0;
+}
+
+.viewChipIcon svg {
+  display: block;
+}
+
+.viewChip:hover {
+  background: var(--msp-surface);
+  border-color: var(--msp-border);
+  color: var(--msp-text);
+}
+
+.viewChipActive {
+  background: var(--msp-surface);
+  border-color: var(--msp-accent-border);
+  color: var(--msp-accent);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--msp-accent-soft);
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .ribbonBody {
+    min-height: auto;
+  }
+
+  .group {
+    border-right: none;
+    border-bottom: 1px solid var(--msp-border);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.25rem;
+  }
+}

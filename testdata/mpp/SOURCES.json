@@ -1,0 +1,85 @@
+{
+  "description": "Real Microsoft Project .mpp fixtures used by integration tests",
+  "fixtures": [
+    {
+      "file": "01-advanced-tasks.mpp",
+      "source": "O'Reilly / Microsoft Press — Microsoft Project 2013 Step by Step (ISBN 9780735669116), Chapter 9 Advanced Tasks",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 20,
+      "minDependencies": 10,
+      "minResources": 5
+    },
+    {
+      "file": "02-fine-tuning-tasks.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 10 Fine-Tuning Tasks",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 20,
+      "minDependencies": 10,
+      "minResources": 5
+    },
+    {
+      "file": "03-advanced-resources.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 11 Advanced Resources",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 30,
+      "minDependencies": 10,
+      "minResources": 10
+    },
+    {
+      "file": "04-advanced-assignments.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 11 Advanced Assignments",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 40,
+      "minDependencies": 10,
+      "minResources": 10
+    },
+    {
+      "file": "05-advanced-plan.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 12 Advanced Plan",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 40,
+      "minDependencies": 15,
+      "minResources": 5
+    },
+    {
+      "file": "06-advanced-tracking.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 14 Advanced Tracking (D)",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 40,
+      "minDependencies": 15,
+      "minResources": 5
+    },
+    {
+      "file": "07-back-on-track.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 16 Getting Back on Track",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 40,
+      "minDependencies": 15,
+      "minResources": 5
+    },
+    {
+      "file": "08-advanced-reporting.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 18 Advanced Reporting",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 15,
+      "minDependencies": 10,
+      "minResources": 5
+    },
+    {
+      "file": "09-consolidating.mpp",
+      "source": "O'Reilly MS Project 2013 Step by Step, Chapter 21 Consolidating Projects (B)",
+      "url": "https://resources.oreilly.com/examples/9780735669116-files",
+      "minTasks": 15,
+      "minDependencies": 10,
+      "minResources": 5
+    },
+    {
+      "file": "10-project-online-sample.mpp",
+      "source": "Real Project Online MPP export from MPXJ GitHub issue #443 (Sample.mpp)",
+      "url": "https://github.com/joniles/mpxj/issues/443",
+      "minTasks": 3,
+      "minDependencies": 0,
+      "minResources": 0
+    }
+  ]
+}

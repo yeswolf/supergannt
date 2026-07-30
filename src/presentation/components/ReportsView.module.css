@@ -1,0 +1,87 @@
+.panel {
+  height: 100%;
+  overflow: auto;
+  padding: 1rem 1.15rem;
+  background: var(--msp-surface);
+}
+
+.heading h2,
+.sub {
+  margin: 0 0 0.35rem;
+  font-family: var(--msp-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.heading p {
+  margin: 0 0 1.15rem;
+  color: var(--msp-text-secondary);
+  font-size: 0.84rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.35rem;
+}
+
+.grid article {
+  padding: 0.9rem 1rem;
+  background: var(--msp-surface-alt);
+  border: 1px solid var(--msp-border);
+  border-radius: var(--msp-radius);
+}
+
+.grid h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: var(--msp-accent);
+  font-weight: 700;
+}
+
+.grid dl {
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.grid dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.grid dt {
+  color: var(--msp-text-secondary);
+  font-size: 0.82rem;
+}
+
+.grid dd {
+  margin: 0;
+  font-weight: 650;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--msp-border);
+  background: var(--msp-surface);
+  border-radius: var(--msp-radius);
+}
+
+.over {
+  border-color: #f1aeb5;
+  background: var(--msp-danger-soft);
+}

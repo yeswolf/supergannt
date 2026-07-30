@@ -1,0 +1,77 @@
+.wrap {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hint,
+.empty {
+  margin: 0;
+  color: var(--msp-text-secondary);
+  font-size: 0.84rem;
+}
+
+.empty {
+  padding: 0.65rem;
+  background: #fff4ce;
+  border: 1px solid #f9e2ae;
+  border-radius: var(--msp-radius);
+  color: var(--msp-warning);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid var(--msp-border);
+  padding: 0.35rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  background: var(--msp-surface-alt);
+  font-weight: 600;
+  color: var(--msp-text-secondary);
+  font-size: 0.75rem;
+}
+
+.table select,
+.table input,
+.addRow select {
+  font: inherit;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--msp-border-strong);
+  background: var(--msp-surface);
+  width: 100%;
+  border-radius: var(--msp-radius);
+}
+
+.table button {
+  appearance: none;
+  border: 1px solid var(--msp-border-strong);
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  padding: 0.3rem 0.55rem;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--msp-radius);
+}
+
+.table button:hover {
+  background: var(--msp-accent-soft);
+  border-color: var(--msp-accent);
+  color: var(--msp-accent-hover);
+}
+
+.addRow select {
+  max-width: 20rem;
+}
+
+.warn {
+  color: var(--msp-danger);
+  font-size: 0.75rem;
+}
