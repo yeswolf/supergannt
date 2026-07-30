@@ -53,10 +53,13 @@ Sample plan: [`06-advanced-tracking.mpp`](testdata/mpp/06-advanced-tracking.mpp)
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/03-tasks.png" alt="Task Sheet" width="450" />
-  &nbsp;
-  <img src="docs/screenshots/04-resources.png" alt="Resource Sheet" width="450" />
-  <br/><em>📋 Task Sheet &nbsp;·&nbsp; 👥 Resource Sheet</em>
+  <img src="docs/screenshots/03-tasks.png" alt="Task Sheet" width="920" />
+  <br/><em>📋 Task Sheet</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/04-resources.png" alt="Resource Sheet" width="920" />
+  <br/><em>👥 Resource Sheet</em>
 </p>
 
 <p align="center">
@@ -65,17 +68,23 @@ Sample plan: [`06-advanced-tracking.mpp`](testdata/mpp/06-advanced-tracking.mpp)
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/06-wbs.png" alt="WBS" width="450" />
-  &nbsp;
-  <img src="docs/screenshots/07-task-usage.png" alt="Task Usage" width="450" />
-  <br/><em>🌳 WBS &nbsp;·&nbsp; ⏱️ Task Usage</em>
+  <img src="docs/screenshots/06-wbs.png" alt="WBS" width="920" />
+  <br/><em>🌳 WBS</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/08-resource-usage.png" alt="Resource Usage" width="450" />
-  &nbsp;
-  <img src="docs/screenshots/09-calendar.png" alt="Calendar" width="450" />
-  <br/><em>📈 Resource Usage &nbsp;·&nbsp; 📆 Calendar</em>
+  <img src="docs/screenshots/07-task-usage.png" alt="Task Usage" width="920" />
+  <br/><em>⏱️ Task Usage</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/08-resource-usage.png" alt="Resource Usage" width="920" />
+  <br/><em>📈 Resource Usage</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/09-calendar.png" alt="Calendar" width="920" />
+  <br/><em>📆 Calendar</em>
 </p>
 
 <p align="center">
