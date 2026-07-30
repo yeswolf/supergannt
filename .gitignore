@@ -19,6 +19,13 @@ testdata/mpp/_download
 dist-server
 build-desktop
 release
+release-tauri
+src-tauri/target
+src-tauri/resources/server
+src-tauri/resources/mpp
+src-tauri/resources/ui
+src-tauri/resources/node
+z-out.txt
 
 # Editor directories and files
 .vscode/*

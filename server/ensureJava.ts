@@ -111,16 +111,21 @@ async function findOnPath(): Promise<string | null> {
 async function collectCandidates(runtimeDir: string): Promise<string[]> {
   const localJdk = path.join(runtimeDir, 'jdk', 'bin', javaBinName())
   const out: string[] = []
+  const ignoreSystem = process.env.SUPERGANNT_IGNORE_SYSTEM_JAVA === '1'
 
   const push = (p: string | null | undefined) => {
     if (p && !out.includes(p)) out.push(p)
   }
 
   push(process.env.SUPERGANNT_JAVA)
-  if (process.env.JAVA_HOME) {
+  if (!ignoreSystem && process.env.JAVA_HOME) {
     push(path.join(process.env.JAVA_HOME, 'bin', javaBinName()))
   }
   push(localJdk)
+
+  if (ignoreSystem) {
+    return out
+  }
 
   const pathJava = await findOnPath()
   push(pathJava)
