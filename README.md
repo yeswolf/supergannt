@@ -29,12 +29,6 @@ Open real **`.mpp`** plans. Edit them in the browser or on the desktop. Schedule
 
 Built for people who live in Gantt charts — PMs, schedulers, and engineers who want a **fast local tool** that still interoperates with **Microsoft Project** and **ProjectLibre**.
 
-### 💿 Grab the Windows installer
-
-👉 **[Download SuperGantt_1.0.2_x64-setup.exe](https://github.com/yeswolf/supergannt/releases/download/v1.0.2/SuperGantt_1.0.2_x64-setup.exe)** from [Releases](https://github.com/yeswolf/supergannt/releases/latest)
-
-> Slim NSIS install (~31 MB). Portable Node / JRE are fetched on first need into `%LOCALAPPDATA%\SuperGantt\runtime`.
-
 ---
 
 ## 📸 Screenshots
