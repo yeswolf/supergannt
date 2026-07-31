@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, within } from '@testing-library/react'
 import { renderWithWorkspace } from '../../test/workspaceTestUtils'
 import { CalendarView } from './CalendarView'
 
@@ -9,7 +9,7 @@ describe('CalendarView', () => {
     () => {
       renderWithWorkspace(<CalendarView />)
 
-      expect(screen.getByRole('heading', { name: 'Change Working Time' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Working Time' })).toBeInTheDocument()
 
       fireEvent.click(screen.getByRole('button', { name: 'Create New Calendar…' }))
       fireEvent.click(screen.getByRole('button', { name: 'Use for project' }))
@@ -48,4 +48,14 @@ describe('CalendarView', () => {
     },
     15_000,
   )
+
+  it('switches to year scale and opens a month', () => {
+    renderWithWorkspace(<CalendarView />)
+    const scale = screen.getByRole('group', { name: 'Calendar scale' })
+    fireEvent.click(within(scale).getByRole('button', { name: 'Year' }))
+    expect(screen.getByRole('grid', { name: 'Working time year' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next year' }))
+    fireEvent.click(screen.getByRole('button', { name: /January \d+/ }))
+    expect(screen.getByRole('grid', { name: 'Working time month' })).toBeInTheDocument()
+  })
 })

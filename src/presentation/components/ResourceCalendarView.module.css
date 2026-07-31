@@ -1,43 +1,4 @@
-.meta {
-  font-size: 0.84rem;
-  color: var(--msp-text-secondary);
-  align-self: center;
-}
-
-.scaleGroup {
-  display: inline-flex;
-  border: 1px solid var(--msp-border-strong);
-  border-radius: var(--msp-radius);
-  overflow: hidden;
-  align-self: end;
-}
-
-.scaleBtn,
-.scaleActive {
-  appearance: none;
-  border: none;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.4rem 0.75rem;
-  cursor: pointer;
-  background: var(--msp-surface);
-  color: var(--msp-text-secondary);
-}
-
-.scaleActive {
-  background: var(--msp-accent);
-  color: #fff;
-}
-
-.scaleBtn + .scaleBtn,
-.scaleBtn + .scaleActive,
-.scaleActive + .scaleBtn,
-.scaleActive + .scaleActive {
-  border-left: 1px solid var(--msp-border-strong);
-}
-
-.dayCell {
+﻿.dayCell {
   min-height: 5.5rem;
   align-items: stretch;
   text-align: left;
@@ -61,107 +22,37 @@
   white-space: nowrap;
   border: none;
   border-radius: 2px;
-  background: #deecf9;
-  color: #0f6cbd;
+  background: var(--msp-accent-soft);
+  color: var(--msp-accent);
   font: inherit;
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: var(--msp-text-xs);
+  font-weight: 400;
   padding: 0.12rem 0.25rem;
   cursor: pointer;
   text-align: left;
 }
 
 .taskChip:hover {
-  background: #c7e0f4;
+  background: var(--msp-accent-border);
 }
 
 .more {
-  font-size: 0.68rem;
+  font-size: var(--msp-text-xs);
   color: var(--msp-text-secondary);
   padding-left: 0.2rem;
 }
 
-.yearGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.yearMonth {
-  appearance: none;
-  border: 1px solid var(--msp-border);
-  border-radius: var(--msp-radius);
-  background: var(--msp-surface);
-  padding: 0.45rem 0.5rem 0.55rem;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-}
-
-.yearMonth:hover {
-  border-color: var(--msp-accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--msp-accent) 35%, transparent);
-}
-
-.yearMonthTitle {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.82rem;
-  font-weight: 700;
-  margin-bottom: 0.35rem;
-  color: var(--msp-text);
-}
-
-.yearMonthBadge {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #0f6cbd;
-  background: #deecf9;
-  border-radius: 999px;
-  padding: 0.05rem 0.4rem;
-}
-
-.yearMiniGrid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 1px;
-}
-
-.yearWeekday {
-  font-size: 0.62rem;
-  text-align: center;
-  color: var(--msp-text-secondary);
-  font-weight: 600;
-  padding: 0.1rem 0;
-}
-
-.yearDay,
-.yearDayPad {
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  font-size: 0.62rem;
-  border-radius: 2px;
-  line-height: 1;
-}
-
-.yearDayPad {
-  background: transparent;
-}
-
 .yearDayBusy {
-  outline: 1px solid #0f6cbd;
+  outline: 1px solid var(--msp-accent);
   outline-offset: -1px;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .yearDayBusyLegend {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.78rem;
+  font-size: var(--msp-text-sm);
   color: var(--msp-text-secondary);
 }
 
@@ -169,19 +60,7 @@
   content: '';
   width: 0.75rem;
   height: 0.75rem;
-  border: 1px solid #0f6cbd;
+  border: 1px solid var(--msp-accent);
   border-radius: 2px;
-  background: #deecf9;
-}
-
-@media (max-width: 1100px) {
-  .yearGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 720px) {
-  .yearGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  background: var(--msp-accent-soft);
 }

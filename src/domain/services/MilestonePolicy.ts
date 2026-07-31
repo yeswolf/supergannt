@@ -8,11 +8,16 @@ export function isZeroEffort(duration: Duration): boolean {
 
 /**
  * Normalize milestone + duration. Minimal non-milestone slot = 1 hour.
+ * Summaries never become milestones — rollup owns their dates/effort.
  */
 export function applyMilestoneRules(
   props: TaskProps,
   options: { forceMilestone?: boolean; forceNotMilestone?: boolean } = {},
 ): Partial<TaskProps> {
+  if (props.summary && options.forceMilestone !== true) {
+    return { milestone: false }
+  }
+
   const wantMilestone =
     options.forceMilestone === true
       ? true

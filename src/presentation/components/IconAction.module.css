@@ -1,0 +1,125 @@
+.btn,
+.active,
+.primary {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--msp-control-h);
+  height: var(--msp-control-h);
+  min-width: var(--msp-touch-min);
+  min-height: var(--msp-touch-min);
+  padding: 0;
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  cursor: pointer;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.btn svg,
+.active svg,
+.primary svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.btn:hover:not(:disabled),
+.active:hover:not(:disabled) {
+  border-color: var(--msp-accent);
+  background: var(--msp-accent-soft);
+}
+
+.btn:focus-visible,
+.active:focus-visible,
+.primary:focus-visible,
+.onDark:focus-visible {
+  outline: 2px solid var(--msp-accent);
+  outline-offset: 1px;
+}
+
+.primary {
+  background: var(--msp-accent);
+  border-color: var(--msp-accent);
+  color: var(--msp-on-accent, #fff);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--msp-accent-hover);
+  border-color: var(--msp-accent-hover);
+}
+
+.active {
+  background: var(--msp-accent);
+  border-color: var(--msp-accent);
+  color: var(--msp-on-accent, #fff);
+}
+
+.onDark {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--msp-titlebar-text);
+}
+
+.onDark:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: var(--msp-titlebar-text);
+}
+
+.btn:disabled,
+.active:disabled,
+.primary:disabled,
+.onDark:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: var(--msp-control-h);
+  min-height: var(--msp-touch-min);
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+  overflow: hidden;
+  background: var(--msp-surface);
+}
+
+.group .btn,
+.group .active,
+.group .primary {
+  width: var(--msp-control-h);
+  height: var(--msp-control-h);
+  min-width: var(--msp-touch-min);
+  min-height: var(--msp-touch-min);
+  border: none;
+  border-radius: 0;
+}
+
+.group .btn + .btn,
+.group .btn + .active,
+.group .active + .btn,
+.group .active + .active,
+.group .btn + .primary,
+.group .primary + .btn {
+  border-left: 1px solid var(--msp-border-strong);
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  min-height: var(--msp-touch-min);
+}
+
+.glyph {
+  font-size: var(--msp-text-xs);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-family: var(--msp-font);
+}

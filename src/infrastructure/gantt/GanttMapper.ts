@@ -81,3 +81,41 @@ export function toGanttData(project: Project): {
 
   return { data, links }
 }
+
+export type GanttTaskFilter = 'all' | 'critical' | 'milestones' | 'incomplete'
+
+/** Keep matching tasks plus ancestor summaries so the tree stays coherent. */
+export function filterGanttData(
+  project: Project,
+  filter: GanttTaskFilter,
+): { data: GanttTaskDto[]; links: GanttLinkDto[] } {
+  const full = toGanttData(project)
+  if (filter === 'all') return full
+
+  const byId = new Map(project.tasks.map((t) => [String(t.id), t]))
+  const matches = (taskId: string): boolean => {
+    const t = byId.get(taskId)
+    if (!t) return false
+    if (filter === 'critical') return t.critical
+    if (filter === 'milestones') return t.milestone
+    if (filter === 'incomplete') return !t.summary && t.percentComplete < 100
+    return true
+  }
+
+  const keep = new Set<string>()
+  for (const t of project.tasks) {
+    if (!matches(String(t.id))) continue
+    let cur = t as (typeof t) | undefined
+    while (cur) {
+      keep.add(String(cur.id))
+      cur = cur.parentId ? byId.get(String(cur.parentId)) : undefined
+    }
+  }
+
+  return {
+    data: full.data.filter((d) => keep.has(String(d.id))),
+    links: full.links.filter(
+      (l) => keep.has(String(l.source)) && keep.has(String(l.target)),
+    ),
+  }
+}

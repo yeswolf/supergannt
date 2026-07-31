@@ -4,9 +4,11 @@ import { renderWithWorkspace } from '../../test/workspaceTestUtils'
 import { ResourceCalendarView } from './ResourceCalendarView'
 import { CalendarView } from './CalendarView'
 
+const withDemo = { bootstrap: [{ type: 'loadDemo' as const }] }
+
 describe('ResourceCalendarView', () => {
   it('shows resource month grid and working-time actions', () => {
-    renderWithWorkspace(<ResourceCalendarView />)
+    renderWithWorkspace(<ResourceCalendarView />, withDemo)
     expect(screen.getByRole('heading', { name: 'Resource Calendar' })).toBeInTheDocument()
     expect(screen.getByLabelText('Resource calendar resource')).toBeInTheDocument()
     expect(screen.getByRole('grid', { name: 'Resource calendar month' })).toBeInTheDocument()
@@ -15,7 +17,7 @@ describe('ResourceCalendarView', () => {
   })
 
   it('switches between month and year scale', () => {
-    renderWithWorkspace(<ResourceCalendarView />)
+    renderWithWorkspace(<ResourceCalendarView />, withDemo)
     const scale = screen.getByRole('group', { name: 'Calendar scale' })
     fireEvent.click(within(scale).getByRole('button', { name: 'Year' }))
     expect(screen.getByRole('grid', { name: 'Resource calendar year' })).toBeInTheDocument()
@@ -30,8 +32,8 @@ describe('ResourceCalendarView', () => {
 
 describe('CalendarView resource scope', () => {
   it('switches For selector to a resource and can create a resource calendar', () => {
-    renderWithWorkspace(<CalendarView />)
-    expect(screen.getByRole('heading', { name: 'Change Working Time' })).toBeInTheDocument()
+    renderWithWorkspace(<CalendarView />, withDemo)
+    expect(screen.getByRole('heading', { name: 'Working Time' })).toBeInTheDocument()
     const owner = screen.getByLabelText('Calendar applies to')
     const options = within(owner).getAllByRole('option')
     const resourceOption = options.find((o) => o.textContent?.startsWith('Resource:'))

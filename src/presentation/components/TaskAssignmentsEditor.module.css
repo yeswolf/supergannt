@@ -1,77 +1,89 @@
 .wrap {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.45rem;
+  overflow: auto;
 }
 
-.hint,
 .empty {
   margin: 0;
+  padding: 0 var(--msp-cell-px);
+  height: var(--msp-row-h);
+  display: flex;
+  align-items: center;
   color: var(--msp-text-secondary);
-  font-size: 0.84rem;
-}
-
-.empty {
-  padding: 0.65rem;
-  background: #fff4ce;
-  border: 1px solid #f9e2ae;
-  border-radius: var(--msp-radius);
-  color: var(--msp-warning);
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
+  border-bottom: 1px solid var(--msp-border);
 }
 
 .table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
-  font-size: 0.84rem;
+  font-size: var(--msp-text-sm);
+  table-layout: auto;
+}
+
+.table[data-cols-ready] {
+  table-layout: fixed;
+  min-width: 0;
 }
 
 .table th,
 .table td {
   border-bottom: 1px solid var(--msp-border);
-  padding: 0.35rem;
+  border-right: 1px solid var(--msp-border);
+  padding: 0 var(--msp-cell-px);
+  height: var(--msp-row-h);
   text-align: left;
   vertical-align: middle;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .table th {
   background: var(--msp-surface-alt);
-  font-weight: 600;
   color: var(--msp-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
 }
 
 .table select,
 .table input,
 .addRow select {
   font: inherit;
-  padding: 0.35rem 0.45rem;
-  border: 1px solid var(--msp-border-strong);
-  background: var(--msp-surface);
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
+  height: var(--msp-control-h);
+  min-height: var(--msp-control-h);
+  box-sizing: border-box;
+  padding: 0 0.25rem;
+  border: 1px solid transparent;
+  background: transparent;
   width: 100%;
-  border-radius: var(--msp-radius);
-}
-
-.table button {
-  appearance: none;
-  border: 1px solid var(--msp-border-strong);
-  background: var(--msp-surface);
+  border-radius: 2px;
   color: var(--msp-text);
-  padding: 0.3rem 0.55rem;
-  font: inherit;
-  cursor: pointer;
-  border-radius: var(--msp-radius);
 }
 
-.table button:hover {
-  background: var(--msp-accent-soft);
+.table select:focus,
+.table input:focus,
+.addRow select:focus {
+  outline: none;
   border-color: var(--msp-accent);
-  color: var(--msp-accent-hover);
+  background: var(--msp-surface);
 }
 
 .addRow select {
   max-width: 20rem;
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+  padding: 0 0.35rem;
 }
 
 .warn {
   color: var(--msp-danger);
-  font-size: 0.75rem;
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
 }

@@ -1,44 +1,32 @@
-@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Segoe+UI:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&display=swap');
+@import './themes.css';
 
 :root {
-  /* Fluent / MS Project 2026-inspired tokens */
-  --msp-bg: #f3f2f1;
-  --msp-surface: #ffffff;
-  --msp-surface-alt: #faf9f8;
-  --msp-ribbon: #ffffff;
-  --msp-titlebar: #0f6cbd;
-  --msp-titlebar-text: #ffffff;
-  --msp-accent: #0f6cbd;
-  --msp-accent-hover: #115ea3;
-  --msp-accent-soft: #e8f3fc;
-  --msp-accent-border: #b4d6fa;
-  --msp-text: #242424;
-  --msp-text-secondary: #616161;
-  --msp-text-muted: #8a8886;
-  --msp-border: #e1dfdd;
-  --msp-border-strong: #c8c6c4;
-  --msp-row-hover: #f5f5f5;
-  --msp-row-selected: #cfe4f9;
-  --msp-danger: #c50f1f;
-  --msp-danger-soft: #fde7e9;
-  --msp-success: #0e700e;
-  --msp-warning: #8a6116;
-  --msp-gantt-bar: #5b9bd5;
-  --msp-gantt-bar-progress: #2b579a;
-  --msp-gantt-critical: #d13438;
-  --msp-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
-  --msp-radius: 4px;
-  --msp-font: 'Source Sans 3', 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --msp-font-display: 'Source Sans 3', 'Segoe UI', sans-serif;
-  /* Ribbon command icons — one size for every tab so the ribbon never jumps */
-  --msp-icon-ribbon: 2.75rem;
-  --msp-icon-ribbon-large: 2.75rem; /* alias kept for older refs; same as ribbon */
-  --msp-icon-view: 1.7rem;
-  --msp-icon-brand: 1.75rem;
-  --msp-ribbon-cmd-height: 5.15rem;
-  --msp-ribbon-body-height: 6.85rem;
-  --msp-ribbon-icon-slot: 2.85rem;
-  --msp-ribbon-label-height: 1.85rem;
+  --msp-shadow: none;
+  --msp-radius: 6px;
+  --msp-font: 'Geist Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  --msp-font-display: var(--msp-font);
+  /* Readable mono scale (base 15px) */
+  --msp-text-xs: 0.733rem;
+  --msp-text-sm: 0.867rem;
+  --msp-text-md: 0.933rem;
+  --msp-text-lg: 1rem;
+  --msp-text-xl: 1.2rem;
+  --msp-grid-font: var(--msp-text-sm);
+  /* Touch-first density (44px everywhere) */
+  --msp-control-h: 44px;
+  --msp-row-h: 44px;
+  --msp-touch-min: 44px;
+  --msp-cell-px: 0.45rem;
+  --msp-heading-py: 0.35rem;
+  --msp-heading-px: 0.75rem;
+  --msp-toolbar-h: var(--msp-control-h);
+  --msp-indent: 1.1rem;
+  --msp-chrome-h: 48px;
+  --msp-bottom-nav-h: 56px;
+  --msp-gantt-row-px: 44;
+  --msp-icon-view: 1.35rem;
+  --msp-icon-brand: 1.5rem;
 
   color: var(--msp-text);
   background: var(--msp-bg);
@@ -47,8 +35,11 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.4;
-  font-size: 14px;
+  line-height: 1.35;
+  font-size: 15px;
+  font-feature-settings: 'ss01' on, 'calt' on;
+  letter-spacing: -0.01em;
+  font-weight: 400;
 }
 
 * {
@@ -68,11 +59,14 @@ input,
 select,
 textarea {
   font: inherit;
+  font-weight: 400;
 }
 
 body {
   min-width: 320px;
   overflow: hidden;
+  color: var(--msp-text);
+  background: var(--msp-bg);
 }
 
 #root {
@@ -83,4 +77,60 @@ body {
 ::selection {
   background: var(--msp-accent-soft);
   color: var(--msp-text);
+}
+
+code,
+kbd,
+samp {
+  font-family: var(--msp-font);
+}
+
+:focus-visible {
+  outline: 2px solid var(--msp-accent);
+  outline-offset: 1px;
+}
+
+/* Modern scrollbars — thin thumb, no classic arrow buttons */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--msp-text-muted) 55%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 2px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--msp-text-muted) 45%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--msp-text-secondary) 65%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--msp-text-secondary) 85%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }

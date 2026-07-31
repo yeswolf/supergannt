@@ -1,6 +1,6 @@
 [package]
 name = "supergannt"
-version = "1.0.1"
+version = "1.0.2"
 description = "SuperGantt — MS Project / ProjectLibre alternative (Tauri / WebView2)"
 authors = ["SuperGantt"]
 edition = "2021"

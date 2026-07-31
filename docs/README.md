@@ -1,6 +1,6 @@
 # SuperGantt — documentation index
 
-This folder is the **canonical requirements and decision record** distilled from the full product chat history (initial vision through desktop packaging, scheduling parity with ProjectLibre, Network Diagram, icons, installers, and regression fixes).
+This folder is the **canonical requirements and decision record** distilled from the full product chat history (initial vision through desktop packaging, scheduling parity with ProjectLibre, Network Diagram, adaptive shell, themes, and regression fixes).
 
 Use these documents when implementing features, reviewing PRs, writing tests, or deciding “does this match what we agreed?”.
 
@@ -13,8 +13,8 @@ Use these documents when implementing features, reviewing PRs, writing tests, or
 | [requirements/01-architecture-quality.md](./requirements/01-architecture-quality.md) | CLEAN architecture, libs policy, code quality, test coverage |
 | [requirements/02-file-formats.md](./requirements/02-file-formats.md) | `.mpp` / MSPDI / MPX / PDF open-save rules, identity, Java runtime |
 | [requirements/03-scheduling.md](./requirements/03-scheduling.md) | ProjectLibre parity: links, constraints, effort triangle, calendars, milestones |
-| [requirements/04-ui-ux.md](./requirements/04-ui-ux.md) | Views, ribbon, Gantt, Task Info, Network, histograms, icons, loaders |
-| [requirements/05-runtime-packaging.md](./requirements/05-runtime-packaging.md) | Web, Docker, Tauri desktop, installer, ports, 404, JDK discovery |
+| [requirements/04-ui-ux.md](./requirements/04-ui-ux.md) | Adaptive shell, themes, ViewHeader, Gantt, Task Info, Network, histograms |
+| [requirements/05-runtime-packaging.md](./requirements/05-runtime-packaging.md) | Web, Docker, Tauri desktop, installer, ports, JDK discovery |
 | [requirements/06-testing-verification.md](./requirements/06-testing-verification.md) | Tests, fixtures, coverage ≥80%, always-test-then-build rule |
 | [requirements/07-bugfixes-and-regressions.md](./requirements/07-bugfixes-and-regressions.md) | Confirmed bugs from late chats and required invariants |
 | [decisions/adr-index.md](./decisions/adr-index.md) | Architecture / vendor decisions (Aspose rejected, OLE path, etc.) |
@@ -27,7 +27,7 @@ Use these documents when implementing features, reviewing PRs, writing tests, or
 
 ## Source of truth
 
-- Chat transcripts under the Cursor project `agent-transcripts` for SuperGantt (sessions including the original product brief and follow-ups through icon/installer/Task Info OK fixes).
+- Chat transcripts under the Cursor project `agent-transcripts` for SuperGantt.
 - Living product surface: `README.md`, `package.json` scripts, `src/**`, `server/**`, `src-tauri/**`.
 
 If code and this docs folder disagree, **update the docs in the same change** (or explicitly mark a requirement as superseded in an ADR).

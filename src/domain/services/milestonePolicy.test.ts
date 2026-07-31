@@ -48,4 +48,10 @@ describe('MilestonePolicy (hour-based)', () => {
     expect(rules.milestone).toBe(false)
     expect(rules.duration?.toHours()).toBe(1)
   })
+
+  it('does not turn summary tasks into milestones', () => {
+    const rules = applyMilestoneRules({ ...baseProps(0), summary: true })
+    expect(rules.milestone).toBe(false)
+    expect(rules.duration).toBeUndefined()
+  })
 })

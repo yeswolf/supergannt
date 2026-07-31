@@ -1,5 +1,7 @@
 import type { Project } from '../../domain/entities/Project'
+import { IconAction } from './IconAction'
 import styles from './TaskAssignmentsEditor.module.css'
+import { ColumnHeader, useResizableColumns } from './useResizableColumns'
 
 export interface TaskAssignmentDraft {
   assignmentId?: string
@@ -31,24 +33,38 @@ export function TaskAssignmentsEditor({
 }: Props) {
   const assignedIds = new Set(drafts.map((d) => d.resourceId))
   const available = project.resources.filter((r) => !assignedIds.has(r.id))
+  const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
+    `${drafts.length}:${project.resources.length}`,
+  )
 
   return (
     <div className={styles.wrap}>
-      <p className={styles.hint}>
-        Assign resources to this task (same as ProjectLibre Task Information →
-        Resources). Units = allocation (1 = 100%).
-      </p>
       {project.resources.length === 0 ? (
-        <p className={styles.empty}>
-          No resources yet — open the Resources view and add people/equipment first.
-        </p>
+        <p className={styles.empty}>No resources yet.</p>
       ) : null}
-      <table className={styles.table}>
+      <table ref={tableRef} className={styles.table}>
+        {colgroup}
         <thead>
           <tr>
-            <th>Resource Name</th>
-            <th>Units</th>
-            <th />
+            <ColumnHeader
+              index={0}
+              onResizeStart={onResizeStart}
+              onResizeAuto={onResizeAuto}
+            >
+              Resource Name
+            </ColumnHeader>
+            <ColumnHeader
+              index={1}
+              onResizeStart={onResizeStart}
+              onResizeAuto={onResizeAuto}
+            >
+              Units
+            </ColumnHeader>
+            <ColumnHeader
+              index={2}
+              onResizeStart={onResizeStart}
+              onResizeAuto={onResizeAuto}
+            />
           </tr>
         </thead>
         <tbody>
@@ -104,8 +120,9 @@ export function TaskAssignmentsEditor({
                   />
                 </td>
                 <td>
-                  <button
-                    type="button"
+                  <IconAction
+                    label="Remove"
+                    icon="delete"
                     onClick={() => {
                       if (live && row.assignmentId && onUnassign) {
                         onUnassign(row.assignmentId)
@@ -113,9 +130,7 @@ export function TaskAssignmentsEditor({
                       }
                       onChange(drafts.filter((_, j) => j !== i))
                     }}
-                  >
-                    Remove
-                  </button>
+                  />
                 </td>
               </tr>
             )

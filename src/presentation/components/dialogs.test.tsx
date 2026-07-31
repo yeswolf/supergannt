@@ -49,6 +49,7 @@ describe('TaskInformationDialog', () => {
         <OpenFirstTaskInfo tab="general" />
         <TaskInformationDialog />
       </>,
+      { bootstrap: [{ type: 'loadDemo' }] },
     )
 
     await waitFor(() =>
@@ -57,16 +58,16 @@ describe('TaskInformationDialog', () => {
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Updated Task' } })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Predecessors' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Predecessors' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add predecessor' }))
     const removePred = screen.getAllByRole('button', { name: 'Remove' })[0]
     if (removePred) fireEvent.click(removePred)
     fireEvent.click(screen.getByRole('button', { name: 'Add predecessor' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resources' }))
-    expect(screen.getByText(/Assign resources/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Resources' }))
+    expect(screen.getByLabelText('Add resource to task')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
     fireEvent.change(screen.getByLabelText('Constraint type'), {
       target: { value: 'mustStartOn' },
     })
@@ -84,6 +85,7 @@ describe('TaskInformationDialog', () => {
         <OpenFirstTaskInfo />
         <TaskInformationDialog />
       </>,
+      { bootstrap: [{ type: 'loadDemo' }] },
     )
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -91,12 +93,11 @@ describe('TaskInformationDialog', () => {
 })
 
 describe('AssignResourcesDialog', () => {
-  it('shows hint when no task selected', () => {
+  it('shows status when assign opens with no task', () => {
     renderWithWorkspace(<AssignResourcesDialog />, {
       bootstrap: [{ type: 'openAssignDialog' }],
     })
-    expect(screen.getByText(/Select a task first/i)).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Close'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('saves assignments for a selected task', async () => {
@@ -105,6 +106,7 @@ describe('AssignResourcesDialog', () => {
         <OpenAssignForFirstTask />
         <AssignResourcesDialog />
       </>,
+      { bootstrap: [{ type: 'loadDemo' }] },
     )
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
@@ -161,7 +163,7 @@ describe('TaskAssignmentsEditor', () => {
         target: { value: '0.5' },
       })
       expect(onUnits).toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+      fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]!)
       expect(onUnassign).toHaveBeenCalled()
     } else {
       const addLive = screen.getByLabelText('Add resource to task')

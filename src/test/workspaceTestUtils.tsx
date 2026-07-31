@@ -5,6 +5,7 @@ import {
   useWorkspaceDispatch,
 } from '../presentation/state/WorkspaceContext'
 import type { WorkspaceAction } from '../presentation/state/workspace'
+import { ThemeProvider } from '../presentation/theme/ThemeContext'
 
 function Bootstrap({
   actions,
@@ -29,9 +30,11 @@ export function renderWithWorkspace(
   const { bootstrap, ...rest } = options ?? {}
   return render(ui, {
     wrapper: ({ children }) => (
-      <WorkspaceProvider>
-        <Bootstrap actions={bootstrap}>{children}</Bootstrap>
-      </WorkspaceProvider>
+      <ThemeProvider>
+        <WorkspaceProvider>
+          <Bootstrap actions={bootstrap}>{children}</Bootstrap>
+        </WorkspaceProvider>
+      </ThemeProvider>
     ),
     ...rest,
   })

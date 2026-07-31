@@ -1,39 +1,49 @@
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { toResourceSheet } from '../../application/services/ReportingService'
+import { IconAction } from './IconAction'
 import styles from './DataTable.module.css'
+import { ColumnHeader, useResizableColumns } from './useResizableColumns'
+import { ViewHeader } from './ViewHeader'
+
+const HEADERS = [
+  'Name',
+  'Type',
+  'Group',
+  'Max Units',
+  'Std Rate',
+  'Calendar',
+  'Assigned',
+  'Work (h)',
+  'Cost',
+  '',
+] as const
 
 export function ResourceView() {
   const { project, selectedResourceId, selectedTaskId } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const utilization = toResourceSheet(project)
+  const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
+    project.resources.length,
+  )
 
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>Resources</h2>
-        <p>
-          Select a task in Gantt/Task Sheet, then use Assign here — or use toolbar{' '}
-          <strong>Assign</strong> / Task Info → Resources from any view. Base{' '}
-          <strong>Calendar</strong> drives resource availability (MS Project).
-        </p>
-        <button type="button" onClick={() => dispatch({ type: 'addResource' })}>
-          Add Resource
-        </button>
-      </div>
+      <ViewHeader title="Resources" />
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table ref={tableRef} className={styles.table}>
+          {colgroup}
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Group</th>
-              <th>Max Units</th>
-              <th>Std Rate</th>
-              <th>Calendar</th>
-              <th>Assigned</th>
-              <th>Work (h)</th>
-              <th>Cost</th>
-              <th />
+              {HEADERS.map((label, i) => (
+                <ColumnHeader
+                  key={label || 'actions'}
+                  index={i}
+                  onResizeStart={onResizeStart}
+                  onResizeAuto={onResizeAuto}
+                >
+                  {label}
+                </ColumnHeader>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -165,8 +175,9 @@ export function ResourceView() {
                   <td>{util?.cost.format() ?? '—'}</td>
                   <td>
                     <div className={styles.rowActions}>
-                      <button
-                        type="button"
+                      <IconAction
+                        label="Assign to task"
+                        icon="resources"
                         disabled={!selectedTaskId}
                         onClick={(e) => {
                           e.stopPropagation()
@@ -177,18 +188,15 @@ export function ResourceView() {
                             resourceId: resource.id,
                           })
                         }}
-                      >
-                        Assign to task
-                      </button>
-                      <button
-                        type="button"
+                      />
+                      <IconAction
+                        label="Delete"
+                        icon="delete"
                         onClick={(e) => {
                           e.stopPropagation()
                           dispatch({ type: 'deleteResource', resourceId: resource.id })
                         }}
-                      >
-                        Delete
-                      </button>
+                      />
                     </div>
                   </td>
                 </tr>

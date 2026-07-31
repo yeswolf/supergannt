@@ -1,6 +1,7 @@
-import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type KeyboardEvent, type SetStateAction } from 'react'
 import type { LinkType } from '../../domain/entities/Dependency'
-import type { TaskConstraintType } from '../../domain/entities/Task'
+import type { Project } from '../../domain/entities/Project'
+import type { Task, TaskConstraintType } from '../../domain/entities/Task'
 import { asTaskId } from '../../domain/value-objects/Ids'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
@@ -9,6 +10,8 @@ import {
   draftsFromProject,
   type TaskAssignmentDraft,
 } from './TaskAssignmentsEditor'
+import { IconAction, IconActions } from './IconAction'
+import { ColumnHeader, useResizableColumns } from './useResizableColumns'
 import styles from './TaskInformationDialog.module.css'
 
 const LINK_TYPES: LinkType[] = ['FS', 'SS', 'FF', 'SF']
@@ -48,6 +51,7 @@ export function TaskInformationDialog() {
   const [constraintDate, setConstraintDate] = useState('')
   const [links, setLinks] = useState<DraftLink[]>([])
   const [assignments, setAssignments] = useState<TaskAssignmentDraft[]>([])
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!task || !taskInfoOpen) return
@@ -73,6 +77,26 @@ export function TaskInformationDialog() {
     setAssignments(draftsFromProject(project, task.id))
     setTab(taskInfoTab)
   }, [task, taskInfoOpen, project.dependencies, project.assignments, taskInfoTab])
+
+  useEffect(() => {
+    if (!taskInfoOpen || !task) return
+    const prev = document.activeElement as HTMLElement | null
+    const focusable = dialogRef.current?.querySelector<HTMLElement>(
+      'input, select, textarea, button, [href], [tabindex]:not([tabindex="-1"])',
+    )
+    focusable?.focus()
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        dispatch({ type: 'closeTaskInfo' })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      prev?.focus?.()
+    }
+  }, [taskInfoOpen, task, dispatch])
 
   if (!taskInfoOpen || !task) return null
 
@@ -178,11 +202,18 @@ export function TaskInformationDialog() {
   const onDialogKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
     const target = e.target as HTMLElement
-    // Multiline notes: Enter inserts a newline; buttons keep their own activation.
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON') return
+    const tag = target.tagName
+    if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT') return
     e.preventDefault()
     confirmOk()
   }
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'general', label: 'General' },
+    { id: 'predecessors', label: 'Predecessors' },
+    { id: 'resources', label: 'Resources' },
+    { id: 'advanced', label: 'Advanced' },
+  ]
 
   return (
     <div
@@ -191,6 +222,7 @@ export function TaskInformationDialog() {
       onClick={() => dispatch({ type: 'closeTaskInfo' })}
     >
       <div
+        ref={dialogRef}
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
@@ -200,37 +232,37 @@ export function TaskInformationDialog() {
       >
         <header className={styles.header}>
           <h2 id="task-info-title">Task Information</h2>
-          <button
-            type="button"
-            className={styles.close}
-            aria-label="Close"
+          <IconAction
+            label="Close"
+            icon="cancel"
+            tone="onDark"
             onClick={() => dispatch({ type: 'closeTaskInfo' })}
-          >
-            ×
-          </button>
+          />
         </header>
 
-        <nav className={styles.tabs} aria-label="Task information tabs">
-          {(
-            [
-              ['general', 'General'],
-              ['predecessors', 'Predecessors'],
-              ['resources', 'Resources'],
-              ['advanced', 'Advanced'],
-            ] as const
-          ).map(([id, label]) => (
+        <div className={styles.tabs} role="tablist" aria-label="Task information tabs">
+          {tabs.map(({ id, label }) => (
             <button
               key={id}
               type="button"
+              role="tab"
+              id={`task-tab-${id}`}
+              aria-selected={tab === id}
+              aria-controls={`task-panel-${id}`}
               className={tab === id ? styles.tabActive : undefined}
               onClick={() => setTab(id)}
             >
               {label}
             </button>
           ))}
-        </nav>
+        </div>
 
-        <div className={styles.body}>
+        <div
+          className={styles.body}
+          role="tabpanel"
+          id={`task-panel-${tab}`}
+          aria-labelledby={`task-tab-${tab}`}
+        >
           {tab === 'general' ? (
             <div className={styles.form}>
               <label>
@@ -290,122 +322,12 @@ export function TaskInformationDialog() {
           ) : null}
 
           {tab === 'predecessors' ? (
-            <div className={styles.predTab}>
-              <p className={styles.hint}>
-                Add predecessors with type and lag (hours), same as ProjectLibre Task
-                Information → Predecessors.
-              </p>
-              <table className={styles.predTable}>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Task Name</th>
-                    <th>Type</th>
-                    <th>Lag (h)</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {links.map((link, i) => {
-                    const pred = project.getTask(asTaskId(link.predecessorId))
-                    const predIndex = project.tasks.findIndex(
-                      (t) => t.id === link.predecessorId,
-                    )
-                    return (
-                      <tr key={`${link.predecessorId}-${i}`}>
-                        <td>{predIndex >= 0 ? predIndex + 1 : '—'}</td>
-                        <td>
-                          <select
-                            value={link.predecessorId}
-                            aria-label={`Predecessor ${i + 1} task`}
-                            onChange={(e) => {
-                              const predecessorId = e.target.value
-                              setLinks((prev) =>
-                                prev.map((row, j) =>
-                                  j === i ? { ...row, predecessorId } : row,
-                                ),
-                              )
-                            }}
-                          >
-                            {otherTasks.map((t) => {
-                              const idx = project.tasks.findIndex((x) => x.id === t.id)
-                              return (
-                                <option key={t.id} value={t.id}>
-                                  {idx + 1} — {t.name}
-                                </option>
-                              )
-                            })}
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            value={link.type}
-                            aria-label={`Predecessor ${i + 1} type`}
-                            onChange={(e) => {
-                              const type = e.target.value as LinkType
-                              setLinks((prev) =>
-                                prev.map((row, j) =>
-                                  j === i ? { ...row, type } : row,
-                                ),
-                              )
-                            }}
-                          >
-                            {LINK_TYPES.map((t) => (
-                              <option key={t} value={t}>
-                                {t}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step={1}
-                            value={link.lagHours}
-                            aria-label={`Predecessor ${i + 1} lag hours`}
-                            onChange={(e) => {
-                              const lagHours = Number(e.target.value)
-                              setLinks((prev) =>
-                                prev.map((row, j) =>
-                                  j === i ? { ...row, lagHours } : row,
-                                ),
-                              )
-                            }}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setLinks((prev) => prev.filter((_, j) => j !== i))
-                            }
-                          >
-                            Remove
-                          </button>
-                        </td>
-                        {!pred ? (
-                          <td className={styles.warn}>Missing task</td>
-                        ) : null}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <button
-                type="button"
-                disabled={otherTasks.length === 0}
-                onClick={() => {
-                  const first = otherTasks[0]
-                  if (!first) return
-                  setLinks((prev) => [
-                    ...prev,
-                    { predecessorId: first.id, type: 'FS', lagHours: 0 },
-                  ])
-                }}
-              >
-                Add predecessor
-              </button>
-            </div>
+            <PredecessorsTable
+              links={links}
+              setLinks={setLinks}
+              project={project}
+              otherTasks={otherTasks}
+            />
           ) : null}
 
           {tab === 'resources' ? (
@@ -451,17 +373,154 @@ export function TaskInformationDialog() {
         </div>
 
         <footer className={styles.footer}>
-          <button type="button" onClick={confirmOk}>
-            OK
-          </button>
-          <button type="button" onClick={() => dispatch({ type: 'closeTaskInfo' })}>
-            Cancel
-          </button>
-          <button type="button" onClick={applyCurrentTab}>
-            Apply
-          </button>
+          <IconActions>
+            <IconAction label="OK" icon="ok" primary onClick={confirmOk} />
+            <IconAction
+              label="Cancel"
+              icon="cancel"
+              onClick={() => dispatch({ type: 'closeTaskInfo' })}
+            />
+            <IconAction label="Apply" icon="apply" onClick={applyCurrentTab} />
+          </IconActions>
         </footer>
       </div>
     </div>
   )
 }
+
+function PredecessorsTable({
+  links,
+  setLinks,
+  project,
+  otherTasks,
+}: {
+  links: DraftLink[]
+  setLinks: Dispatch<SetStateAction<DraftLink[]>>
+  project: Project
+  otherTasks: Task[]
+}) {
+  const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
+    links.length,
+  )
+  const headers = ['ID', 'Task Name', 'Type', 'Lag (h)', ''] as const
+
+  return (
+    <div className={styles.predTab}>
+      <table ref={tableRef} className={styles.predTable}>
+        {colgroup}
+        <thead>
+          <tr>
+            {headers.map((label, i) => (
+              <ColumnHeader
+                key={label || 'actions'}
+                index={i}
+                onResizeStart={onResizeStart}
+                onResizeAuto={onResizeAuto}
+              >
+                {label}
+              </ColumnHeader>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {links.map((link, i) => {
+            const pred = project.getTask(asTaskId(link.predecessorId))
+            const predIndex = project.tasks.findIndex(
+              (t) => t.id === link.predecessorId,
+            )
+            return (
+              <tr key={`${link.predecessorId}-${i}`}>
+                <td>{predIndex >= 0 ? predIndex + 1 : '—'}</td>
+                <td>
+                  <select
+                    value={link.predecessorId}
+                    aria-label={`Predecessor ${i + 1} task`}
+                    onChange={(e) => {
+                      const predecessorId = e.target.value
+                      setLinks((prev) =>
+                        prev.map((row, j) =>
+                          j === i ? { ...row, predecessorId } : row,
+                        ),
+                      )
+                    }}
+                  >
+                    {otherTasks.map((t) => {
+                      const idx = project.tasks.findIndex((x) => x.id === t.id)
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {idx + 1} — {t.name}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  {!pred ? (
+                    <span className={styles.warn}> (missing)</span>
+                  ) : null}
+                </td>
+                <td>
+                  <select
+                    value={link.type}
+                    aria-label={`Predecessor ${i + 1} type`}
+                    onChange={(e) => {
+                      const type = e.target.value as LinkType
+                      setLinks((prev) =>
+                        prev.map((row, j) =>
+                          j === i ? { ...row, type } : row,
+                        ),
+                      )
+                    }}
+                  >
+                    {LINK_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    step={1}
+                    value={link.lagHours}
+                    aria-label={`Predecessor ${i + 1} lag hours`}
+                    onChange={(e) => {
+                      const lagHours = Number(e.target.value)
+                      setLinks((prev) =>
+                        prev.map((row, j) =>
+                          j === i ? { ...row, lagHours } : row,
+                        ),
+                      )
+                    }}
+                  />
+                </td>
+                <td>
+                  <IconAction
+                    label="Remove"
+                    icon="delete"
+                    onClick={() =>
+                      setLinks((prev) => prev.filter((_, j) => j !== i))
+                    }
+                  />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <IconAction
+        label="Add predecessor"
+        icon="add"
+        disabled={otherTasks.length === 0}
+        onClick={() => {
+          const first = otherTasks[0]
+          if (!first) return
+          setLinks((prev) => [
+            ...prev,
+            { predecessorId: first.id, type: 'FS', lagHours: 0 },
+          ])
+        }}
+      />
+    </div>
+  )
+}
+

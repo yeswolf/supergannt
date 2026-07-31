@@ -1,41 +1,69 @@
 .app {
   height: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'top top'
+    'rail main'
+    'rail status'
+    'bottom bottom';
   background: var(--msp-bg);
   color: var(--msp-text);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  /* Allow title-bar menus to paint over main; body already locks page scroll */
+  overflow: visible;
 }
 
 .main {
+  grid-area: main;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: var(--msp-surface);
-  border-top: 1px solid var(--msp-border);
 }
 
 .statusBar {
+  grid-area: status;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.28rem 0.85rem;
+  padding: 0 0.85rem;
   background: var(--msp-surface-alt);
   border-top: 1px solid var(--msp-border);
-  font-size: 0.78rem;
+  font-size: var(--msp-text-sm);
   color: var(--msp-text-secondary);
-  min-height: 1.75rem;
+  min-height: var(--msp-row-h);
+  min-width: 0;
+  font-weight: 400;
+  overflow: hidden;
 }
 
 .statusBar strong {
   color: var(--msp-text);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .statusMeta {
   display: flex;
   gap: 0.85rem;
   flex-wrap: wrap;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.statusBar > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .busyOverlay {
@@ -44,7 +72,8 @@
   z-index: 50;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
   background: rgba(36, 36, 36, 0.35);
 }
 
@@ -58,7 +87,7 @@
   background: var(--msp-surface);
   border: 1px solid var(--msp-border-strong);
   border-radius: var(--msp-radius);
-  box-shadow: var(--msp-shadow);
+  box-shadow: none;
   text-align: center;
 }
 
@@ -73,22 +102,37 @@
 
 .busyTitle {
   margin: 0;
-  font-family: var(--msp-font-display);
-  font-size: 0.95rem;
-  font-weight: 650;
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-lg);
+  font-weight: 400;
   color: var(--msp-text);
 }
 
 .busyDetail {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--msp-text-md);
   color: var(--msp-text-secondary);
-  max-width: 28ch;
-  overflow-wrap: anywhere;
+  max-width: 18rem;
 }
 
 @keyframes busySpin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 820px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'top'
+      'main'
+      'status'
+      'bottom';
+  }
+
+  .statusMeta span:nth-child(n + 3) {
+    display: none;
   }
 }

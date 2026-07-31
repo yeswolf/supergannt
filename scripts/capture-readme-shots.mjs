@@ -116,13 +116,16 @@ async function prepareShotPlan(sourceMpp) {
   }
 }
 
-async function clickQuickView(page, label) {
-  const chip = page.getByLabel('Quick views').getByRole('button', { name: label })
-  if (await chip.count()) {
-    await chip.click()
-    return
+async function clickView(page, label) {
+  const rail = page.getByRole('navigation', { name: 'Views' })
+  if (await rail.count()) {
+    const btn = rail.getByRole('button', { name: label })
+    if (await btn.count()) {
+      await btn.click()
+      return
+    }
   }
-  await page.locator(`[title="${label}"]`).first().click()
+  await page.getByRole('button', { name: label }).first().click()
 }
 
 async function main() {
@@ -191,7 +194,7 @@ async function main() {
     }
 
     await shot('01-gantt', async () => {
-      await clickQuickView(page, 'Gantt Chart')
+      await clickView(page, 'Gantt Chart')
       const week = page.getByRole('button', { name: 'Week', exact: true })
       if (await week.count()) await week.click()
       await page.waitForTimeout(500)
@@ -204,36 +207,36 @@ async function main() {
     })
 
     await shot('03-tasks', async () => {
-      await clickQuickView(page, 'Task Sheet')
+      await clickView(page, 'Task Sheet')
     })
 
     await shot('04-resources', async () => {
-      await clickQuickView(page, 'Resource Sheet')
+      await clickView(page, 'Resource Sheet')
     })
 
     await shot('05-network', async () => {
-      await clickQuickView(page, 'Network Diagram')
+      await clickView(page, 'Network Diagram')
       await page.waitForTimeout(1500)
     })
 
     await shot('06-wbs', async () => {
-      await clickQuickView(page, 'WBS')
+      await clickView(page, 'WBS')
     })
 
     await shot('07-task-usage', async () => {
-      await clickQuickView(page, 'Task Usage')
+      await clickView(page, 'Task Usage')
     })
 
     await shot('08-resource-usage', async () => {
-      await clickQuickView(page, 'Resource Usage')
+      await clickView(page, 'Resource Usage')
     })
 
     await shot('09-calendar', async () => {
-      await clickQuickView(page, 'Calendar')
+      await clickView(page, 'Working Time')
     })
 
     await shot('10-reports', async () => {
-      await clickQuickView(page, 'Reports')
+      await clickView(page, 'Reports')
     })
   } finally {
     await browser.close()

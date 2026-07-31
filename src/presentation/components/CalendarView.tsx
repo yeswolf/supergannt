@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as CalendarUseCases from '../../application/use-cases/CalendarUseCases'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
+import { IconAction, IconActionGroup, IconActions } from './IconAction'
+import { ViewHeader, ViewHeaderSep } from './ViewHeader'
 import styles from './CalendarView.module.css'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_NAMES_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const MONTH_NAMES = [
   'January',
   'February',
@@ -18,8 +21,23 @@ const MONTH_NAMES = [
   'November',
   'December',
 ]
+const MONTH_NAMES_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]
 
 type Tab = 'calendar' | 'workWeek' | 'exceptions'
+type Scale = 'month' | 'year'
 
 function localKey(date: Date): string {
   const y = date.getFullYear()
@@ -59,6 +77,7 @@ export function CalendarView() {
   const calendar =
     project.calendars.find((c) => c.id === activeCalendarId) ?? project.getCalendar()
   const [tab, setTab] = useState<Tab>('calendar')
+  const [scale, setScale] = useState<Scale>('month')
   const [cursor, setCursor] = useState(() => {
     const s = project.startDate
     return { year: s.getFullYear(), month: s.getMonth() }
@@ -77,6 +96,15 @@ export function CalendarView() {
   const cells = useMemo(
     () => monthCells(cursor.year, cursor.month),
     [cursor.year, cursor.month],
+  )
+
+  const yearMonths = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, month) => ({
+        month,
+        cells: monthCells(cursor.year, month),
+      })),
+    [cursor.year],
   )
 
   const exceptionMap = useMemo(() => {
@@ -112,107 +140,159 @@ export function CalendarView() {
     dispatch({ type: 'selectResource', resourceId: value })
   }
 
+  const shiftCursor = (delta: number) => {
+    setCursor((c) => {
+      if (scale === 'year') {
+        return { year: c.year + delta, month: c.month }
+      }
+      const m = c.month + delta
+      if (m < 0) return { year: c.year - 1, month: 11 }
+      if (m > 11) return { year: c.year + 1, month: 0 }
+      return { year: c.year, month: m }
+    })
+  }
+
+  const toggleDay = (date: Date) => {
+    try {
+      apply(
+        CalendarUseCases.toggleCalendarDay(
+          project,
+          calendar.id,
+          date,
+          holidayName.trim() || 'Holiday',
+        ),
+        `Updated ${date.toLocaleDateString()}.`,
+      )
+    } catch (error) {
+      dispatch({
+        type: 'setStatus',
+        message: error instanceof Error ? error.message : 'Calendar update failed.',
+      })
+    }
+  }
+
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>Change Working Time</h2>
-        <p>
-          Edit the project calendar or a resource calendar (MS Project). Click any day
-          to mark a holiday / non-working day, or to make a weekend working. Click again
-          to clear the exception.
-        </p>
-      </div>
+      <ViewHeader
+        title="Working Time"
+        leading={
+          tab === 'calendar' ? (
+            <>
+              <IconActionGroup label="Calendar scale">
+                <IconAction
+                  label="Month"
+                  icon="month"
+                  pressed={scale === 'month'}
+                  onClick={() => setScale('month')}
+                />
+                <IconAction
+                  label="Year"
+                  icon="year"
+                  pressed={scale === 'year'}
+                  onClick={() => setScale('year')}
+                />
+              </IconActionGroup>
+              <ViewHeaderSep />
+            </>
+          ) : null
+        }
+        trailing={
+          <IconActions>
+            <IconAction
+              label="Create New Calendar…"
+              icon="newCalendar"
+              onClick={() => {
+                const before = project.calendars.length
+                const next = CalendarUseCases.addCalendar(
+                  project,
+                  services.ids,
+                  'Custom Calendar',
+                )
+                apply(next, 'Calendar added.')
+                const created = next.calendars[before]
+                if (created) setCalendarId(created.id)
+              }}
+            />
+            {selectedResource ? (
+              <IconAction
+                label="New calendar for resource…"
+                icon="addResource"
+                onClick={() => {
+                  dispatch({
+                    type: 'ensureResourceCalendar',
+                    resourceId: selectedResource.id,
+                  })
+                }}
+              />
+            ) : (
+              <IconAction
+                label="Use for project"
+                icon="useProject"
+                onClick={() =>
+                  apply(
+                    CalendarUseCases.setProjectCalendar(project, calendar.id),
+                    'Project calendar updated.',
+                  )
+                }
+              />
+            )}
+          </IconActions>
+        }
+      />
 
       <div className={styles.toolbar}>
-        <label>
-          For
-          <select
-            value={owner}
-            aria-label="Calendar applies to"
-            onChange={(e) => onOwnerChange(e.target.value)}
-          >
-            <option value="project">Project</option>
-            {project.resources.map((r) => (
-              <option key={r.id} value={r.id}>
-                Resource: {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Calendar
-          <select
-            value={activeCalendarId}
-            aria-label="Calendar"
-            onChange={(e) => {
-              const nextId = e.target.value
-              setCalendarId(nextId)
-              if (selectedResource) {
-                dispatch({
-                  type: 'setResourceCalendar',
-                  resourceId: selectedResource.id,
-                  calendarId: nextId,
-                })
-              }
-            }}
-          >
-            {project.calendars.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {c.id === project.calendarId ? ' (project)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={() => {
-            const before = project.calendars.length
-            const next = CalendarUseCases.addCalendar(
-              project,
-              services.ids,
-              'Custom Calendar',
-            )
-            apply(next, 'Calendar added.')
-            const created = next.calendars[before]
-            if (created) setCalendarId(created.id)
-          }}
-        >
-          Create New Calendar…
-        </button>
-        {selectedResource ? (
-          <button
-            type="button"
-            onClick={() => {
-              dispatch({
-                type: 'ensureResourceCalendar',
-                resourceId: selectedResource.id,
-              })
-            }}
-          >
-            New calendar for resource…
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() =>
-              apply(
-                CalendarUseCases.setProjectCalendar(project, calendar.id),
-                'Project calendar updated.',
-              )
-            }
-          >
-            Use for project
-          </button>
-        )}
-        <label>
-          Exception name
-          <input
-            value={holidayName}
-            onChange={(e) => setHolidayName(e.target.value)}
-            placeholder="Holiday"
-          />
-        </label>
+        <div className={styles.toolbarStart}>
+          <label>
+            For
+            <select
+              value={owner}
+              aria-label="Calendar applies to"
+              onChange={(e) => onOwnerChange(e.target.value)}
+            >
+              <option value="project">Project</option>
+              {project.resources.map((r) => (
+                <option key={r.id} value={r.id}>
+                  Resource: {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Calendar
+            <select
+              value={activeCalendarId}
+              aria-label="Calendar"
+              onChange={(e) => {
+                const nextId = e.target.value
+                setCalendarId(nextId)
+                if (selectedResource) {
+                  dispatch({
+                    type: 'setResourceCalendar',
+                    resourceId: selectedResource.id,
+                    calendarId: nextId,
+                  })
+                }
+              }}
+            >
+              {project.calendars.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.id === project.calendarId ? ' (project)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {tab === 'calendar' ? (
+            <label>
+              Exception name
+              <input
+                value={holidayName}
+                onChange={(e) => setHolidayName(e.target.value)}
+                placeholder="Holiday"
+              />
+            </label>
+          ) : null}
+        </div>
       </div>
 
       <nav className={styles.tabs} aria-label="Calendar editor tabs">
@@ -237,91 +317,112 @@ export function CalendarView() {
       {tab === 'calendar' ? (
         <div className={styles.monthPanel}>
           <div className={styles.monthNav}>
-            <button
-              type="button"
-              aria-label="Previous month"
-              onClick={() =>
-                setCursor((c) => {
-                  const m = c.month - 1
-                  return m < 0
-                    ? { year: c.year - 1, month: 11 }
-                    : { year: c.year, month: m }
-                })
-              }
-            >
-              ‹
-            </button>
+            <IconAction
+              label={scale === 'year' ? 'Previous year' : 'Previous month'}
+              icon="prev"
+              onClick={() => shiftCursor(-1)}
+            />
             <h3>
-              {MONTH_NAMES[cursor.month]} {cursor.year}
+              {scale === 'year'
+                ? `${cursor.year}`
+                : `${MONTH_NAMES[cursor.month]} ${cursor.year}`}
             </h3>
-            <button
-              type="button"
-              aria-label="Next month"
-              onClick={() =>
-                setCursor((c) => {
-                  const m = c.month + 1
-                  return m > 11
-                    ? { year: c.year + 1, month: 0 }
-                    : { year: c.year, month: m }
-                })
-              }
-            >
-              ›
-            </button>
+            <IconAction
+              label={scale === 'year' ? 'Next year' : 'Next month'}
+              icon="next"
+              onClick={() => shiftCursor(1)}
+            />
           </div>
 
-          <div className={styles.monthGrid} role="grid" aria-label="Working time month">
-            {DAY_NAMES.map((d) => (
-              <div key={d} className={styles.weekdayHeader}>
-                {d}
+          {scale === 'month' ? (
+            <>
+              <div className={styles.monthGrid} role="grid" aria-label="Working time month">
+                {DAY_NAMES.map((d) => (
+                  <div key={d} className={styles.weekdayHeader}>
+                    {d}
+                  </div>
+                ))}
+                {cells.map((date, i) =>
+                  date ? (
+                    <button
+                      key={localKey(date)}
+                      type="button"
+                      className={`${styles.dayCell} ${dayClass(date)}`}
+                      title={
+                        exceptionMap.get(localKey(date))?.name ??
+                        (calendar.workDays[date.getDay()]!.working
+                          ? 'Working day — click for holiday'
+                          : 'Non-working — click for working exception')
+                      }
+                      onClick={() => toggleDay(date)}
+                    >
+                      <span className={styles.dayNum}>{date.getDate()}</span>
+                      {exceptionMap.get(localKey(date)) ? (
+                        <span className={styles.dayLabel}>
+                          {exceptionMap.get(localKey(date))!.name}
+                        </span>
+                      ) : null}
+                    </button>
+                  ) : (
+                    <div key={`pad-${i}`} className={styles.dayPad} />
+                  ),
+                )}
               </div>
-            ))}
-            {cells.map((date, i) =>
-              date ? (
-                <button
-                  key={localKey(date)}
-                  type="button"
-                  className={`${styles.dayCell} ${dayClass(date)}`}
-                  title={
-                    exceptionMap.get(localKey(date))?.name ??
-                    (calendar.workDays[date.getDay()]!.working
-                      ? 'Working day — click for holiday'
-                      : 'Non-working — click for working exception')
-                  }
-                  onClick={() => {
-                    try {
-                      apply(
-                        CalendarUseCases.toggleCalendarDay(
-                          project,
-                          calendar.id,
-                          date,
-                          holidayName.trim() || 'Holiday',
+            </>
+          ) : (
+            <div className={styles.yearGrid} role="grid" aria-label="Working time year">
+              {yearMonths.map(({ month, cells: monthDays }) => {
+                const exceptionsInMonth = monthDays.reduce((n, d) => {
+                  if (!d) return n
+                  return n + (exceptionMap.has(localKey(d)) ? 1 : 0)
+                }, 0)
+                return (
+                  <button
+                    key={month}
+                    type="button"
+                    className={styles.yearMonth}
+                    aria-label={`${MONTH_NAMES[month]} ${cursor.year}`}
+                    onClick={() => {
+                      setCursor((c) => ({ ...c, month }))
+                      setScale('month')
+                    }}
+                  >
+                    <div className={styles.yearMonthTitle}>
+                      <span>{MONTH_NAMES_SHORT[month]}</span>
+                      {exceptionsInMonth > 0 ? (
+                        <span className={styles.yearMonthBadge}>{exceptionsInMonth}ex</span>
+                      ) : null}
+                    </div>
+                    <div className={styles.yearMiniGrid}>
+                      {DAY_NAMES_SHORT.map((d, i) => (
+                        <span key={`${d}-${i}`} className={styles.yearWeekday}>
+                          {d}
+                        </span>
+                      ))}
+                      {monthDays.map((date, i) =>
+                        date ? (
+                          <span
+                            key={localKey(date)}
+                            className={`${styles.yearDay} ${dayClass(date)}`}
+                            title={
+                              exceptionMap.get(localKey(date))?.name ??
+                              (calendar.workDays[date.getDay()]!.working
+                                ? 'Working'
+                                : 'Non-working')
+                            }
+                          >
+                            {date.getDate()}
+                          </span>
+                        ) : (
+                          <span key={`ypad-${month}-${i}`} className={styles.yearDayPad} />
                         ),
-                        `Updated ${date.toLocaleDateString()}.`,
-                      )
-                    } catch (error) {
-                      dispatch({
-                        type: 'setStatus',
-                        message:
-                          error instanceof Error
-                            ? error.message
-                            : 'Calendar update failed.',
-                      })
-                    }
-                  }}
-                >
-                  <span className={styles.dayNum}>{date.getDate()}</span>
-                  {exceptionMap.get(localKey(date)) ? (
-                    <span className={styles.dayLabel}>
-                      {exceptionMap.get(localKey(date))!.name}
-                    </span>
-                  ) : null}
-                </button>
-              ) : (
-                <div key={`pad-${i}`} className={styles.dayPad} />
-              ),
-            )}
-          </div>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
           <div className={styles.legend}>
             <span className={styles.dayWorking}>Working</span>
@@ -425,8 +526,9 @@ export function CalendarView() {
               />
               Working
             </label>
-            <button
-              type="button"
+            <IconAction
+              label="Add exception"
+              icon="add"
               disabled={!exceptionDate}
               onClick={() => {
                 const [y, m, d] = exceptionDate.split('-').map(Number)
@@ -439,9 +541,7 @@ export function CalendarView() {
                   'Exception added.',
                 )
               }}
-            >
-              Add exception
-            </button>
+            />
           </div>
           <ul>
             {calendar.exceptions.map((ex) => (
@@ -450,8 +550,9 @@ export function CalendarView() {
                   {ex.date.toLocaleDateString()} — {ex.name} (
                   {ex.working ? 'working' : 'non-working'})
                 </span>
-                <button
-                  type="button"
+                <IconAction
+                  label="Remove"
+                  icon="delete"
                   onClick={() =>
                     apply(
                       CalendarUseCases.removeCalendarException(
@@ -462,9 +563,7 @@ export function CalendarView() {
                       'Exception removed.',
                     )
                   }
-                >
-                  Remove
-                </button>
+                />
               </li>
             ))}
           </ul>

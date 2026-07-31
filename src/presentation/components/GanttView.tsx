@@ -1,14 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import gantt from 'dhtmlx-gantt'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
-import { toGanttData, DHTMLX_TO_LINK } from '../../infrastructure/gantt/GanttMapper'
+import {
+  filterGanttData,
+  DHTMLX_TO_LINK,
+  type GanttTaskFilter,
+} from '../../infrastructure/gantt/GanttMapper'
 import {
   clampZoomIndex,
   DEFAULT_GANTT_ZOOM_INDEX,
   GANTT_ZOOM_LEVELS,
 } from '../../infrastructure/gantt/GanttZoomLevels'
+import { installGanttColumnResize } from '../../infrastructure/gantt/ganttColumnResize'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
+import { IconAction, IconActionGroup } from './IconAction'
+import { ViewHeader, ViewHeaderSep } from './ViewHeader'
 import styles from './GanttView.module.css'
+
+const SCALE_GLYPH: Record<string, string> = {
+  hours: 'H',
+  days: 'D',
+  threedays: '3D',
+  week: 'W',
+  month: 'M',
+  quarter: 'Q',
+  year: 'Y',
+}
+
+const FILTERS: {
+  id: GanttTaskFilter
+  label: string
+  icon: 'allTasks' | 'critical' | 'milestone' | 'incomplete'
+}[] = [
+  { id: 'all', label: 'All tasks', icon: 'allTasks' },
+  { id: 'critical', label: 'Critical', icon: 'critical' },
+  { id: 'milestones', label: 'Milestones', icon: 'milestone' },
+  { id: 'incomplete', label: 'Incomplete', icon: 'incomplete' },
+]
 
 function applyZoomLevel(index: number): void {
   const level = GANTT_ZOOM_LEVELS[clampZoomIndex(index)]!
@@ -30,6 +58,7 @@ export function GanttView() {
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_GANTT_ZOOM_INDEX)
   const zoomIndexRef = useRef(zoomIndex)
   zoomIndexRef.current = zoomIndex
+  const [taskFilter, setTaskFilter] = useState<GanttTaskFilter>('all')
 
   const setZoom = useCallback((next: number) => {
     const clamped = clampZoomIndex(next)
@@ -54,20 +83,39 @@ export function GanttView() {
     gantt.config.open_tree_initially = true
     gantt.config.work_time = true
     gantt.config.correct_work_time = true
-    gantt.config.row_height = 32
-    gantt.config.scale_height = 56
+    // Touch rows; bars fill most of the row. Milestone diamonds clamped in CSS.
+    gantt.config.row_height = 44
+    gantt.config.bar_height = 34
+    gantt.config.bar_height_padding = 5
+    gantt.config.scale_height = 44
+    gantt.config.min_task_grid_row_height = 40
     gantt.config.columns = [
-      { name: 'wbs', label: 'WBS', width: 70, resize: true },
-      { name: 'text', label: 'Task name', tree: true, width: 200, resize: true },
+      { name: 'wbs', label: 'WBS', width: 72, min_width: 48, resize: true },
+      { name: 'text', label: 'Task name', tree: true, width: 240, min_width: 120, resize: true },
       {
         name: 'resources',
         label: 'Resources',
-        width: 140,
+        width: 160,
+        min_width: 80,
         resize: true,
         template: (task: { resources?: string }) => task.resources?.trim() ?? '',
       },
-      { name: 'start_date', label: 'Start', align: 'center', width: 110 },
-      { name: 'duration', label: 'Hours', align: 'center', width: 56 },
+      {
+        name: 'start_date',
+        label: 'Start',
+        align: 'center',
+        width: 110,
+        min_width: 90,
+        resize: true,
+      },
+      {
+        name: 'duration',
+        label: 'Hours',
+        align: 'center',
+        width: 64,
+        min_width: 48,
+        resize: true,
+      },
     ]
 
     // GPL/CE stubs getTaskType() → always "task", which hides milestone diamonds.
@@ -105,6 +153,8 @@ export function GanttView() {
     applyZoomLevel(zoomIndexRef.current)
     gantt.init(root)
     readyRef.current = true
+    // CE build ignores columns[].resize (PRO). Install our own grid column drag-resize.
+    const detachColResize = installGanttColumnResize(gantt, root)
 
     const onSelect = gantt.attachEvent('onTaskSelected', (id: string) => {
       const additive =
@@ -175,17 +225,17 @@ export function GanttView() {
       if (e.deltaY < 0) zoomIn()
       else if (e.deltaY > 0) zoomOut()
     }
-
-    window.addEventListener('keydown', onKey)
-    root.addEventListener('wheel', onWheel, { passive: false })
     const onToolbarZoom = (e: Event) => {
       const detail = (e as CustomEvent<'in' | 'out'>).detail
       if (detail === 'in') zoomIn()
       else if (detail === 'out') zoomOut()
     }
+    window.addEventListener('keydown', onKey)
     window.addEventListener('supergantt:gantt-zoom', onToolbarZoom)
+    root.addEventListener('wheel', onWheel, { passive: false })
 
     return () => {
+      detachColResize()
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('supergantt:gantt-zoom', onToolbarZoom)
       root.removeEventListener('wheel', onWheel)
@@ -201,58 +251,52 @@ export function GanttView() {
 
   useEffect(() => {
     if (!readyRef.current) return
-    const { data, links } = toGanttData(project)
+    const { data, links } = filterGanttData(project, taskFilter)
     gantt.clearAll()
     gantt.parse({ data, links })
     applyZoomLevel(zoomIndexRef.current)
     if (selectedTaskId && gantt.isTaskExists(selectedTaskId)) {
       gantt.selectTask(selectedTaskId)
     }
-  }, [project, selectedTaskId])
+  }, [project, selectedTaskId, taskFilter])
 
   const level = GANTT_ZOOM_LEVELS[zoomIndex]!
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.viewBar} role="toolbar" aria-label="Gantt view controls">
-        <div className={styles.viewGroup} role="group" aria-label="Zoom">
-          <button
-            type="button"
-            title="Zoom In (Ctrl+=) — finer timescale"
-            disabled={zoomIndex <= 0}
-            onClick={zoomIn}
-          >
-            Zoom In
-          </button>
-          <button
-            type="button"
-            title="Zoom Out (Ctrl+-) — coarser timescale"
-            disabled={zoomIndex >= GANTT_ZOOM_LEVELS.length - 1}
-            onClick={zoomOut}
-          >
-            Zoom Out
-          </button>
-          <span className={styles.scaleLabel} aria-live="polite">
-            Timescale: <strong>{level.label}</strong>
-          </span>
-        </div>
-        <div className={styles.viewGroup} role="group" aria-label="Timescale">
-          {GANTT_ZOOM_LEVELS.map((item, i) => (
-            <button
-              key={item.id}
-              type="button"
-              className={i === zoomIndex ? styles.scaleActive : undefined}
-              title={`Set timescale to ${item.label}`}
-              onClick={() => setZoom(i)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <p className={styles.hintInline}>
-          Ctrl+wheel or Ctrl+/− · Double-click task to edit
-        </p>
-      </div>
+      <ViewHeader
+        title="Gantt Chart"
+        leading={
+          <>
+            <IconActionGroup label="Timescale">
+              {GANTT_ZOOM_LEVELS.map((item, i) => (
+                <IconAction
+                  key={item.id}
+                  label={item.label}
+                  glyph={SCALE_GLYPH[item.id] ?? item.label.slice(0, 1)}
+                  pressed={i === zoomIndex}
+                  onClick={() => setZoom(i)}
+                />
+              ))}
+            </IconActionGroup>
+            <span className={styles.scaleLabel} aria-live="polite">
+              {level.label}
+            </span>
+            <IconActionGroup label="Task filter">
+              {FILTERS.map((f) => (
+                <IconAction
+                  key={f.id}
+                  label={f.label}
+                  icon={f.icon}
+                  pressed={taskFilter === f.id}
+                  onClick={() => setTaskFilter(f.id)}
+                />
+              ))}
+            </IconActionGroup>
+            <ViewHeaderSep />
+          </>
+        }
+      />
       <div ref={containerRef} className={styles.chart} role="region" aria-label="Gantt chart" />
     </div>
   )

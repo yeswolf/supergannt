@@ -64,7 +64,7 @@ export interface WorkspaceState {
 
 export function createInitialState(services = createAppServices()): WorkspaceState {
   return {
-    project: createDemoProject(services.ids),
+    project: createEmptyProject(services.ids),
     view: 'gantt',
     selectedTaskId: null,
     selectedTaskIds: [],
@@ -72,8 +72,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     taskInfoOpen: false,
     taskInfoTab: 'general',
     assignDialogOpen: false,
-    statusMessage:
-      'Select a task, then Assign (toolbar) or edit the Resources column / Task Info → Resources.',
+    statusMessage: 'Blank plan — add a task or open a file.',
     busyMessage: null,
     services,
   }
@@ -185,15 +184,22 @@ export function workspaceReducer(
       }
     case 'closeTaskInfo':
       return { ...state, taskInfoOpen: false }
-    case 'openAssignDialog':
+    case 'openAssignDialog': {
+      const taskId = action.taskId ?? state.selectedTaskId
+      if (!taskId) {
+        return {
+          ...state,
+          assignDialogOpen: false,
+          statusMessage: 'Select a task to assign resources.',
+        }
+      }
       return {
         ...state,
         assignDialogOpen: true,
-        selectedTaskId: action.taskId ?? state.selectedTaskId,
-        selectedTaskIds: action.taskId
-          ? [action.taskId]
-          : state.selectedTaskIds,
+        selectedTaskId: taskId,
+        selectedTaskIds: action.taskId ? [action.taskId] : state.selectedTaskIds,
       }
+    }
     case 'closeAssignDialog':
       return { ...state, assignDialogOpen: false }
     case 'setProject':

@@ -1,21 +1,28 @@
 .panel {
   height: 100%;
   overflow: auto;
-  padding: 1rem 1.15rem;
+  padding: 0;
   background: var(--msp-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.heading {
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+  min-height: var(--msp-row-h);
+  display: flex;
+  align-items: center;
 }
 
 .heading h2 {
   margin: 0;
-  font-family: var(--msp-font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.heading p {
-  margin: 0.25rem 0 1rem;
-  color: var(--msp-text-secondary);
-  font-size: 0.84rem;
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-lg);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .list {
@@ -27,51 +34,71 @@
 .node,
 .groupHead {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.65rem;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.55rem;
   width: 100%;
+  box-sizing: border-box;
   text-align: left;
-  border: 1px solid var(--msp-border);
+  border: none;
+  border-bottom: 1px solid var(--msp-border);
   background: var(--msp-surface);
-  padding: 0.55rem 0.75rem;
-  margin-bottom: 0.3rem;
-  color: inherit;
+  height: var(--msp-row-h);
+  min-height: var(--msp-row-h);
+  padding: 0 var(--msp-cell-px);
+  margin: 0;
+  color: var(--msp-text);
   cursor: pointer;
   font: inherit;
-  border-radius: var(--msp-radius);
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
+  line-height: 1.2;
+  border-radius: 0;
 }
 
 .groupHead {
   background: var(--msp-surface-alt);
   cursor: default;
-  font-weight: 600;
+}
+
+.name {
+  font-weight: 400;
+  font-size: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wbs {
   font-variant-numeric: tabular-nums;
   color: var(--msp-accent);
   min-width: 3rem;
-  font-weight: 600;
+  font-weight: 400;
+  flex-shrink: 0;
 }
 
 .meta {
   margin-left: auto;
-  font-size: 0.78rem;
+  font-size: inherit;
   color: var(--msp-text-secondary);
+  font-weight: 400;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .critical {
-  border-color: #f1aeb5;
   background: var(--msp-danger-soft);
 }
 
 .milestone {
-  border-style: dashed;
+  border-bottom-style: dashed;
 }
 
 .selected {
-  outline: 2px solid var(--msp-accent);
-  outline-offset: -1px;
   background: var(--msp-row-selected);
+  box-shadow: inset 2px 0 0 var(--msp-accent);
+}
+
+.list .list .node {
+  /* nested indent handled via inline paddingLeft */
 }

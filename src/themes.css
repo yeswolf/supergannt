@@ -1,0 +1,218 @@
+/* Color themes — structural tokens stay in index.css */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --msp-bg: #f4f4f5;
+  --msp-surface: #ffffff;
+  --msp-surface-alt: #fafafa;
+  --msp-titlebar: #18181b;
+  --msp-titlebar-text: #fafafa;
+  --msp-titlebar-border: color-mix(in srgb, #fafafa 18%, transparent);
+  --msp-accent: #2563eb;
+  --msp-accent-hover: #1d4ed8;
+  --msp-accent-soft: #eff6ff;
+  --msp-accent-border: #bfdbfe;
+  --msp-text: #18181b;
+  --msp-text-secondary: #52525b;
+  --msp-text-muted: #a1a1aa;
+  --msp-border: #e4e4e7;
+  --msp-border-strong: #d4d4d8;
+  --msp-row-hover: #f4f4f5;
+  --msp-row-selected: #dbeafe;
+  --msp-danger: #dc2626;
+  --msp-danger-soft: #fef2f2;
+  --msp-success: #16a34a;
+  --msp-success-soft: #dcfce7;
+  --msp-warning: #a16207;
+  --msp-gantt-bar: #60a5fa;
+  --msp-gantt-bar-progress: #2563eb;
+  --msp-gantt-critical: #ef4444;
+  --msp-on-accent: #ffffff;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --msp-bg: #09090b;
+  --msp-surface: #18181b;
+  --msp-surface-alt: #27272a;
+  --msp-titlebar: #09090b;
+  --msp-titlebar-text: #fafafa;
+  --msp-titlebar-border: color-mix(in srgb, #fafafa 14%, transparent);
+  --msp-accent: #3b82f6;
+  --msp-accent-hover: #60a5fa;
+  --msp-accent-soft: #1e3a5f;
+  --msp-accent-border: #1d4ed8;
+  --msp-text: #fafafa;
+  --msp-text-secondary: #a1a1aa;
+  --msp-text-muted: #71717a;
+  --msp-border: #3f3f46;
+  --msp-border-strong: #52525b;
+  --msp-row-hover: #27272a;
+  --msp-row-selected: #1e3a5f;
+  --msp-danger: #f87171;
+  --msp-danger-soft: #450a0a;
+  --msp-success: #4ade80;
+  --msp-success-soft: #052e16;
+  --msp-warning: #fbbf24;
+  --msp-gantt-bar: #3b82f6;
+  --msp-gantt-bar-progress: #60a5fa;
+  --msp-gantt-critical: #f87171;
+  --msp-on-accent: #ffffff;
+}
+
+/* WCAG-oriented high contrast: black / white / yellow / blue */
+[data-theme='contrast-light'] {
+  color-scheme: light;
+  --msp-bg: #ffffff;
+  --msp-surface: #ffffff;
+  --msp-surface-alt: #ffffff;
+  --msp-titlebar: #000000;
+  --msp-titlebar-text: #ffffff;
+  --msp-titlebar-border: #ffffff;
+  --msp-accent: #0000ee;
+  --msp-accent-hover: #0000aa;
+  --msp-accent-soft: #ffff00;
+  --msp-accent-border: #000000;
+  --msp-text: #000000;
+  --msp-text-secondary: #000000;
+  --msp-text-muted: #333333;
+  --msp-border: #000000;
+  --msp-border-strong: #000000;
+  --msp-row-hover: #ffff00;
+  --msp-row-selected: #ffff00;
+  --msp-danger: #cc0000;
+  --msp-danger-soft: #ffcccc;
+  --msp-success: #007700;
+  --msp-success-soft: #ccffcc;
+  --msp-warning: #996600;
+  --msp-gantt-bar: #0000ee;
+  --msp-gantt-bar-progress: #000000;
+  --msp-gantt-critical: #cc0000;
+  --msp-on-accent: #ffffff;
+}
+
+[data-theme='contrast-dark'] {
+  color-scheme: dark;
+  --msp-bg: #000000;
+  --msp-surface: #000000;
+  --msp-surface-alt: #000000;
+  --msp-titlebar: #000000;
+  --msp-titlebar-text: #ffffff;
+  --msp-titlebar-border: #ffffff;
+  --msp-accent: #ffff00;
+  --msp-accent-hover: #ffff66;
+  --msp-accent-soft: #0000aa;
+  --msp-accent-border: #ffffff;
+  --msp-text: #ffffff;
+  --msp-text-secondary: #ffffff;
+  --msp-text-muted: #cccccc;
+  --msp-border: #ffffff;
+  --msp-border-strong: #ffffff;
+  --msp-row-hover: #0000aa;
+  --msp-row-selected: #0000ee;
+  --msp-danger: #ff6666;
+  --msp-danger-soft: #660000;
+  --msp-success: #66ff66;
+  --msp-success-soft: #004400;
+  --msp-warning: #ffcc00;
+  --msp-gantt-bar: #ffff00;
+  --msp-gantt-bar-progress: #ffffff;
+  --msp-gantt-critical: #ff6666;
+  --msp-on-accent: #000000;
+}
+
+/*
+ * IntelliJ IDEA Darcula (approximate editor / UI chrome palette).
+ * Refs: UI defaults around #2B2B2B / #3C3F41, text #A9B7C6, accent #3592C4 / #FFC66D.
+ */
+[data-theme='darcula'] {
+  color-scheme: dark;
+  --msp-bg: #3c3f41;
+  --msp-surface: #2b2b2b;
+  --msp-surface-alt: #313335;
+  --msp-titlebar: #3c3f41;
+  --msp-titlebar-text: #bbbbbb;
+  --msp-titlebar-border: #323232;
+  --msp-accent: #3592c4;
+  --msp-accent-hover: #4fafd7;
+  --msp-accent-soft: #2b4150;
+  --msp-accent-border: #214283;
+  --msp-text: #a9b7c6;
+  --msp-text-secondary: #808080;
+  --msp-text-muted: #606060;
+  --msp-border: #4b4b4b;
+  --msp-border-strong: #555555;
+  --msp-row-hover: #36383a;
+  --msp-row-selected: #214283;
+  --msp-danger: #ff6b68;
+  --msp-danger-soft: #4b2a2a;
+  --msp-success: #6a8759;
+  --msp-success-soft: #2f3b2a;
+  --msp-warning: #ffc66d;
+  --msp-gantt-bar: #6897bb;
+  --msp-gantt-bar-progress: #3592c4;
+  --msp-gantt-critical: #ff6b68;
+  --msp-on-accent: #ffffff;
+}
+
+/* Solarized (Ethan Schoonover) */
+[data-theme='solarized-light'] {
+  color-scheme: light;
+  --msp-bg: #fdf6e3;
+  --msp-surface: #eee8d5;
+  --msp-surface-alt: #fdf6e3;
+  --msp-titlebar: #073642;
+  --msp-titlebar-text: #eee8d5;
+  --msp-titlebar-border: color-mix(in srgb, #eee8d5 22%, transparent);
+  --msp-accent: #268bd2;
+  --msp-accent-hover: #1a6ea8;
+  --msp-accent-soft: #e4f1f7;
+  --msp-accent-border: #93a1a1;
+  --msp-text: #657b83;
+  --msp-text-secondary: #586e75;
+  --msp-text-muted: #93a1a1;
+  --msp-border: #93a1a1;
+  --msp-border-strong: #839496;
+  --msp-row-hover: #e6dfc8;
+  --msp-row-selected: #d6ebf5;
+  --msp-danger: #dc322f;
+  --msp-danger-soft: #f8d6d4;
+  --msp-success: #859900;
+  --msp-success-soft: #e5ecc0;
+  --msp-warning: #b58900;
+  --msp-gantt-bar: #2aa198;
+  --msp-gantt-bar-progress: #268bd2;
+  --msp-gantt-critical: #dc322f;
+  --msp-on-accent: #fdf6e3;
+}
+
+[data-theme='solarized-dark'] {
+  color-scheme: dark;
+  --msp-bg: #002b36;
+  --msp-surface: #073642;
+  --msp-surface-alt: #002b36;
+  --msp-titlebar: #002b36;
+  --msp-titlebar-text: #93a1a1;
+  --msp-titlebar-border: color-mix(in srgb, #93a1a1 28%, transparent);
+  --msp-accent: #268bd2;
+  --msp-accent-hover: #2aa198;
+  --msp-accent-soft: #0a4050;
+  --msp-accent-border: #586e75;
+  --msp-text: #839496;
+  --msp-text-secondary: #657b83;
+  --msp-text-muted: #586e75;
+  --msp-border: #586e75;
+  --msp-border-strong: #657b83;
+  --msp-row-hover: #0a3542;
+  --msp-row-selected: #0a4050;
+  --msp-danger: #dc322f;
+  --msp-danger-soft: #4a1c1b;
+  --msp-success: #859900;
+  --msp-success-soft: #2f3510;
+  --msp-warning: #b58900;
+  --msp-gantt-bar: #268bd2;
+  --msp-gantt-bar-progress: #2aa198;
+  --msp-gantt-critical: #dc322f;
+  --msp-on-accent: #002b36;
+}

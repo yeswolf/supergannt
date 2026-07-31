@@ -6,9 +6,11 @@ import { RbsView } from './RbsView'
 import { ReportsView } from './ReportsView'
 import { TaskUsageView, ResourceUsageView } from './UsageViews'
 
+const withDemo = { bootstrap: [{ type: 'loadDemo' as const }] }
+
 describe('tree and report views', () => {
   it('renders WBS and selects tasks', () => {
-    renderWithWorkspace(<WbsView />)
+    renderWithWorkspace(<WbsView />, withDemo)
     expect(screen.getByRole('heading', { name: 'WBS' })).toBeInTheDocument()
     const buttons = screen.getAllByRole('button')
     expect(buttons.length).toBeGreaterThan(0)
@@ -16,7 +18,7 @@ describe('tree and report views', () => {
   })
 
   it('renders RBS and selects resources', () => {
-    renderWithWorkspace(<RbsView />)
+    renderWithWorkspace(<RbsView />, withDemo)
     expect(screen.getByRole('heading', { name: 'RBS' })).toBeInTheDocument()
     const buttons = screen.getAllByRole('button')
     expect(buttons.length).toBeGreaterThan(0)
@@ -24,17 +26,17 @@ describe('tree and report views', () => {
   })
 
   it('renders reports with earned value', () => {
-    renderWithWorkspace(<ReportsView />)
+    renderWithWorkspace(<ReportsView />, withDemo)
     expect(screen.getByRole('heading', { name: 'Reports' })).toBeInTheDocument()
     expect(screen.getByText('Earned Value')).toBeInTheDocument()
     expect(screen.getByText('Resource Load')).toBeInTheDocument()
   })
 
   it('renders task and resource usage tables', () => {
-    const { unmount } = renderWithWorkspace(<TaskUsageView />)
+    const { unmount } = renderWithWorkspace(<TaskUsageView />, withDemo)
     expect(screen.getByRole('heading', { name: 'Task Usage' })).toBeInTheDocument()
     unmount()
-    renderWithWorkspace(<ResourceUsageView />)
+    renderWithWorkspace(<ResourceUsageView />, withDemo)
     expect(screen.getByRole('heading', { name: 'Resource Usage' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Histogram' })).toBeInTheDocument()
   })

@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { asTaskId } from '../../domain/value-objects/Ids'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import {
@@ -6,6 +6,7 @@ import {
   draftsFromProject,
   type TaskAssignmentDraft,
 } from './TaskAssignmentsEditor'
+import { IconAction, IconActions } from './IconAction'
 import styles from './TaskInformationDialog.module.css'
 
 /** Quick assign dialog — available from any view via toolbar Assign. */
@@ -14,50 +15,34 @@ export function AssignResourcesDialog() {
   const dispatch = useWorkspaceDispatch()
   const task = selectedTaskId ? project.getTask(asTaskId(selectedTaskId)) : null
   const [drafts, setDrafts] = useState<TaskAssignmentDraft[]>([])
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!task || !assignDialogOpen) return
     setDrafts(draftsFromProject(project, task.id))
   }, [task, assignDialogOpen, project.assignments])
 
-  if (!assignDialogOpen) return null
-
-  if (!task) {
-    return (
-      <div
-        className={styles.backdrop}
-        role="presentation"
-        onClick={() => dispatch({ type: 'closeAssignDialog' })}
-      >
-        <div
-          className={styles.dialog}
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <header className={styles.header}>
-            <h2>Assign Resources</h2>
-            <button
-              type="button"
-              className={styles.close}
-              aria-label="Close"
-              onClick={() => dispatch({ type: 'closeAssignDialog' })}
-            >
-              ×
-            </button>
-          </header>
-          <div className={styles.body}>
-            <p className={styles.hint}>Select a task first (Gantt, Task Sheet, etc.).</p>
-          </div>
-          <footer className={styles.footer}>
-            <button type="button" onClick={() => dispatch({ type: 'closeAssignDialog' })}>
-              Close
-            </button>
-          </footer>
-        </div>
-      </div>
+  useEffect(() => {
+    if (!assignDialogOpen || !task) return
+    const prev = document.activeElement as HTMLElement | null
+    const focusable = dialogRef.current?.querySelector<HTMLElement>(
+      'select, input, button, [href], textarea, [tabindex]:not([tabindex="-1"])',
     )
-  }
+    focusable?.focus()
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        dispatch({ type: 'closeAssignDialog' })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      prev?.focus?.()
+    }
+  }, [assignDialogOpen, task, dispatch])
+
+  if (!assignDialogOpen || !task) return null
 
   const save = () => {
     dispatch({
@@ -71,7 +56,8 @@ export function AssignResourcesDialog() {
   const onDialogKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
     const target = e.target as HTMLElement
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON') return
+    const tag = target.tagName
+    if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT') return
     e.preventDefault()
     save()
   }
@@ -83,6 +69,7 @@ export function AssignResourcesDialog() {
       onClick={() => dispatch({ type: 'closeAssignDialog' })}
     >
       <div
+        ref={dialogRef}
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
@@ -92,14 +79,12 @@ export function AssignResourcesDialog() {
       >
         <header className={styles.header}>
           <h2 id="assign-title">Assign Resources — {task.name}</h2>
-          <button
-            type="button"
-            className={styles.close}
-            aria-label="Close"
+          <IconAction
+            label="Close"
+            icon="cancel"
+            tone="onDark"
             onClick={() => dispatch({ type: 'closeAssignDialog' })}
-          >
-            ×
-          </button>
+          />
         </header>
         <div className={styles.body}>
           <TaskAssignmentsEditor
@@ -110,12 +95,14 @@ export function AssignResourcesDialog() {
           />
         </div>
         <footer className={styles.footer}>
-          <button type="button" onClick={save}>
-            OK
-          </button>
-          <button type="button" onClick={() => dispatch({ type: 'closeAssignDialog' })}>
-            Cancel
-          </button>
+          <IconActions>
+            <IconAction label="OK" icon="ok" primary onClick={save} />
+            <IconAction
+              label="Cancel"
+              icon="cancel"
+              onClick={() => dispatch({ type: 'closeAssignDialog' })}
+            />
+          </IconActions>
         </footer>
       </div>
     </div>

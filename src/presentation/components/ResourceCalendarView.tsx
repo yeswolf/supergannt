@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
+import { IconAction, IconActionGroup, IconActions } from './IconAction'
+import { ViewHeader, ViewHeaderSep } from './ViewHeader'
 import calStyles from './CalendarView.module.css'
 import styles from './ResourceCalendarView.module.css'
 
@@ -171,102 +173,98 @@ export function ResourceCalendarView() {
   if (!resource) {
     return (
       <div className={calStyles.panel}>
-        <div className={calStyles.heading}>
-          <h2>Resource Calendar</h2>
-          <p>Add a resource to view their working calendar.</p>
-        </div>
+        <ViewHeader title="Resource Calendar" />
       </div>
     )
   }
 
   return (
     <div className={calStyles.panel}>
-      <div className={calStyles.heading}>
-        <h2>Resource Calendar</h2>
-        <p>
-          Availability for a resource (MS Project Resource Calendar). Switch Month /
-          Year scale; working days come from the resource calendar, assigned tasks
-          appear on overlapping days.
-        </p>
-      </div>
+      <ViewHeader
+        title="Resource Calendar"
+        leading={
+          <>
+            <IconActionGroup label="Calendar scale">
+              <IconAction
+                label="Month"
+                icon="month"
+                pressed={scale === 'month'}
+                onClick={() => setScale('month')}
+              />
+              <IconAction
+                label="Year"
+                icon="year"
+                pressed={scale === 'year'}
+                onClick={() => setScale('year')}
+              />
+            </IconActionGroup>
+            <ViewHeaderSep />
+          </>
+        }
+        trailing={
+          <IconActions>
+            <IconAction
+              label="New calendar for resource…"
+              icon="newCalendar"
+              onClick={() =>
+                dispatch({ type: 'ensureResourceCalendar', resourceId: resource.id })
+              }
+            />
+            <IconAction
+              label="Change Working Time…"
+              icon="workingTime"
+              onClick={() => dispatch({ type: 'setView', view: 'calendar' })}
+            />
+          </IconActions>
+        }
+      />
 
       <div className={calStyles.toolbar}>
-        <label>
-          Resource
-          <select
-            value={resource.id}
-            aria-label="Resource calendar resource"
-            onChange={(e) => {
-              setResourceId(e.target.value)
-              dispatch({ type: 'selectResource', resourceId: e.target.value })
-            }}
-          >
-            {project.resources.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className={styles.scaleGroup} role="group" aria-label="Calendar scale">
-          <button
-            type="button"
-            className={scale === 'month' ? styles.scaleActive : styles.scaleBtn}
-            aria-pressed={scale === 'month'}
-            onClick={() => setScale('month')}
-          >
-            Month
-          </button>
-          <button
-            type="button"
-            className={scale === 'year' ? styles.scaleActive : styles.scaleBtn}
-            aria-pressed={scale === 'year'}
-            onClick={() => setScale('year')}
-          >
-            Year
-          </button>
+        <div className={calStyles.toolbarStart}>
+          <label>
+            Resource
+            <select
+              value={resource.id}
+              aria-label="Resource calendar resource"
+              onChange={(e) => {
+                setResourceId(e.target.value)
+                dispatch({ type: 'selectResource', resourceId: e.target.value })
+              }}
+            >
+              {project.resources.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className={calStyles.toolbarField}>
+            <span className={calStyles.fieldLabel}>Calendar</span>
+            <span className={calStyles.fieldValue}>
+              {calendar.name}
+              {calendar.id === project.calendarId ? ' · project' : ''}
+            </span>
+          </div>
         </div>
-        <span className={styles.meta}>
-          Calendar: <strong>{calendar.name}</strong>
-          {calendar.id === project.calendarId ? ' (project)' : ''}
-        </span>
-        <button
-          type="button"
-          onClick={() =>
-            dispatch({ type: 'ensureResourceCalendar', resourceId: resource.id })
-          }
-        >
-          New calendar for resource…
-        </button>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: 'setView', view: 'calendar' })}
-        >
-          Change Working Time…
-        </button>
       </div>
 
       <div className={calStyles.monthPanel}>
         <div className={calStyles.monthNav}>
-          <button
-            type="button"
-            aria-label={scale === 'year' ? 'Previous year' : 'Previous month'}
+          <IconAction
+            label={scale === 'year' ? 'Previous year' : 'Previous month'}
+            icon="prev"
             onClick={() => shiftCursor(-1)}
-          >
-            ‹
-          </button>
+          />
           <h3>
             {scale === 'year'
               ? `${cursor.year} — ${resource.name}`
               : `${MONTH_NAMES[cursor.month]} ${cursor.year} — ${resource.name}`}
           </h3>
-          <button
-            type="button"
-            aria-label={scale === 'year' ? 'Next year' : 'Next month'}
+          <IconAction
+            label={scale === 'year' ? 'Next year' : 'Next month'}
+            icon="next"
             onClick={() => shiftCursor(1)}
-          >
-            ›
-          </button>
+          />
         </div>
 
         {scale === 'month' ? (
@@ -320,7 +318,7 @@ export function ResourceCalendarView() {
             )}
           </div>
         ) : (
-          <div className={styles.yearGrid} role="grid" aria-label="Resource calendar year">
+          <div className={calStyles.yearGrid} role="grid" aria-label="Resource calendar year">
             {yearMonths.map(({ month, cells: monthDays }) => {
               const assignedInMonth = monthDays.reduce((n, d) => {
                 if (!d) return n
@@ -330,22 +328,22 @@ export function ResourceCalendarView() {
                 <button
                   key={month}
                   type="button"
-                  className={styles.yearMonth}
+                  className={calStyles.yearMonth}
                   aria-label={`${MONTH_NAMES[month]} ${cursor.year}`}
                   onClick={() => {
                     setCursor((c) => ({ ...c, month }))
                     setScale('month')
                   }}
                 >
-                  <div className={styles.yearMonthTitle}>
+                  <div className={calStyles.yearMonthTitle}>
                     <span>{MONTH_NAMES_SHORT[month]}</span>
                     {assignedInMonth > 0 ? (
-                      <span className={styles.yearMonthBadge}>{assignedInMonth}d</span>
+                      <span className={calStyles.yearMonthBadge}>{assignedInMonth}d</span>
                     ) : null}
                   </div>
-                  <div className={styles.yearMiniGrid}>
+                  <div className={calStyles.yearMiniGrid}>
                     {DAY_NAMES.map((d, i) => (
-                      <span key={`${d}-${i}`} className={styles.yearWeekday}>
+                      <span key={`${d}-${i}`} className={calStyles.yearWeekday}>
                         {d}
                       </span>
                     ))}
@@ -353,7 +351,7 @@ export function ResourceCalendarView() {
                       date ? (
                         <span
                           key={localKey(date)}
-                          className={`${styles.yearDay} ${dayClass(date)} ${
+                          className={`${calStyles.yearDay} ${dayClass(date)} ${
                             (assignmentDays.get(localKey(date))?.length ?? 0) > 0
                               ? styles.yearDayBusy
                               : ''
@@ -369,7 +367,7 @@ export function ResourceCalendarView() {
                           {date.getDate()}
                         </span>
                       ) : (
-                        <span key={`ypad-${month}-${i}`} className={styles.yearDayPad} />
+                        <span key={`ypad-${month}-${i}`} className={calStyles.yearDayPad} />
                       ),
                     )}
                   </div>

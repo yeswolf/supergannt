@@ -58,7 +58,7 @@ The product is successful when:
    - edited files as Project-openable `.mpp` plus MSPDI / MPX / PDF as needed.
 4. The same codebase runs via `npm run dev`, Docker, and a packaged Windows `.exe` installer without “blank 404” windows.
 5. Automated tests stay green and coverage of application `src` stays **≥ 80%** on statements, branches, functions, and lines.
-6. UI is modern (MS Project 2026 / Fluent-inspired), with proper app icon, ribbon, and view set comparable to ProjectLibre’s planning surfaces.
+6. UI is modern (flat tool aesthetic, Geist Mono, themes), with proper app icon, adaptive shell (desktop / web / mobile), command palette, and view set comparable to ProjectLibre’s planning surfaces.
 
 ## 5. Explicit non-goals / rejected approaches
 

@@ -18,9 +18,9 @@ Never ship an installer or claim Network/scheduling fixes without running the re
 
 Notable historically under-covered areas to keep improving:
 
-- Network edge geometry helpers / SVG paths.
+- Network edge geometry helpers / SVG paths / viewport wrap placement.
 - Some dialog keydown branches.
-- Toolbar open-file edge paths.
+- AppChrome / command-palette file paths.
 
 ## 3. Fixture strategy (MUST)
 
@@ -38,7 +38,10 @@ Notable historically under-covered areas to keep improving:
 | FS successor shift | `FsSuccessorReschedule.test.ts` |
 | Task Info OK order | `TaskInfoOk.test.ts` |
 | Effort triangle | `effortScheduling.test.ts`, use-case tests |
-| Network routing | `NetworkView.test.tsx` (layers, wrap orthogonal, render) |
+| Network routing | `NetworkView.test.tsx` (layers, viewport band wrap, orthogonal floor, render) |
+| Gantt CE column resize | `ganttColumnResize.test.ts`, `GanttView.test.tsx` |
+| App chrome / palette | `AppChrome.test.tsx` |
+| Themes | `ThemeContext.test.tsx` |
 | openPlanFile / loader | `dateInput.test.ts` / openPlanFile cases + AppShell busy |
 | MPP | `mpp.test.ts`, `mppRoundTrip.test.ts`, `realMpp.fixtures.test.ts` |
 | Workspace | `workspace.test.ts` |
@@ -57,7 +60,9 @@ Use after Network / Task Info / installer changes:
 1. Open demo or sample plan — loader appears.
 2. Edit duration hours in Task Information → OK → hours stick on sheet/Gantt.
 3. Add FS predecessor (“after”) → OK → successor bar moves after predecessor finish.
-4. Open Network — nodes visible, arrows orthogonal, wrap uses under-lane not diagonal slash.
-5. Resource usage histogram bars differ by hours.
-6. Packaged exe launches to real UI (not 404), even if something listens on 8787 without static files.
-7. Desktop shortcut icon has transparent corners (not black squares).
+4. Open Network — nodes visible, arrows orthogonal; narrow the pane so layers wrap to a new band; wrap edges use under-lane not diagonal slash.
+5. Switch Theme (top bar) — Gantt borders/text/summary bars follow the theme.
+6. Command palette: Load sample plan — durations/finish dates scheduled; Save / Open still work.
+7. Resource usage histogram bars differ by hours.
+8. Packaged exe launches to real UI (not 404), even if something listens on 8787 without static files.
+9. Desktop shortcut icon has transparent corners (not black squares).

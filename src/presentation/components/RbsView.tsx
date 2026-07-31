@@ -1,6 +1,7 @@
 import { buildRbsTree } from '../../application/services/ViewModels'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './TreeViews.module.css'
+import { ViewHeader } from './ViewHeader'
 
 export function RbsView() {
   const { project, selectedResourceId } = useWorkspaceState()
@@ -9,15 +10,12 @@ export function RbsView() {
 
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>RBS</h2>
-        <p>Resource Breakdown Structure — resources grouped by org group.</p>
-      </div>
+      <ViewHeader title="RBS" />
       <ul className={styles.list}>
         {tree.map((group) => (
           <li key={group.id}>
             <div className={styles.groupHead}>
-              <strong>{group.name}</strong>
+              <span className={styles.name}>{group.name}</span>
               <span className={styles.meta}>
                 {group.assignedUnits}/{group.maxUnits} units · {group.taskCount} assignments
               </span>
@@ -38,7 +36,7 @@ export function RbsView() {
                       dispatch({ type: 'selectResource', resourceId: resource.id })
                     }
                   >
-                    <strong>{resource.name}</strong>
+                    <span className={styles.name}>{resource.name}</span>
                     <span className={styles.meta}>
                       {resource.type} · {resource.assignedUnits}/{resource.maxUnits} ·{' '}
                       {resource.taskCount} tasks

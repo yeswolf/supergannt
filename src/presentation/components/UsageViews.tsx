@@ -5,6 +5,8 @@ import {
 } from '../../application/services/ViewModels'
 import { useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './DataTable.module.css'
+import { ColumnHeader, useResizableColumns } from './useResizableColumns'
+import { ViewHeader } from './ViewHeader'
 
 function uniqueDates(rows: { cells: { date: string }[] }[]): string[] {
   const set = new Set<string>()
@@ -16,23 +18,29 @@ export function TaskUsageView() {
   const { project } = useWorkspaceState()
   const rows = buildTaskUsage(project)
   const dates = uniqueDates(rows)
+  const remeasureKey = `${rows.length}:${dates.length}`
+  const { tableRef, colgroup, onResizeStart, onResizeAuto } =
+    useResizableColumns(remeasureKey)
+
+  const headers = ['WBS', 'Task', 'Resource', 'Total (h)', ...dates.map((d) => d.slice(5))]
 
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>Task Usage</h2>
-        <p>Work hours by task and day (hour-based slots).</p>
-      </div>
+      <ViewHeader title="Task Usage" />
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table ref={tableRef} className={styles.table}>
+          {colgroup}
           <thead>
             <tr>
-              <th>WBS</th>
-              <th>Task</th>
-              <th>Resource</th>
-              <th>Total (h)</th>
-              {dates.map((d) => (
-                <th key={d}>{d.slice(5)}</th>
+              {headers.map((label, i) => (
+                <ColumnHeader
+                  key={`${label}-${i}`}
+                  index={i}
+                  onResizeStart={onResizeStart}
+                  onResizeAuto={onResizeAuto}
+                >
+                  {label}
+                </ColumnHeader>
               ))}
             </tr>
           </thead>
@@ -63,27 +71,34 @@ export function ResourceUsageView() {
   const rows = buildResourceUsage(project)
   const histogram = buildResourceHistogram(project)
   const dates = uniqueDates(rows)
+  const remeasureKey = `${rows.length}:${dates.length}`
+  const { tableRef, colgroup, onResizeStart, onResizeAuto } =
+    useResizableColumns(remeasureKey)
   // Peak of load vs capacity in view; use px heights (%, against min-height, never resolved).
   const maxScale = Math.max(
     1,
     ...histogram.map((b) => Math.max(b.hours, b.capacity)),
   )
 
+  const headers = ['Resource', 'Task', 'Total (h)', ...dates.map((d) => d.slice(5))]
+
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>Resource Usage</h2>
-        <p>Assignment hours and load histogram (overallocation in red).</p>
-      </div>
+      <ViewHeader title="Resource Usage" />
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table ref={tableRef} className={styles.table}>
+          {colgroup}
           <thead>
             <tr>
-              <th>Resource</th>
-              <th>Task</th>
-              <th>Total (h)</th>
-              {dates.map((d) => (
-                <th key={d}>{d.slice(5)}</th>
+              {headers.map((label, i) => (
+                <ColumnHeader
+                  key={`${label}-${i}`}
+                  index={i}
+                  onResizeStart={onResizeStart}
+                  onResizeAuto={onResizeAuto}
+                >
+                  {label}
+                </ColumnHeader>
               ))}
             </tr>
           </thead>
@@ -106,8 +121,8 @@ export function ResourceUsageView() {
         </table>
       </div>
 
-      <div className={styles.heading}>
-        <h2>Histogram</h2>
+      <div className={styles.subHeading}>
+        <h3>Histogram</h3>
       </div>
       <div className={styles.tableWrap}>
         <div className={styles.histogram}>

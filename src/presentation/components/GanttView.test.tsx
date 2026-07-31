@@ -65,10 +65,15 @@ describe('GanttView', () => {
     expect(ganttMock.init).toHaveBeenCalled()
     expect(ganttMock.parse).toHaveBeenCalled()
 
-    await user.click(screen.getByRole('button', { name: 'Zoom In' }))
-    await user.click(screen.getByRole('button', { name: 'Zoom Out' }))
-    const dayBtn = screen.queryByRole('button', { name: 'Day' })
-    if (dayBtn) await user.click(dayBtn)
+    await user.click(screen.getByRole('button', { name: 'Hours' }))
+    await user.click(screen.getByRole('button', { name: 'Days' }))
+    const weekBtn = screen.queryByRole('button', { name: 'Week' })
+    if (weekBtn) await user.click(weekBtn)
+
+    await user.click(screen.getByRole('button', { name: 'Critical' }))
+    await user.click(screen.getByRole('button', { name: 'Milestones' }))
+    await user.click(screen.getByRole('button', { name: 'Incomplete' }))
+    await user.click(screen.getByRole('button', { name: 'All tasks' }))
 
     window.dispatchEvent(new CustomEvent('supergantt:gantt-zoom', { detail: 'in' }))
     window.dispatchEvent(new CustomEvent('supergantt:gantt-zoom', { detail: 'out' }))

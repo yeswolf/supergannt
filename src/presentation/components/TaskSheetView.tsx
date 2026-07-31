@@ -4,11 +4,29 @@ import { formatTaskResourceNames } from '../../application/use-cases/ResourceUse
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
 import styles from './DataTable.module.css'
+import { ColumnHeader, useResizableColumns } from './useResizableColumns'
+import { ViewHeader } from './ViewHeader'
+
+const HEADERS = [
+  'ID',
+  'WBS',
+  'Name',
+  'Duration (h)',
+  '%',
+  'Start',
+  'Finish',
+  'Cost',
+  'Resource Names',
+  'Predecessors',
+] as const
 
 export function TaskSheetView() {
   const { project, selectedTaskId, selectedTaskIds } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const [draftPreds, setDraftPreds] = useState<Record<string, string>>({})
+  const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
+    project.tasks.length,
+  )
 
   useEffect(() => {
     const next: Record<string, string> = {}
@@ -20,45 +38,22 @@ export function TaskSheetView() {
 
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>Task Sheet</h2>
-        <p>
-          Assign people via the Resources column or Assign. Predecessors:{' '}
-          <code>2FS+8h</code>. Ctrl/Cmd+click to multi-select, then Link.
-        </p>
-        <div className={styles.rowActions}>
-          <button
-            type="button"
-            disabled={!selectedTaskId}
-            onClick={() => dispatch({ type: 'openAssignDialog' })}
-          >
-            Assign Resources…
-          </button>
-          <button
-            type="button"
-            disabled={!selectedTaskId}
-            onClick={() =>
-              dispatch({ type: 'openTaskInfo', tab: 'resources' })
-            }
-          >
-            Task Information…
-          </button>
-        </div>
-      </div>
+      <ViewHeader title="Task Sheet" />
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table ref={tableRef} className={styles.table}>
+          {colgroup}
           <thead>
             <tr>
-              <th>ID</th>
-              <th>WBS</th>
-              <th>Name</th>
-              <th>Duration (h)</th>
-              <th>%</th>
-              <th>Start</th>
-              <th>Finish</th>
-              <th>Cost</th>
-              <th>Resource Names</th>
-              <th>Predecessors</th>
+              {HEADERS.map((label, i) => (
+                <ColumnHeader
+                  key={label}
+                  index={i}
+                  onResizeStart={onResizeStart}
+                  onResizeAuto={onResizeAuto}
+                >
+                  {label}
+                </ColumnHeader>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -87,7 +82,7 @@ export function TaskSheetView() {
                   <td>{task.wbs}</td>
                   <td>
                     <input
-                      style={{ paddingLeft: `${task.outlineLevel * 1.1}rem` }}
+                      style={{ paddingLeft: `calc(${task.outlineLevel} * var(--msp-indent))` }}
                       value={task.name}
                       aria-label={`Task ${task.wbs} name`}
                       onClick={(e) => e.stopPropagation()}

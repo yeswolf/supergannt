@@ -2,13 +2,18 @@ import type { ReactNode, SVGProps } from 'react'
 
 type IconProps = SVGProps<SVGSVGElement>
 
+/** Flat stroke icons — Lucide / Phosphor energy, currentColor, no shadows. */
 function Svg({ children, ...props }: IconProps & { children: ReactNode }) {
   return (
     <svg
-      viewBox="0 0 32 32"
+      viewBox="0 0 24 24"
       width="1em"
       height="1em"
       fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden
       {...props}
     >
@@ -17,277 +22,299 @@ function Svg({ children, ...props }: IconProps & { children: ReactNode }) {
   )
 }
 
-/** Fluent / Office-inspired multi-color ribbon glyphs */
 export const Icons = {
   blank: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="7" y="4" width="16" height="22" rx="2" fill="#fff" stroke="#8a8886" strokeWidth="1.25" />
-      <path d="M18 4v6h6" stroke="#8a8886" strokeWidth="1.25" strokeLinejoin="round" />
-      <path d="M11 14h8M11 18h8M11 22h5" stroke="#0f6cbd" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6M8 13h8M8 17h5" />
     </Svg>
   ),
   sample: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="5" y="6" width="22" height="18" rx="2" fill="#e8f3fc" stroke="#0f6cbd" strokeWidth="1.25" />
-      <rect x="8" y="10" width="7" height="3" rx="0.75" fill="#5b9bd5" />
-      <rect x="8" y="15" width="11" height="3" rx="0.75" fill="#2b579a" />
-      <rect x="8" y="20" width="5" height="2" rx="0.5" fill="#0f6cbd" opacity="0.55" />
-      <circle cx="24" cy="11" r="2" fill="#0e700e" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9h6M7 13h10M7 17h4" />
     </Svg>
   ),
   open: (p?: IconProps) => (
     <Svg {...p}>
-      <path
-        d="M5 12.5V9a2 2 0 0 1 2-2h5.2L14 9.5H25a2 2 0 0 1 2 2v1"
-        fill="#ffb900"
-        stroke="#8a6116"
-        strokeWidth="1"
-      />
-      <path
-        d="M4.5 14h18.2l2.8 10.5H8.8L4.5 14Z"
-        fill="#ffc83d"
-        stroke="#8a6116"
-        strokeWidth="1.1"
-        strokeLinejoin="round"
-      />
-      <path d="M7 14h14.5" stroke="#fff" strokeWidth="1" opacity="0.5" />
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1" />
+      <path d="M3 10h18l-1.5 9H4.5L3 10Z" />
     </Svg>
   ),
   saveXml: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="7" y="4" width="16" height="22" rx="2" fill="#fff" stroke="#0f6cbd" strokeWidth="1.25" />
-      <path d="M11 4.5h7v5.5H11z" fill="#0f6cbd" />
-      <path d="M11 16h10M11 20h7" stroke="#616161" strokeWidth="1.4" strokeLinecap="round" />
-      <rect x="18" y="22" width="8" height="6" rx="1" fill="#0f6cbd" />
-      <text x="22" y="26.5" textAnchor="middle" fill="#fff" fontSize="4.2" fontWeight="700" fontFamily="Segoe UI, sans-serif">
-        XML
-      </text>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6M8 13h8M8 17h5" />
     </Svg>
   ),
   saveMpx: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="7" y="4" width="16" height="22" rx="2" fill="#fff" stroke="#0e700e" strokeWidth="1.25" />
-      <path d="M11 4.5h7v5.5H11z" fill="#0e700e" />
-      <path d="M11 16h10M11 20h7" stroke="#616161" strokeWidth="1.4" strokeLinecap="round" />
-      <rect x="17.5" y="22" width="9" height="6" rx="1" fill="#0e700e" />
-      <text x="22" y="26.5" textAnchor="middle" fill="#fff" fontSize="4.2" fontWeight="700" fontFamily="Segoe UI, sans-serif">
-        MPX
-      </text>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6M9 16l2 2 4-5" />
     </Svg>
   ),
   saveMpp: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="7" y="4" width="16" height="22" rx="2" fill="#f3f2f1" stroke="#8a8886" strokeWidth="1.25" />
-      <path d="M11 4.5h7v5.5H11z" fill="#8a8886" />
-      <path d="M11 16h10M11 20h7" stroke="#c8c6c4" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M12 24l8-8M20 24l-8-8" stroke="#c50f1f" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6M9 13l6 6M15 13l-6 6" />
+    </Svg>
+  ),
+  plus: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M12 5v14M5 12h14" />
     </Svg>
   ),
   task: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="5" y="8" width="22" height="6" rx="1.5" fill="#5b9bd5" />
-      <rect x="5" y="8" width="9" height="6" rx="1.5" fill="#2b579a" />
-      <rect x="5" y="17" width="14" height="6" rx="1.5" fill="#5b9bd5" />
-      <rect x="5" y="17" width="5" height="6" rx="1.5" fill="#2b579a" />
+      <path d="M4 8h11M4 14h7M4 20h9" />
+      <path d="M18 7v4M16 9h4" />
     </Svg>
   ),
   milestone: (p?: IconProps) => (
     <Svg {...p}>
-      <path d="M5 12h8" stroke="#8a8886" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M19 12h8" stroke="#8a8886" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M16 6.5l6.5 6.5L16 19.5 9.5 13Z" fill="#d13438" stroke="#a4262c" strokeWidth="1" />
-      <path d="M16 9.2l3.8 3.8L16 16.8l-3.8-3.8Z" fill="#fff" opacity="0.35" />
+      <path d="M12 4l6 6-6 6-6-6 6-6Z" />
+      <path d="M3 10h3M18 10h3" />
     </Svg>
   ),
   indent: (p?: IconProps) => (
     <Svg {...p}>
-      <path d="M6 8h18M6 16h18M6 24h10" stroke="#c8c6c4" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M10 14.5h8M10 14.5l3-3M10 14.5l3 3" stroke="#0f6cbd" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M14 20h12" stroke="#0f6cbd" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 6h18M3 12h10M3 18h18" />
+      <path d="M14 9l4 3-4 3" />
     </Svg>
   ),
   outdent: (p?: IconProps) => (
     <Svg {...p}>
-      <path d="M6 8h18M14 16h12M6 24h10" stroke="#c8c6c4" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M18 14.5H10M18 14.5l-3-3M18 14.5l-3 3" stroke="#0f6cbd" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 20h12" stroke="#0f6cbd" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 6h18M11 12h10M3 18h18" />
+      <path d="M10 9l-4 3 4 3" />
     </Svg>
   ),
   delete: (p?: IconProps) => (
     <Svg {...p}>
-      <path d="M8 10h16l-1.2 14.5a2 2 0 0 1-2 1.8H11.2a2 2 0 0 1-2-1.8L8 10Z" fill="#fde7e9" stroke="#c50f1f" strokeWidth="1.2" />
-      <path d="M6.5 10h19" stroke="#c50f1f" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M12 7.5h8a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 0 12 7.5Z" fill="#c50f1f" />
-      <path d="M13.5 14v8M18.5 14v8" stroke="#c50f1f" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12" />
     </Svg>
   ),
   link: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="4" y="12" width="10" height="5" rx="1.2" fill="#5b9bd5" />
-      <rect x="18" y="12" width="10" height="5" rx="1.2" fill="#2b579a" />
-      <path d="M13 14.5h6" stroke="#0f6cbd" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="13" cy="14.5" r="1.4" fill="#0f6cbd" />
-      <circle cx="19" cy="14.5" r="1.4" fill="#0f6cbd" />
-      <path d="M16 8v4M16 17v4" stroke="#8a8886" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="2 2" />
+      <path d="M9 12h6" />
+      <path d="M10 8H7a4 4 0 0 0 0 8h3" />
+      <path d="M14 8h3a4 4 0 0 1 0 8h-3" />
     </Svg>
   ),
   unlink: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="4" y="12" width="10" height="5" rx="1.2" fill="#5b9bd5" />
-      <rect x="18" y="12" width="10" height="5" rx="1.2" fill="#2b579a" />
-      <path d="M13.5 13l5 3M13.5 16l5-3" stroke="#c50f1f" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M10 8H7a4 4 0 0 0-.5 8" />
+      <path d="M14 8h3a4 4 0 0 1 .5 8" />
+      <path d="M8 12h2M14 12h2M4 4l16 16" />
     </Svg>
   ),
   information: (p?: IconProps) => (
     <Svg {...p}>
-      <circle cx="16" cy="16" r="11" fill="#e8f3fc" stroke="#0f6cbd" strokeWidth="1.4" />
-      <circle cx="16" cy="10.5" r="1.5" fill="#0f6cbd" />
-      <path d="M16 14.5v8" stroke="#0f6cbd" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
     </Svg>
   ),
   resources: (p?: IconProps) => (
     <Svg {...p}>
-      <circle cx="12" cy="11" r="4" fill="#5b9bd5" />
-      <circle cx="21" cy="12" r="3.2" fill="#2b579a" />
-      <path d="M5 24c0-3.8 3-6 7-6s7 2.2 7 6" fill="#5b9bd5" />
-      <path d="M16 24c.4-2.8 2.6-4.5 5.2-4.5 2.2 0 4 1.2 4.6 3.2" fill="#2b579a" />
+      <circle cx="9" cy="8" r="3" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M3 19c0-3 2.5-5 6-5s6 2 6 5" />
+      <path d="M14 19c.3-2 2-3.5 4.5-3.5 1.5 0 2.8.6 3.5 1.6" />
     </Svg>
   ),
   zoomIn: (p?: IconProps) => (
     <Svg {...p}>
-      <circle cx="14" cy="14" r="7.5" fill="#fff" stroke="#0f6cbd" strokeWidth="1.6" />
-      <path d="M14 10.5v7M10.5 14h7" stroke="#0f6cbd" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M19.5 19.5L26 26" stroke="#242424" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="11" cy="11" r="7" />
+      <path d="M11 8v6M8 11h6M16.5 16.5 21 21" />
     </Svg>
   ),
   zoomOut: (p?: IconProps) => (
     <Svg {...p}>
-      <circle cx="14" cy="14" r="7.5" fill="#fff" stroke="#0f6cbd" strokeWidth="1.6" />
-      <path d="M10.5 14h7" stroke="#0f6cbd" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M19.5 19.5L26 26" stroke="#242424" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="11" cy="11" r="7" />
+      <path d="M8 11h6M16.5 16.5 21 21" />
     </Svg>
   ),
   addResource: (p?: IconProps) => (
     <Svg {...p}>
-      <circle cx="13" cy="11" r="4.2" fill="#5b9bd5" />
-      <path d="M5.5 24c0-4 3.2-6.5 7.5-6.5S20.5 20 20.5 24" fill="#5b9bd5" />
-      <circle cx="23" cy="12" r="5" fill="#0e700e" />
-      <path d="M23 9.2v5.6M20.2 12h5.6" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 19c0-3 2.5-5 6-5s6 2 6 5" />
+      <path d="M19 8v6M16 11h6" />
     </Svg>
   ),
   calendar: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="5" y="7" width="22" height="20" rx="2" fill="#fff" stroke="#0f6cbd" strokeWidth="1.25" />
-      <rect x="5" y="7" width="22" height="5" fill="#0f6cbd" />
-      <path d="M10 5.5v4M22 5.5v4" stroke="#0f6cbd" strokeWidth="1.8" strokeLinecap="round" />
-      <rect x="9" y="15" width="3.2" height="3.2" rx="0.5" fill="#5b9bd5" />
-      <rect x="14.4" y="15" width="3.2" height="3.2" rx="0.5" fill="#d13438" />
-      <rect x="19.8" y="15" width="3.2" height="3.2" rx="0.5" fill="#c8c6c4" />
-      <rect x="9" y="20.5" width="3.2" height="3.2" rx="0.5" fill="#c8c6c4" />
-      <rect x="14.4" y="20.5" width="3.2" height="3.2" rx="0.5" fill="#5b9bd5" />
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
     </Svg>
   ),
   baseline: (p?: IconProps) => (
     <Svg {...p}>
-      <path d="M5 22h22" stroke="#8a8886" strokeWidth="1.4" strokeLinecap="round" />
-      <rect x="6" y="12" width="9" height="5" rx="1" fill="#5b9bd5" opacity="0.45" />
-      <rect x="6" y="10" width="9" height="5" rx="1" fill="#2b579a" />
-      <rect x="17" y="15" width="8" height="4" rx="1" fill="#5b9bd5" opacity="0.45" />
-      <rect x="17" y="13" width="8" height="4" rx="1" fill="#0f6cbd" />
-      <path d="M24 7l2.2 2.2L29.8 5" stroke="#0e700e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 19h18" />
+      <path d="M5 14h6M13 16h6" />
+      <path d="M5 10h6M13 12h6" />
     </Svg>
   ),
   clearBaseline: (p?: IconProps) => (
     <Svg {...p}>
-      <path d="M5 22h22" stroke="#8a8886" strokeWidth="1.4" strokeLinecap="round" />
-      <rect x="6" y="12" width="9" height="5" rx="1" fill="#c8c6c4" />
-      <rect x="17" y="14" width="8" height="4" rx="1" fill="#c8c6c4" />
-      <circle cx="24" cy="9" r="5" fill="#fde7e9" stroke="#c50f1f" strokeWidth="1.1" />
-      <path d="M22 7l4 4M26 7l-4 4" stroke="#c50f1f" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3 19h18" />
+      <path d="M5 14h6M13 16h6" />
+      <path d="M15 5l4 4M19 5l-4 4" />
     </Svg>
   ),
   reports: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="5" y="5" width="22" height="22" rx="2" fill="#fff" stroke="#0f6cbd" strokeWidth="1.2" />
-      <rect x="9" y="18" width="3.5" height="5" rx="0.5" fill="#5b9bd5" />
-      <rect x="14.25" y="13" width="3.5" height="10" rx="0.5" fill="#2b579a" />
-      <rect x="19.5" y="10" width="3.5" height="13" rx="0.5" fill="#0f6cbd" />
-      <path d="M9 11l4-3 4 2 5-4" stroke="#0e700e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 19V9M10 19V5M16 19v-7M22 19V8" />
     </Svg>
   ),
   gantt: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="4" y="5" width="8" height="22" rx="1" fill="#f3f2f1" stroke="#c8c6c4" />
-      <path d="M6 10h4M6 15h4M6 20h3" stroke="#8a8886" strokeWidth="1.2" strokeLinecap="round" />
-      <rect x="14" y="9" width="12" height="3.5" rx="1" fill="#5b9bd5" />
-      <rect x="14" y="14.5" width="8" height="3.5" rx="1" fill="#2b579a" />
-      <rect x="14" y="20" width="10" height="3.5" rx="1" fill="#5b9bd5" />
+      <path d="M3 5h5M3 12h5M3 19h5" />
+      <path d="M11 5h10M11 12h7M11 19h8" />
     </Svg>
   ),
-  /** Title-bar / product mark — matches app icon motif */
   app: (p?: IconProps) => (
-    <Svg {...p}>
-      <rect x="2" y="2" width="28" height="28" rx="7" fill="#0f6cbd" />
-      <rect x="5" y="8" width="12" height="4" rx="2" fill="#fff" />
-      <rect x="8" y="14" width="16" height="4" rx="2" fill="#fff" />
-      <rect x="12" y="20" width="9" height="4" rx="2" fill="#fff" />
-      <path d="M23 24v3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M23 27.5l2 2-2 2-2-2 2-2Z" fill="#fff" />
+    <Svg {...p} strokeWidth="1.5">
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="M7 8h7M7 12h10M7 16h6" />
     </Svg>
   ),
   taskSheet: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="5" y="5" width="22" height="22" rx="2" fill="#fff" stroke="#0f6cbd" strokeWidth="1.2" />
-      <path d="M5 11h22M5 17h22M5 23h22M12 5v22" stroke="#b4d6fa" strokeWidth="1.1" />
-      <path d="M14.5 8h10M7 14h3M14.5 14h8M7 20h3M14.5 20h6" stroke="#616161" strokeWidth="1.3" strokeLinecap="round" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18M3 14h18M9 4v16" />
     </Svg>
   ),
   network: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="4" y="12" width="8" height="6" rx="1" fill="#5b9bd5" />
-      <rect x="20" y="5" width="8" height="6" rx="1" fill="#2b579a" />
-      <rect x="20" y="21" width="8" height="6" rx="1" fill="#0f6cbd" />
-      <path d="M12 15h4l4-6M16 15l4 9" stroke="#8a8886" strokeWidth="1.5" strokeLinejoin="round" />
-      <circle cx="16" cy="15" r="1.5" fill="#242424" />
+      <rect x="2" y="9" width="6" height="6" rx="1" />
+      <rect x="16" y="3" width="6" height="6" rx="1" />
+      <rect x="16" y="15" width="6" height="6" rx="1" />
+      <path d="M8 12h4l4-5M12 12l4 6" />
     </Svg>
   ),
   wbs: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="11" y="4" width="10" height="5" rx="1" fill="#0f6cbd" />
-      <path d="M16 9v3M10 12h12M10 12v3M22 12v3" stroke="#8a8886" strokeWidth="1.4" />
-      <rect x="5" y="15" width="10" height="5" rx="1" fill="#5b9bd5" />
-      <rect x="17" y="15" width="10" height="5" rx="1" fill="#5b9bd5" />
-      <path d="M10 20v3M7 23h6" stroke="#8a8886" strokeWidth="1.3" />
-      <rect x="4" y="23.5" width="6" height="4" rx="0.8" fill="#b4d6fa" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M12 6v3M6 9h12M6 9v3M18 9v3" />
+      <rect x="2" y="12" width="8" height="4" rx="1" />
+      <rect x="14" y="12" width="8" height="4" rx="1" />
+      <path d="M6 16v2M4 18h4" />
+      <rect x="2" y="18" width="4" height="3" rx="0.5" />
     </Svg>
   ),
   rbs: (p?: IconProps) => (
     <Svg {...p}>
-      <circle cx="16" cy="7" r="3.2" fill="#0f6cbd" />
-      <path d="M16 10.5v3M10 13.5h12M10 13.5v2.5M22 13.5v2.5" stroke="#8a8886" strokeWidth="1.3" />
-      <circle cx="10" cy="19" r="3" fill="#5b9bd5" />
-      <circle cx="22" cy="19" r="3" fill="#5b9bd5" />
-      <path d="M10 22v2.5M7.5 24.5h5" stroke="#8a8886" strokeWidth="1.2" />
-      <circle cx="7.5" cy="27" r="2.2" fill="#b4d6fa" />
-      <circle cx="12.5" cy="27" r="2.2" fill="#b4d6fa" />
+      <circle cx="12" cy="5" r="2.5" />
+      <path d="M12 7.5v2.5M7 10h10M7 10v2M17 10v2" />
+      <circle cx="7" cy="15" r="2.2" />
+      <circle cx="17" cy="15" r="2.2" />
+      <path d="M7 17.2v1.8M5 19h4" />
+      <circle cx="5" cy="21" r="1.5" />
+      <circle cx="9" cy="21" r="1.5" />
     </Svg>
   ),
   taskUsage: (p?: IconProps) => (
     <Svg {...p}>
-      <rect x="4" y="6" width="10" height="20" rx="1" fill="#f3f2f1" stroke="#c8c6c4" />
-      <path d="M6 11h6M6 16h5M6 21h6" stroke="#8a8886" strokeWidth="1.2" strokeLinecap="round" />
-      <rect x="16" y="8" width="3" height="14" rx="0.5" fill="#5b9bd5" />
-      <rect x="20.5" y="12" width="3" height="10" rx="0.5" fill="#2b579a" />
-      <rect x="25" y="10" width="3" height="12" rx="0.5" fill="#0f6cbd" />
+      <path d="M4 4v16M4 20h16" />
+      <path d="M8 16V10M12 16V7M16 16v-5M20 16V9" />
     </Svg>
   ),
   resourceUsage: (p?: IconProps) => (
     <Svg {...p}>
-      <circle cx="9" cy="9" r="3" fill="#5b9bd5" />
-      <path d="M4 22c0-3 2.2-5 5-5s5 2 5 5" fill="#5b9bd5" />
-      <rect x="16" y="8" width="3" height="14" rx="0.5" fill="#5b9bd5" />
-      <rect x="20.5" y="12" width="3" height="10" rx="0.5" fill="#2b579a" />
-      <rect x="25" y="10" width="3" height="12" rx="0.5" fill="#0f6cbd" />
+      <circle cx="7" cy="7" r="2.5" />
+      <path d="M2 18c0-2.5 2-4 5-4s5 1.5 5 4" />
+      <path d="M14 18V8M17.5 18v-6M21 18v-9" />
+    </Svg>
+  ),
+  month: (p?: IconProps) => (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4M8 14h8M8 17h5" />
+    </Svg>
+  ),
+  year: (p?: IconProps) => (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+      <path d="M7 14h2M11 14h2M15 14h2M7 18h2M11 18h2M15 18h2" />
+    </Svg>
+  ),
+  newCalendar: (p?: IconProps) => (
+    <Svg {...p}>
+      <rect x="2" y="5" width="14" height="14" rx="2" />
+      <path d="M2 9h14M6 3v4M12 3v4M18 14v6M15 17h6" />
+    </Svg>
+  ),
+  workingTime: (p?: IconProps) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </Svg>
+  ),
+  useProject: (p?: IconProps) => (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M8 12l3 3 5-6" />
+    </Svg>
+  ),
+  add: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M12 5v14M5 12h14" />
+    </Svg>
+  ),
+  ok: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M5 12l5 5L19 7" />
+    </Svg>
+  ),
+  cancel: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </Svg>
+  ),
+  apply: (p?: IconProps) => (
+    <Svg {...p}>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M8 12l3 3 5-6" />
+    </Svg>
+  ),
+  search: (p?: IconProps) => (
+    <Svg {...p}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M16.5 16.5 21 21" />
+    </Svg>
+  ),
+  theme: (p?: IconProps) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18" />
+      <path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none" opacity="0.35" />
+    </Svg>
+  ),
+  prev: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M15 6l-6 6 6 6" />
+    </Svg>
+  ),
+  next: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M9 6l6 6-6 6" />
+    </Svg>
+  ),
+  allTasks: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M4 7h16M4 12h16M4 17h10" />
+    </Svg>
+  ),
+  critical: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M12 3l9 16H3L12 3Z" />
+      <path d="M12 10v4M12 17h.01" />
+    </Svg>
+  ),
+  incomplete: (p?: IconProps) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
     </Svg>
   ),
 } as const

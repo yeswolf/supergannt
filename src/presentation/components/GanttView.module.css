@@ -1,106 +1,319 @@
 .wrap {
   height: 100%;
   min-height: 420px;
+  min-width: 0;
   background: var(--msp-surface);
   display: flex;
   flex-direction: column;
 }
 
-.viewBar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.55rem 0.85rem;
-  padding: 0.4rem 0.7rem;
-  background: var(--msp-surface-alt);
-  border-bottom: 1px solid var(--msp-border);
-}
-
-.viewGroup {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.viewGroup button {
-  appearance: none;
-  border: 1px solid var(--msp-border);
-  background: var(--msp-surface);
-  color: var(--msp-text);
-  padding: 0.28rem 0.5rem;
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: var(--msp-radius);
-}
-
-.viewGroup button:hover:not(:disabled) {
-  border-color: var(--msp-accent);
-  background: var(--msp-accent-soft);
-  color: var(--msp-accent-hover);
-}
-
-.viewGroup button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.scaleActive {
-  background: var(--msp-accent) !important;
-  border-color: var(--msp-accent) !important;
-  color: #fff !important;
-}
-
 .scaleLabel {
-  margin-left: 0.25rem;
-  font-size: 0.76rem;
+  flex-shrink: 0;
+  font-size: var(--msp-text-sm);
   color: var(--msp-text-secondary);
-}
-
-.hintInline {
-  margin: 0;
-  margin-left: auto;
-  font-size: 0.72rem;
-  color: var(--msp-text-muted);
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .chart {
   flex: 1;
   min-height: 0;
   background: var(--msp-surface);
+  color: var(--msp-text);
 }
 
-.wrap :global(.gantt_container) {
+/* Remap dhtmlx tokens on the mount node AND .gantt_container (same element after init). */
+.wrap :global(.gantt_container),
+.chart {
   border: none !important;
   background: var(--msp-surface) !important;
+  color: var(--msp-text) !important;
+  font-family: var(--msp-font) !important;
+  font-size: var(--msp-text-sm) !important;
+
+  /* Remap dhtmlx theme tokens → SuperGantt themes (CE defaults stay light forever). */
+  --dhx-gantt-font-family: var(--msp-font);
+  --dhx-gantt-font-size: var(--msp-text-sm);
+  --dhx-gantt-regular-font-size: var(--msp-text-sm);
+  --dhx-gantt-caption-font-size: var(--msp-text-xs);
+  --dhx-gantt-task-font-size: var(--msp-text-xs);
+  --dhx-gantt-task-line-height: 12px;
+  --dhx-gantt-regular-line-height: 16px;
+  --dhx-gantt-icon-size: 12px;
+  --dhx-gantt-base-padding: 2px;
+
+  --dhx-gantt-base-colors-white: var(--msp-surface);
+  --dhx-gantt-base-colors-select: var(--msp-row-selected);
+  --dhx-gantt-base-colors-hover-color: var(--msp-row-hover);
+  --dhx-gantt-base-colors-border-light: var(--msp-border);
+  --dhx-gantt-base-colors-border: var(--msp-border-strong);
+  --dhx-gantt-base-colors-icons: var(--msp-text-muted);
+  --dhx-gantt-base-colors-icons-active: var(--msp-text-secondary);
+  --dhx-gantt-base-colors-icons-hover: var(--msp-text);
+  --dhx-gantt-base-colors-disabled: var(--msp-surface-alt);
+  --dhx-gantt-base-colors-text-light: var(--msp-text-secondary);
+  --dhx-gantt-base-colors-text-base: var(--msp-text);
+  --dhx-gantt-base-colors-text-on-fill: var(--msp-on-accent, #fff);
+  --dhx-gantt-base-colors-background: var(--msp-surface);
+  --dhx-gantt-base-colors-background-alt: var(--msp-surface-alt);
+  --dhx-gantt-base-colors-primary: var(--msp-accent);
+  --dhx-gantt-base-colors-primary-hover: var(--msp-accent-hover);
+  --dhx-gantt-base-colors-primary-active: var(--msp-accent-hover);
+  --dhx-gantt-base-colors-primary-lighter: var(--msp-accent-soft);
+  --dhx-gantt-base-colors-warning: var(--msp-warning);
+  --dhx-gantt-base-colors-error: var(--msp-danger);
+  --dhx-gantt-base-colors-success: var(--msp-success);
+
+  --dhx-gantt-container-background: var(--msp-surface);
+  --dhx-gantt-container-color: var(--msp-text);
+  --dhx-gantt-offtime-background: var(--msp-surface-alt);
+  --dhx-gantt-scale-background: var(--msp-surface-alt);
+  --dhx-gantt-scale-color: var(--msp-text-secondary);
+  --dhx-gantt-scale-border-vertical: 1px solid var(--msp-border);
+  --dhx-gantt-scale-border-horizontal: 1px solid var(--msp-border);
+  --dhx-gantt-grid-body-background: var(--msp-surface);
+  --dhx-gantt-grid-scale-background: var(--msp-surface-alt);
+  --dhx-gantt-grid-scale-color: var(--msp-text-secondary);
+  --dhx-gantt-grid-scale-border-vertical: 1px solid var(--msp-border);
+  --dhx-gantt-timeline-scale-background: var(--msp-surface-alt);
+  --dhx-gantt-timeline-scale-color: var(--msp-text-secondary);
+  --dhx-gantt-timeline-scale-border-vertical: 1px solid var(--msp-border);
+  --dhx-gantt-grid-cell-border: 1px solid var(--msp-border);
+  --dhx-gantt-grid-row-border: 1px solid var(--msp-border);
+  --dhx-gantt-default-border: 1px solid var(--msp-border);
+  --dhx-gantt-header-border: 1px solid var(--msp-border);
+
+  --dhx-gantt-task-blue: var(--msp-gantt-bar);
+  --dhx-gantt-task-green: var(--msp-success);
+  --dhx-gantt-task-background: var(--msp-gantt-bar);
+  --dhx-gantt-task-color: var(--msp-on-accent, #fff);
+  --dhx-gantt-project-background: color-mix(in srgb, var(--msp-accent) 55%, var(--msp-text) 45%);
+  --dhx-gantt-project-color: var(--msp-on-accent, #fff);
+  --dhx-gantt-milestone-background: var(--msp-accent);
+  --dhx-gantt-task-line-text: var(--msp-text);
+  --dhx-gantt-task-row-border: 1px solid var(--msp-border);
+  --dhx-gantt-task-row-background: var(--msp-surface);
+  --dhx-gantt-task-row-background--odd: var(--msp-surface-alt);
+  --dhx-gantt-link-background: var(--msp-text-muted);
+  --dhx-gantt-link-background-hover: var(--msp-text-secondary);
+  --dhx-gantt-link-critical-background: var(--msp-gantt-critical);
+}
+
+.wrap :global(.gantt_layout_cell),
+.wrap :global(.gantt_grid),
+.wrap :global(.gantt_grid_data),
+.wrap :global(.gantt_task),
+.wrap :global(.gantt_task_bg),
+.wrap :global(.gantt_data_area) {
+  background: var(--msp-surface) !important;
+  color: var(--msp-text) !important;
 }
 
 .wrap :global(.gantt_grid_scale),
 .wrap :global(.gantt_task_scale) {
-  background: #f0f0f0 !important;
+  background: var(--msp-surface-alt) !important;
   border-bottom: 1px solid var(--msp-border) !important;
   color: var(--msp-text-secondary) !important;
+}
+
+.wrap :global(.gantt_scale_line) {
+  display: flex !important;
+  align-items: stretch !important;
+}
+
+/* Column headers + timescale labels — center in the tall scale band */
+.wrap :global(.gantt_grid_head_cell) {
+  font-family: var(--msp-font) !important;
+  font-size: var(--msp-text-xs) !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  color: var(--msp-text-secondary) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  height: 100% !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  vertical-align: top !important;
+  position: relative !important;
+  border-right: 1px solid var(--msp-border) !important;
+}
+
+/* Hit target hint for CE column resize (PRO resize is unavailable). */
+.wrap :global(.gantt_grid_head_cell)::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  right: 0;
+  width: 3px;
+  height: 70%;
+  border-radius: 1px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.wrap :global(.gantt_grid_head_cell:hover)::after {
+  background: color-mix(in srgb, var(--msp-accent) 45%, transparent);
+}
+
+.wrap :global(.gantt_scale_cell) {
+  font-family: var(--msp-font) !important;
+  font-size: var(--msp-text-xs) !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  color: var(--msp-text-secondary) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  height: 100% !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  vertical-align: top !important;
+  border-right: 1px solid var(--msp-border) !important;
+}
+
+.wrap :global(.gantt_grid_head_cell.gantt_grid_head_text),
+.wrap :global(.gantt_grid_head_cell.gantt_grid_head_wbs),
+.wrap :global(.gantt_grid_head_cell.gantt_grid_head_resources) {
+  justify-content: flex-start !important;
+  padding-left: 8px !important;
+  padding-right: 6px !important;
+}
+
+/* Vertically center grid text — dhtmlx defaults to top-align in tall rows */
+.wrap :global(.gantt_cell) {
+  font-family: var(--msp-font) !important;
+  font-size: var(--msp-text-sm) !important;
+  line-height: 1.15 !important;
+  color: var(--msp-text) !important;
+  border-right: 1px solid var(--msp-border) !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 14px !important;
+  box-sizing: border-box !important;
+}
+
+.wrap :global(.gantt_row),
+.wrap :global(.gantt_task_row) {
+  background: var(--msp-surface) !important;
+  border-bottom: 1px solid var(--msp-border) !important;
+  color: var(--msp-text) !important;
+}
+
+.wrap :global(.gantt_cell_tree) {
+  align-items: center !important;
+  gap: 4px !important;
+  padding-left: 16px !important;
+  padding-right: 12px !important;
+}
+
+.wrap :global(.gantt_tree_content) {
+  font-family: var(--msp-font) !important;
+  font-size: var(--msp-text-sm) !important;
+  line-height: 1.15 !important;
+  color: var(--msp-text) !important;
+  height: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  padding-left: 2px !important;
+}
+
+.wrap :global(.gantt_tree_icon) {
+  width: 16px !important;
+  height: 16px !important;
+  flex: 0 0 16px !important;
+  align-self: center !important;
+  background-size: 12px 12px !important;
+  background-position: center !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  color: var(--msp-text-secondary) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.wrap :global(.gantt_tree_icon.gantt_open),
+.wrap :global(.gantt_tree_icon.gantt_close),
+.wrap :global(.gantt_tree_icon.gantt_blank) {
+  width: 16px !important;
+  height: 16px !important;
+  flex-basis: 16px !important;
+}
+
+.wrap :global(.gantt_tree_icon.gantt_folder_open),
+.wrap :global(.gantt_tree_icon.gantt_folder_closed),
+.wrap :global(.gantt_tree_icon.gantt_file) {
+  display: none !important;
+}
+
+.wrap :global(.gantt_tree_icon.gantt_open)::before,
+.wrap :global(.gantt_tree_icon.gantt_close)::before {
+  color: var(--msp-text-secondary) !important;
+  font-size: 11px !important;
+}
+
+.wrap :global(.gantt_tree_indent) {
+  width: 16px !important;
+  flex: 0 0 16px !important;
+}
+
+.wrap :global(.gantt_task_content) {
+  font-family: var(--msp-font) !important;
+  font-size: var(--msp-text-xs) !important;
+  line-height: 1 !important;
+  padding: 0 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  color: inherit !important;
+  box-sizing: border-box !important;
 }
 
 .wrap :global(.gantt_task_line) {
   border-radius: 2px;
   background: var(--msp-gantt-bar) !important;
   border-color: var(--msp-gantt-bar-progress) !important;
+  color: var(--msp-on-accent, #fff) !important;
+}
+
+.wrap :global(.gantt_task_line.gantt_project) {
+  background: color-mix(in srgb, var(--msp-accent) 55%, var(--msp-text) 45%) !important;
+  border-color: color-mix(in srgb, var(--msp-accent) 40%, var(--msp-text) 60%) !important;
+  color: var(--msp-on-accent, #fff) !important;
 }
 
 .wrap :global(.gantt_task_progress) {
   background: var(--msp-gantt-bar-progress) !important;
 }
 
+.wrap :global(.gantt_task_line.gantt_project .gantt_task_progress) {
+  background: color-mix(in srgb, var(--msp-accent) 35%, var(--msp-text) 65%) !important;
+}
+
+.wrap :global(.gantt_side_content),
+.wrap :global(.gantt_task_text),
+.wrap :global(.gantt_marker .gantt_marker_content) {
+  font-family: var(--msp-font) !important;
+  font-size: var(--msp-text-xs) !important;
+  line-height: 1.15 !important;
+  color: var(--msp-text) !important;
+}
+
+.wrap :global(.gantt_task_cell),
+.wrap :global(.gantt_task_row .gantt_task_cell) {
+  border-right: 1px solid var(--msp-border) !important;
+}
+
 .wrap :global(.super-critical) {
   background: var(--msp-gantt-critical) !important;
-  border-color: #a4262c !important;
+  border-color: var(--msp-gantt-critical) !important;
 }
 
 .wrap :global(.super-critical .gantt_task_progress) {
-  background: #a4262c !important;
+  background: var(--msp-gantt-critical) !important;
 }
 
 .wrap :global(.gantt_row.odd),
@@ -114,12 +327,14 @@
   background: var(--msp-row-selected) !important;
 }
 
-/* Milestone diamonds */
+/*
+ * Milestones: recolor + slightly shrink content. Never override `top` —
+ * dhtmlx sets row offset inline; forcing top:16px parks every diamond wrong.
+ */
 .wrap :global(.gantt_task_line.gantt_milestone),
 .wrap :global(.gantt_task_line.super-milestone) {
   background: transparent !important;
   border: none !important;
-  border-radius: 0 !important;
   box-shadow: none !important;
   overflow: visible !important;
 }
@@ -127,24 +342,24 @@
 .wrap :global(.gantt_task_line.gantt_milestone .gantt_task_content),
 .wrap :global(.gantt_task_line.super-milestone .gantt_task_content) {
   visibility: visible !important;
+  width: 12px !important;
+  height: 12px !important;
+  margin: auto !important;
+  padding: 0 !important;
   background: var(--msp-accent) !important;
-  border: 2px solid var(--msp-accent-hover) !important;
-  border-radius: 2px !important;
+  border: 1.5px solid var(--msp-accent-hover) !important;
   color: transparent !important;
-  transform: rotate(45deg);
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
+  box-sizing: border-box !important;
 }
 
 .wrap :global(.gantt_task_line.gantt_milestone.super-critical .gantt_task_content),
 .wrap :global(.gantt_task_line.super-milestone.super-critical .gantt_task_content) {
   background: var(--msp-gantt-critical) !important;
-  border-color: #a4262c !important;
+  border-color: var(--msp-gantt-critical) !important;
 }
 
 .wrap :global(.gantt_link_arrow),
 .wrap :global(.gantt_line_wrapper div) {
-  background-color: #605e5c !important;
-  border-color: #605e5c !important;
+  background-color: var(--msp-text-muted) !important;
+  border-color: var(--msp-text-muted) !important;
 }

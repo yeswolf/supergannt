@@ -1,5 +1,5 @@
 import type { DragEvent } from 'react'
-import { Toolbar } from './components/Toolbar'
+import { AppChrome } from './components/AppChrome'
 import { GanttView } from './components/GanttView'
 import { TaskSheetView } from './components/TaskSheetView'
 import { ResourceView } from './components/ResourceView'
@@ -13,25 +13,12 @@ import { ResourceCalendarView } from './components/ResourceCalendarView'
 import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
 import { openPlanFile } from './openPlanFile'
+import { viewLabel } from './components/nav/views'
 import { useWorkspaceDispatch, useWorkspaceState } from './state/WorkspaceContext'
 import styles from './AppShell.module.css'
 
 function isFileDrag(e: DragEvent): boolean {
   return Array.from(e.dataTransfer.types).includes('Files')
-}
-
-const VIEW_LABELS: Record<string, string> = {
-  gantt: 'Gantt Chart',
-  tasks: 'Task Sheet',
-  resources: 'Resource Sheet',
-  network: 'Network Diagram',
-  wbs: 'WBS',
-  rbs: 'RBS',
-  taskUsage: 'Task Usage',
-  resourceUsage: 'Resource Usage',
-  calendar: 'Calendar',
-  resourceCalendar: 'Resource Calendar',
-  reports: 'Reports',
 }
 
 export function AppShell() {
@@ -55,7 +42,7 @@ export function AppShell() {
         if (file) void openPlanFile(file, services, dispatch)
       }}
     >
-      <Toolbar />
+      <AppChrome />
       <main className={styles.main}>
         {view === 'gantt' ? <GanttView /> : null}
         {view === 'tasks' ? <TaskSheetView /> : null}
@@ -71,7 +58,7 @@ export function AppShell() {
       </main>
       <footer className={styles.statusBar} role="status">
         <span>
-          {busyMessage ?? statusMessage ?? `${VIEW_LABELS[view] ?? view} · Ready`}
+          {busyMessage ?? statusMessage ?? `${viewLabel(view)} · Ready`}
         </span>
         <div className={styles.statusMeta}>
           <span>
@@ -81,7 +68,7 @@ export function AppShell() {
             Resources <strong>{project.resources.length}</strong>
           </span>
           <span>
-            View <strong>{VIEW_LABELS[view] ?? view}</strong>
+            View <strong>{viewLabel(view)}</strong>
           </span>
           {project.dirty ? <span>Unsaved changes</span> : <span>Saved</span>}
         </div>

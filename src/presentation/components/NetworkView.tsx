@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toNetworkDiagram } from '../../application/services/ReportingService'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './NetworkView.module.css'
+import { ViewHeader } from './ViewHeader'
 
 type Side = 'start' | 'finish'
 type Pt = { x: number; y: number }
@@ -13,10 +14,11 @@ type EdgeGeom = {
   label: Pt
 }
 
-const NODE_W = 168
-const NODE_H = 64
+const NODE_W = 176
+const NODE_H = 72
 const GAP_X = 64
-const GAP_Y = 36
+const GAP_Y = 28
+const BAND_GAP = 48
 const PAD = 20
 const STUB = 18
 const ARROW_SIZE = 9
@@ -158,9 +160,87 @@ export function computeNetworkLayers(
   return layers
 }
 
+/** How many layer-columns fit in the diagram viewport before wrapping to a new band. */
+export function networkColumnsThatFit(viewportWidth: number): number {
+  const usable = Math.max(NODE_W, viewportWidth - PAD * 2)
+  return Math.max(1, Math.floor((usable + GAP_X) / (NODE_W + GAP_X)))
+}
+
+/**
+ * Place layered nodes into columns that wrap into vertical bands when they
+ * exceed `colsPerBand` (viewport width). Wrap edges then route under the floor.
+ */
+export function placeNetworkBoxes(
+  byLayer: Map<number, string[]>,
+  colsPerBand: number,
+): {
+  boxes: Map<string, { x: number; y: number }>
+  width: number
+  contentBottom: number
+  colsPerBand: number
+} {
+  const cols = Math.max(1, colsPerBand)
+  let maxLayer = 0
+  for (const L of byLayer.keys()) maxLayer = Math.max(maxLayer, L)
+  const bandCount = Math.floor(maxLayer / cols) + 1
+
+  const bandHeight = Array.from({ length: bandCount }, () => 0)
+  for (const [L, ids] of byLayer) {
+    const band = Math.floor(L / cols)
+    const h = Math.max(NODE_H, ids.length * (NODE_H + GAP_Y) - GAP_Y)
+    bandHeight[band] = Math.max(bandHeight[band]!, h)
+  }
+
+  const bandY: number[] = []
+  let cursor = PAD
+  for (let b = 0; b < bandCount; b++) {
+    bandY[b] = cursor
+    cursor += bandHeight[b]! + (b < bandCount - 1 ? BAND_GAP : 0)
+  }
+
+  const boxes = new Map<string, { x: number; y: number }>()
+  for (const [L, ids] of byLayer) {
+    const band = Math.floor(L / cols)
+    const col = L % cols
+    ids.forEach((id, row) => {
+      boxes.set(id, {
+        x: PAD + col * (NODE_W + GAP_X),
+        y: bandY[band]! + row * (NODE_H + GAP_Y),
+      })
+    })
+  }
+
+  const usedCols = Math.min(cols, maxLayer + 1)
+  const width = Math.max(
+    PAD * 2 + NODE_W,
+    PAD + usedCols * (NODE_W + GAP_X) - GAP_X + PAD,
+  )
+  const contentBottom = cursor
+
+  return { boxes, width, contentBottom, colsPerBand: cols }
+}
+
 export function NetworkView() {
   const { project, selectedTaskId } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
+  const diagramRef = useRef<HTMLDivElement>(null)
+  const [viewportW, setViewportW] = useState(960)
+
+  useEffect(() => {
+    const el = diagramRef.current
+    if (!el) return
+    const apply = (w: number) => {
+      const next = Math.max(1, Math.floor(w))
+      setViewportW((prev) => (prev === next ? prev : next))
+    }
+    apply(el.clientWidth || 960)
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (w != null && w > 0) apply(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const layout = useMemo(() => {
     const { nodes, edges } = toNetworkDiagram(project)
@@ -176,21 +256,10 @@ export function NetworkView() {
       byLayer.set(L, row)
     }
 
-    const boxes = new Map<string, { x: number; y: number }>()
-    let maxLayer = 0
-    let maxRow = 0
-    for (const [L, ids] of byLayer) {
-      maxLayer = Math.max(maxLayer, L)
-      maxRow = Math.max(maxRow, ids.length - 1)
-      ids.forEach((id, row) => {
-        boxes.set(id, {
-          x: PAD + L * (NODE_W + GAP_X),
-          y: PAD + row * (NODE_H + GAP_Y),
-        })
-      })
-    }
+    const colsPerBand = networkColumnsThatFit(viewportW)
+    const placed = placeNetworkBoxes(byLayer, colsPerBand)
+    const { boxes, width, contentBottom } = placed
 
-    const contentBottom = PAD + (maxRow + 1) * (NODE_H + GAP_Y) - GAP_Y
     const floorY = contentBottom + GAP_Y
     const wrapCount = edges.filter((e) => {
       const a = boxes.get(e.from)
@@ -202,10 +271,6 @@ export function NetworkView() {
       return stubFrom(p1, from).x + 8 >= stubFrom(p2, to).x
     }).length
 
-    const width = Math.max(
-      PAD * 2 + NODE_W,
-      PAD + (maxLayer + 1) * (NODE_W + GAP_X) - GAP_X + PAD,
-    )
     const height = floorY + Math.max(1, wrapCount) * WRAP_LANE + PAD
 
     let wrapLane = 0
@@ -228,16 +293,13 @@ export function NetworkView() {
       })
     }
 
-    return { nodes, boxes, width, height, edgeGeoms }
-  }, [project])
+    return { nodes, boxes, width, height, edgeGeoms, colsPerBand }
+  }, [project, viewportW])
 
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>Network Diagram</h2>
-        <p>PERT-style dependency graph with critical path highlighted.</p>
-      </div>
-      <div className={styles.diagram}>
+      <ViewHeader title="Network Diagram" />
+      <div ref={diagramRef} className={styles.diagram}>
         <div
           className={styles.canvas}
           style={{ width: layout.width, height: layout.height }}
@@ -260,8 +322,8 @@ export function NetworkView() {
                 style={{ left: box.x, top: box.y, width: NODE_W, height: NODE_H }}
                 onClick={() => dispatch({ type: 'selectTask', taskId: node.id })}
               >
-                <strong>{node.name}</strong>
-                <span>
+                <span className={styles.name}>{node.name}</span>
+                <span className={styles.dates}>
                   {node.earlyStart} → {node.earlyFinish}
                 </span>
               </button>

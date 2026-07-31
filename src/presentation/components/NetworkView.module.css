@@ -2,26 +2,30 @@
   height: 100%;
   min-height: 0;
   overflow: auto;
-  padding: 1rem 1.15rem;
+  padding: 0;
   background: var(--msp-surface);
 }
 
-.heading h2 {
-  margin: 0 0 0.25rem;
-  font-family: var(--msp-font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
+.heading {
+  padding: var(--msp-heading-py) var(--msp-heading-px);
+  border-bottom: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+  min-height: var(--msp-row-h);
+  display: flex;
+  align-items: center;
 }
 
-.heading p {
-  margin: 0 0 1rem;
-  color: var(--msp-text-secondary);
-  font-size: 0.84rem;
+.heading h2 {
+  margin: 0;
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-lg);
+  font-weight: 400;
+  letter-spacing: -0.02em;
 }
 
 .diagram {
   position: relative;
-  margin-bottom: 1.25rem;
+  margin: 0.75rem var(--msp-heading-px) 1.25rem;
   overflow: auto;
 }
 
@@ -35,7 +39,7 @@
   left: 0;
   top: 0;
   pointer-events: none;
-  z-index: 2;
+  z-index: 1;
   overflow: visible;
   background: transparent;
 }
@@ -54,8 +58,8 @@
 
 .linkLabel {
   fill: var(--msp-accent);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
   paint-order: stroke;
   stroke: var(--msp-surface);
   stroke-width: 3px;
@@ -63,19 +67,22 @@
 
 .node {
   position: absolute;
+  z-index: 2;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  justify-content: center;
+  gap: 0.2rem;
   text-align: left;
-  padding: 0.65rem 0.75rem;
+  padding: 0.4rem 0.55rem;
   overflow: hidden;
   border: 1px solid var(--msp-border);
   background: var(--msp-surface);
   color: var(--msp-text);
   cursor: pointer;
   border-radius: var(--msp-radius);
-  transition: border-color 120ms ease, background 120ms ease;
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .node:hover {
@@ -83,20 +90,29 @@
   background: var(--msp-accent-soft);
 }
 
-.node strong {
-  font-size: 0.9rem;
+.name {
+  flex: 0 0 auto;
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
+  color: var(--msp-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.dates {
+  flex: 0 0 auto;
+  font-size: var(--msp-text-xs);
+  color: var(--msp-text-secondary);
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.node span {
-  font-size: 0.76rem;
-  color: var(--msp-text-secondary);
-}
-
 .critical {
-  border-color: #f1aeb5;
+  border-color: var(--msp-danger);
   background: var(--msp-danger-soft);
 }
 
@@ -108,5 +124,5 @@
   outline: 2px solid var(--msp-accent);
   outline-offset: -1px;
   background: var(--msp-row-selected);
+  box-shadow: inset 2px 0 0 var(--msp-accent);
 }
-

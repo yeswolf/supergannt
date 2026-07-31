@@ -39,9 +39,10 @@ Square CSS grid (`ceil(sqrt(n))`) + straight SVG lines between side anchors.
 ### Invariant (MUST)
 
 - Layout by **dependency layers** (longest-path layering): successors sit to the right of predecessors.
+- When layers exceed columns that fit the viewport, continue on a **new vertical band** (`placeNetworkBoxes` / `networkColumnsThatFit`).
 - Edges are **orthogonal** polylines.
 - Reverse/wrap edges use a **floor lane under the diagram**, never a diagonal through the node field.
-- Unit tests cover forward elbow vs wrap-under-floor routing (`routeLink`, `computeNetworkLayers`).
+- Unit tests cover forward elbow, band wrap placement, and wrap-under-floor routing (`routeLink`, `computeNetworkLayers`, `placeNetworkBoxes`).
 
 ---
 

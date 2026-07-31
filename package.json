@@ -1,7 +1,7 @@
 {
   "name": "supergannt",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "SuperGantt",
   "description": "Modern MS Project / ProjectLibre alternative — open and save .mpp in the browser or desktop (Tauri / WebView2)",
   "type": "module",

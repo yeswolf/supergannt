@@ -4,6 +4,7 @@ import {
 } from '../../application/services/ReportingService'
 import { useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './ReportsView.module.css'
+import { ViewHeader } from './ViewHeader'
 
 export function ReportsView() {
   const { project } = useWorkspaceState()
@@ -14,10 +15,7 @@ export function ReportsView() {
 
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>Reports</h2>
-        <p>Earned value, schedule health, and resource load — same idea as ProjectLibre reports.</p>
-      </div>
+      <ViewHeader title="Reports" />
 
       <div className={styles.grid}>
         <article>
@@ -89,8 +87,8 @@ export function ReportsView() {
       <ul className={styles.list}>
         {resources.map((r) => (
           <li key={r.resourceId} className={r.overallocated ? styles.over : undefined}>
-            <strong>{r.name}</strong>
-            <span>
+            <span className={styles.name}>{r.name}</span>
+            <span className={styles.meta}>
               {r.assignedUnits}/{r.maxUnits} units · {r.workHours.toFixed(1)}h ·{' '}
               {r.cost.format()}
             </span>

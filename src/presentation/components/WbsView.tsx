@@ -4,6 +4,7 @@ import {
 } from '../../application/services/ViewModels'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './TreeViews.module.css'
+import { ViewHeader } from './ViewHeader'
 
 function Node({ node, depth }: { node: WbsNode; depth: number }) {
   const dispatch = useWorkspaceDispatch()
@@ -20,11 +21,11 @@ function Node({ node, depth }: { node: WbsNode; depth: number }) {
         ]
           .filter(Boolean)
           .join(' ')}
-        style={{ paddingLeft: `${0.75 + depth * 1.1}rem` }}
+        style={{ paddingLeft: `calc(var(--msp-cell-px) + ${depth} * var(--msp-indent))` }}
         onClick={() => dispatch({ type: 'selectTask', taskId: node.id })}
       >
         <span className={styles.wbs}>{node.wbs}</span>
-        <strong>{node.name}</strong>
+        <span className={styles.name}>{node.name}</span>
         <span className={styles.meta}>
           {node.milestone ? 'Milestone · 0h' : `${node.durationHours}h`} · {node.percentComplete}%
         </span>
@@ -45,10 +46,7 @@ export function WbsView() {
   const tree = buildWbsTree(project)
   return (
     <div className={styles.panel}>
-      <div className={styles.heading}>
-        <h2>WBS</h2>
-        <p>Work Breakdown Structure — hierarchical task tree (ProjectLibre WBS view).</p>
-      </div>
+      <ViewHeader title="WBS" />
       <ul className={styles.list}>
         {tree.map((node) => (
           <Node key={node.id} node={node} depth={0} />

@@ -57,6 +57,7 @@ export function scheduleProject(
       finish,
       duration: Duration.hours(Math.max(hours, 0)),
       workHours: Math.max(hours, 0),
+      milestone: false,
       percentComplete: Math.round(
         children.reduce((s, c) => s + c.percentComplete, 0) / children.length,
       ),

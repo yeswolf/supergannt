@@ -88,9 +88,15 @@
 | D7 | MUST | Network Diagram со стрелками (arrowheads) | «network diagram… стрелки» |
 | D8 | MUST | Network не пустой / не зависает (нет infinite re-render) | «на network ничерта не показывается» |
 | D9 | MUST | Network: нормальный обход на wrap, не диагональ через карточки | «когда упирается в правую границу…» |
+| D9a | MUST | Network: колонки слоёв переносятся по ширине viewport (новая полоса), не один бесконечный ряд | «перестал делать переходы… один длинный ряд» |
 | D10 | MUST | Иконка приложения красивая, брендовая | «иконку для приложения…» |
 | D11 | MUST | Углы иконки прозрачные, не чёрные | «иконка почему с черными углами» |
 | D12 | SHOULD | Title-bar brand mark согласован с app icon | Реализация Icons.app |
+| D13 | MUST | Адаптивный shell без ribbon / без отдельной action-полосы; действия в ViewHeader | Ideal UX / «убери context bar» |
+| D14 | MUST | Темы (Light/Dark/Contrast/Darcula/Solarized); Gantt следует `--msp-*` | «сделай … темы» + Gantt borders |
+| D15 | MUST | Нет меню File — file actions только через command palette; Theme menu остаётся | «меню файл убери… свичтер тем оставь» |
+| D16 | MUST | Sample plan сразу scheduled (finish/work/assignments), не нулевые спаны | «при загрузке sample plan не грузятся значения часов» |
+| D17 | SHOULD | Современные скроллбары без стрелок | «стили скроллов покруче» |
 
 См. `requirements/04-ui-ux.md`, `07-bugfixes-and-regressions.md`.
 
