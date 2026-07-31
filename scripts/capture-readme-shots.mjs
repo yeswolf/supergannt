@@ -128,6 +128,25 @@ async function clickView(page, label) {
   await page.getByRole('button', { name: label }).first().click()
 }
 
+/** Theme menu labels — three distinct looks for README Gantt theme shots. */
+const GANTT_THEME_SHOTS = [
+  { id: 'dark', label: 'Dark', file: '11-gantt-theme-dark' },
+  { id: 'darcula', label: 'Darcula', file: '12-gantt-theme-darcula' },
+  { id: 'solarized-dark', label: 'Solarized Dark', file: '13-gantt-theme-solarized-dark' },
+]
+
+async function setTheme(page, label) {
+  const themeBtn = page.getByRole('button', { name: 'Theme', exact: true })
+  await themeBtn.click()
+  const item = page.getByRole('menuitemradio', { name: label, exact: true })
+  if (await item.count()) {
+    await item.click()
+  } else {
+    await page.getByRole('menuitem', { name: label, exact: true }).click()
+  }
+  await page.waitForTimeout(500)
+}
+
 async function main() {
   let chromium
   try {
@@ -199,6 +218,13 @@ async function main() {
       if (await week.count()) await week.click()
       await page.waitForTimeout(500)
     })
+
+    for (const t of GANTT_THEME_SHOTS) {
+      await shot(t.file, async () => {
+        await setTheme(page, t.label)
+      })
+    }
+    await setTheme(page, 'Light')
 
     await shot('02-gantt-month', async () => {
       const month = page.getByRole('button', { name: 'Month', exact: true })

@@ -36,55 +36,96 @@ Built for people who live in Gantt charts — PMs, schedulers, and engineers who
 Sample plan: [`06-advanced-tracking.mpp`](testdata/mpp/06-advanced-tracking.mpp)  
 *(screenshots omit recurring “Editorial staff meeting” tasks for clarity)*
 
+<details open>
+<summary>📅 Gantt Chart — week scale (Light)</summary>
 <p align="center">
-  <img src="docs/screenshots/01-gantt.png" alt="Gantt Chart (week scale)" width="920" />
-  <br/><em>📅 Gantt Chart — week scale</em>
+  <img src="docs/screenshots/01-gantt.png" alt="Gantt Chart week scale, Light theme" width="920" />
 </p>
+</details>
 
+<details>
+<summary>🎨 Gantt — Dark</summary>
 <p align="center">
-  <img src="docs/screenshots/02-gantt-month.png" alt="Gantt Chart (month scale)" width="920" />
-  <br/><em>🗓️ Gantt Chart — month scale</em>
+  <img src="docs/screenshots/11-gantt-theme-dark.png" alt="Gantt Chart Dark theme" width="920" />
 </p>
+</details>
 
+<details>
+<summary>🎨 Gantt — Darcula</summary>
+<p align="center">
+  <img src="docs/screenshots/12-gantt-theme-darcula.png" alt="Gantt Chart Darcula theme" width="920" />
+</p>
+</details>
+
+<details>
+<summary>🎨 Gantt — Solarized Dark</summary>
+<p align="center">
+  <img src="docs/screenshots/13-gantt-theme-solarized-dark.png" alt="Gantt Chart Solarized Dark theme" width="920" />
+</p>
+</details>
+
+<details>
+<summary>🗓️ Gantt Chart — month scale</summary>
+<p align="center">
+  <img src="docs/screenshots/02-gantt-month.png" alt="Gantt Chart month scale" width="920" />
+</p>
+</details>
+
+<details>
+<summary>📋 Task Sheet</summary>
 <p align="center">
   <img src="docs/screenshots/03-tasks.png" alt="Task Sheet" width="920" />
-  <br/><em>📋 Task Sheet</em>
 </p>
+</details>
 
+<details>
+<summary>👥 Resource Sheet</summary>
 <p align="center">
   <img src="docs/screenshots/04-resources.png" alt="Resource Sheet" width="920" />
-  <br/><em>👥 Resource Sheet</em>
 </p>
+</details>
 
+<details>
+<summary>🕸️ Network Diagram</summary>
 <p align="center">
   <img src="docs/screenshots/05-network.png" alt="Network Diagram" width="920" />
-  <br/><em>🕸️ Network Diagram</em>
 </p>
+</details>
 
+<details>
+<summary>🌳 WBS</summary>
 <p align="center">
   <img src="docs/screenshots/06-wbs.png" alt="WBS" width="920" />
-  <br/><em>🌳 WBS</em>
 </p>
+</details>
 
+<details>
+<summary>⏱️ Task Usage</summary>
 <p align="center">
   <img src="docs/screenshots/07-task-usage.png" alt="Task Usage" width="920" />
-  <br/><em>⏱️ Task Usage</em>
 </p>
+</details>
 
+<details>
+<summary>📈 Resource Usage</summary>
 <p align="center">
   <img src="docs/screenshots/08-resource-usage.png" alt="Resource Usage" width="920" />
-  <br/><em>📈 Resource Usage</em>
 </p>
+</details>
 
+<details>
+<summary>📆 Working Time</summary>
 <p align="center">
-  <img src="docs/screenshots/09-calendar.png" alt="Calendar" width="920" />
-  <br/><em>📆 Calendar</em>
+  <img src="docs/screenshots/09-calendar.png" alt="Working Time calendar" width="920" />
 </p>
+</details>
 
+<details>
+<summary>📑 Reports</summary>
 <p align="center">
   <img src="docs/screenshots/10-reports.png" alt="Reports" width="920" />
-  <br/><em>📑 Reports</em>
 </p>
+</details>
 
 ---
 
