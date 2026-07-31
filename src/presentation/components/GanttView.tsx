@@ -17,6 +17,8 @@ import { IconAction, IconActionGroup } from './IconAction'
 import { ViewHeader, ViewHeaderSep } from './ViewHeader'
 import styles from './GanttView.module.css'
 
+const NARROW_MQ = '(max-width: 820px)'
+
 const SCALE_GLYPH: Record<string, string> = {
   hours: 'H',
   days: 'D',
@@ -38,6 +40,27 @@ const FILTERS: {
   { id: 'incomplete', label: 'Incomplete', icon: 'incomplete' },
 ]
 
+type GanttApi = typeof gantt & {
+  render?: () => void
+  setSizes?: () => void
+  getScrollState?: () => { x: number; y: number }
+  scrollTo?: (x: number | null, y: number | null) => void
+  getTaskType?: (typeOrTask: unknown) => string
+  config: typeof gantt.config & {
+    types: { task: string; project: string; milestone: string }
+    show_grid?: boolean
+    touch?: boolean | string
+    touch_drag?: number | boolean
+    grid_width?: number
+    order_branch?: boolean
+    drag_move?: boolean
+    drag_resize?: boolean
+    scroll_size?: number
+    preserve_scroll?: boolean
+    drag_timeline?: null | { ignore?: string; useKey?: boolean | string }
+  }
+}
+
 function applyZoomLevel(index: number): void {
   const level = GANTT_ZOOM_LEVELS[clampZoomIndex(index)]!
   gantt.config.min_column_width = level.minColumnWidth
@@ -46,8 +69,156 @@ function applyZoomLevel(index: number): void {
     step: s.step,
     format: s.format,
   }))
-  const api = gantt as typeof gantt & { render?: () => void }
+  const api = gantt as GanttApi
   api.render?.()
+}
+
+function applyGridLayout(opts: { narrow: boolean; showGrid: boolean }): void {
+  const api = gantt as GanttApi
+  const { narrow, showGrid } = opts
+  const gridOn = narrow ? showGrid : true
+
+  api.config.show_grid = gridOn
+  // Reorder-by-drag fights vertical swipe on phones.
+  api.config.order_branch = !narrow
+  api.config.scroll_size = narrow ? 14 : 8
+  api.config.preserve_scroll = true
+
+  if (!gridOn) {
+    delete api.config.grid_width
+    return
+  }
+
+  if (narrow) {
+    // Compact name-only tree so the chart still has room when the list is open.
+    api.config.columns = [
+      {
+        name: 'text',
+        label: 'Task name',
+        tree: true,
+        width: 200,
+        min_width: 120,
+        resize: true,
+      },
+    ]
+    api.config.grid_width = 210
+    return
+  }
+
+  api.config.columns = [
+    { name: 'wbs', label: 'WBS', width: 72, min_width: 48, resize: true },
+    {
+      name: 'text',
+      label: 'Task name',
+      tree: true,
+      width: 240,
+      min_width: 120,
+      resize: true,
+    },
+    {
+      name: 'resources',
+      label: 'Resources',
+      width: 160,
+      min_width: 80,
+      resize: true,
+      template: (task: { resources?: string }) => task.resources?.trim() ?? '',
+    },
+    {
+      name: 'start_date',
+      label: 'Start',
+      align: 'center',
+      width: 110,
+      min_width: 90,
+      resize: true,
+    },
+    {
+      name: 'duration',
+      label: 'Hours',
+      align: 'center',
+      width: 64,
+      min_width: 48,
+      resize: true,
+    },
+  ]
+  delete api.config.grid_width
+}
+
+/**
+ * Extra pan/scroll on the timeline for touch — dhtmlx often eats swipes as
+ * drag starts. One-finger pans when not on a task bar / link handle.
+ */
+function installTimelineTouchPan(root: HTMLElement): () => void {
+  const api = gantt as GanttApi
+  let tracking = false
+  let startX = 0
+  let startY = 0
+  let originX = 0
+  let originY = 0
+  let moved = false
+
+  const ignoreTarget = (t: EventTarget | null) => {
+    const el = t as HTMLElement | null
+    return Boolean(
+      el?.closest?.(
+        '.gantt_task_line, .gantt_link_control, .gantt_link_point, .gantt_grid, .gantt_grid_data, .gantt_drag_marker',
+      ),
+    )
+  }
+
+  const onStart = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return
+    if (ignoreTarget(e.target)) return
+    const touch = e.touches[0]!
+    tracking = true
+    moved = false
+    startX = touch.clientX
+    startY = touch.clientY
+    const pos = api.getScrollState?.() ?? { x: 0, y: 0 }
+    originX = pos.x
+    originY = pos.y
+  }
+
+  const onMove = (e: TouchEvent) => {
+    if (!tracking || e.touches.length !== 1) return
+    const touch = e.touches[0]!
+    const dx = touch.clientX - startX
+    const dy = touch.clientY - startY
+    if (!moved && Math.hypot(dx, dy) < 8) return
+    moved = true
+    e.preventDefault()
+    api.scrollTo?.(Math.max(0, originX - dx), Math.max(0, originY - dy))
+  }
+
+  const onEnd = () => {
+    tracking = false
+    moved = false
+  }
+
+  root.addEventListener('touchstart', onStart, { passive: true })
+  root.addEventListener('touchmove', onMove, { passive: false })
+  root.addEventListener('touchend', onEnd)
+  root.addEventListener('touchcancel', onEnd)
+
+  return () => {
+    root.removeEventListener('touchstart', onStart)
+    root.removeEventListener('touchmove', onMove)
+    root.removeEventListener('touchend', onEnd)
+    root.removeEventListener('touchcancel', onEnd)
+  }
+}
+
+function useNarrowViewport(): boolean {
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(NARROW_MQ).matches : false,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_MQ)
+    const onChange = () => setNarrow(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return narrow
 }
 
 export function GanttView() {
@@ -59,6 +230,13 @@ export function GanttView() {
   const zoomIndexRef = useRef(zoomIndex)
   zoomIndexRef.current = zoomIndex
   const [taskFilter, setTaskFilter] = useState<GanttTaskFilter>('all')
+  const narrow = useNarrowViewport()
+  /** Mobile: task grid hidden by default; toggled from the header. */
+  const [showTaskGrid, setShowTaskGrid] = useState(false)
+  const showTaskGridRef = useRef(showTaskGrid)
+  showTaskGridRef.current = showTaskGrid
+  const narrowRef = useRef(narrow)
+  narrowRef.current = narrow
 
   const setZoom = useCallback((next: number) => {
     const clamped = clampZoomIndex(next)
@@ -69,24 +247,49 @@ export function GanttView() {
   const zoomIn = useCallback(() => setZoom(zoomIndexRef.current - 1), [setZoom])
   const zoomOut = useCallback(() => setZoom(zoomIndexRef.current + 1), [setZoom])
 
+  const refreshLayout = useCallback(() => {
+    if (!readyRef.current) return
+    applyGridLayout({
+      narrow: narrowRef.current,
+      showGrid: showTaskGridRef.current,
+    })
+    const api = gantt as GanttApi
+    api.render?.()
+    api.setSizes?.()
+  }, [])
+
+  useEffect(() => {
+    refreshLayout()
+  }, [narrow, showTaskGrid, refreshLayout])
+
   useEffect(() => {
     const root = containerRef.current
     if (!root) return
 
-    gantt.plugins({ marker: true })
+    const api = gantt as GanttApi
+
+    try {
+      gantt.plugins({ marker: true, drag_timeline: true })
+    } catch {
+      gantt.plugins({ marker: true })
+    }
+
     gantt.config.date_format = '%Y-%m-%d %H:%i'
     gantt.config.xml_date = '%Y-%m-%d %H:%i'
     gantt.config.duration_unit = 'hour'
     gantt.config.duration_step = 1
     gantt.config.time_step = 60
-    gantt.config.order_branch = true
     gantt.config.open_tree_initially = true
     gantt.config.work_time = true
     gantt.config.correct_work_time = true
     // Force mobile touch handlers (tablets often report as desktop UA).
-    // Long-press threshold so a swipe scrolls instead of starting a drag.
-    gantt.config.touch = 'force'
-    gantt.config.touch_drag = 500
+    // Long-press before drag so a swipe can scroll/pan.
+    api.config.touch = 'force'
+    api.config.touch_drag = 750
+    api.config.drag_timeline = {
+      ignore: '.gantt_task_line, .gantt_task_link, .gantt_link_control',
+      useKey: false,
+    }
     // Touch rows; bars fill most of the row. Milestone diamonds clamped in CSS.
     gantt.config.row_height = 44
     gantt.config.bar_height = 34
@@ -94,89 +297,24 @@ export function GanttView() {
     gantt.config.scale_height = 44
     gantt.config.min_task_grid_row_height = 40
 
-    const applyColumns = () => {
-      const narrow = window.matchMedia('(max-width: 820px)').matches
-      gantt.config.columns = [
-        {
-          name: 'wbs',
-          label: 'WBS',
-          width: 72,
-          min_width: 48,
-          resize: true,
-          hide: narrow,
-        },
-        {
-          name: 'text',
-          label: 'Task name',
-          tree: true,
-          width: narrow ? 168 : 240,
-          min_width: 96,
-          resize: true,
-        },
-        {
-          name: 'resources',
-          label: 'Resources',
-          width: 160,
-          min_width: 80,
-          resize: true,
-          hide: narrow,
-          template: (task: { resources?: string }) => task.resources?.trim() ?? '',
-        },
-        {
-          name: 'start_date',
-          label: 'Start',
-          align: 'center',
-          width: narrow ? 96 : 110,
-          min_width: 80,
-          resize: true,
-        },
-        {
-          name: 'duration',
-          label: 'Hours',
-          align: 'center',
-          width: 64,
-          min_width: 48,
-          resize: true,
-          hide: narrow,
-        },
-      ]
-      if (narrow) {
-        gantt.config.grid_width = 280
-      } else {
-        delete (gantt.config as { grid_width?: number }).grid_width
-      }
-    }
-    applyColumns()
-    const mq = window.matchMedia('(max-width: 820px)')
-    const onMq = () => {
-      applyColumns()
-      if (readyRef.current) {
-        const api = gantt as typeof gantt & { render?: () => void; setSizes?: () => void }
-        api.render?.()
-        api.setSizes?.()
-      }
-    }
-    mq.addEventListener('change', onMq)
+    applyGridLayout({
+      narrow: narrowRef.current,
+      showGrid: showTaskGridRef.current,
+    })
 
     // GPL/CE stubs getTaskType() → always "task", which hides milestone diamonds.
-    const ganttAny = gantt as typeof gantt & {
-      getTaskType: (typeOrTask: unknown) => string
-      config: typeof gantt.config & {
-        types: { task: string; project: string; milestone: string }
-      }
-    }
-    ganttAny.getTaskType = (typeOrTask: unknown) => {
+    api.getTaskType = (typeOrTask: unknown) => {
       const raw =
         typeOrTask && typeof typeOrTask === 'object' && 'type' in typeOrTask
           ? String((typeOrTask as { type?: string }).type ?? '')
           : String(typeOrTask ?? '')
-      if (raw === 'milestone' || raw === ganttAny.config.types.milestone) {
-        return ganttAny.config.types.milestone
+      if (raw === 'milestone' || raw === api.config.types.milestone) {
+        return api.config.types.milestone
       }
-      if (raw === 'project' || raw === ganttAny.config.types.project) {
-        return ganttAny.config.types.project
+      if (raw === 'project' || raw === api.config.types.project) {
+        return api.config.types.project
       }
-      return ganttAny.config.types.task
+      return api.config.types.task
     }
 
     gantt.templates.task_class = (
@@ -195,6 +333,7 @@ export function GanttView() {
     readyRef.current = true
     // CE build ignores columns[].resize (PRO). Install our own grid column drag-resize.
     const detachColResize = installGanttColumnResize(gantt, root)
+    const detachTouchPan = installTimelineTouchPan(root)
 
     const onSelect = gantt.attachEvent('onTaskSelected', (id: string) => {
       const additive =
@@ -275,7 +414,7 @@ export function GanttView() {
     root.addEventListener('wheel', onWheel, { passive: false })
 
     return () => {
-      mq.removeEventListener('change', onMq)
+      detachTouchPan()
       detachColResize()
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('supergantt:gantt-zoom', onToolbarZoom)
@@ -296,6 +435,10 @@ export function GanttView() {
     gantt.clearAll()
     gantt.parse({ data, links })
     applyZoomLevel(zoomIndexRef.current)
+    applyGridLayout({
+      narrow: narrowRef.current,
+      showGrid: showTaskGridRef.current,
+    })
     if (selectedTaskId && gantt.isTaskExists(selectedTaskId)) {
       gantt.selectTask(selectedTaskId)
     }
@@ -304,11 +447,26 @@ export function GanttView() {
   const level = GANTT_ZOOM_LEVELS[zoomIndex]!
 
   return (
-    <div className={styles.wrap}>
+    <div
+      className={`${styles.wrap}${narrow ? ` ${styles.narrow}` : ''}${
+        showTaskGrid ? ` ${styles.gridOpen}` : ''
+      }`}
+    >
       <ViewHeader
         title="Gantt Chart"
         leading={
           <>
+            {narrow ? (
+              <>
+                <IconAction
+                  icon="taskSheet"
+                  label={showTaskGrid ? 'Hide task list' : 'Show task list'}
+                  pressed={showTaskGrid}
+                  onClick={() => setShowTaskGrid((v) => !v)}
+                />
+                <ViewHeaderSep />
+              </>
+            ) : null}
             <IconActionGroup label="Timescale">
               {GANTT_ZOOM_LEVELS.map((item, i) => (
                 <IconAction
@@ -338,7 +496,12 @@ export function GanttView() {
           </>
         }
       />
-      <div ref={containerRef} className={styles.chart} role="region" aria-label="Gantt chart" />
+      <div
+        ref={containerRef}
+        className={styles.chart}
+        role="region"
+        aria-label="Gantt chart"
+      />
     </div>
   )
 }

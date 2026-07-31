@@ -39,6 +39,8 @@ const { ganttMock, handlers, tasks } = vi.hoisted(() => {
     isTaskExists: vi.fn((id: string) => tasks.has(String(id))),
     selectTask: vi.fn(),
     render: vi.fn(),
+    getScrollState: vi.fn(() => ({ x: 0, y: 0 })),
+    scrollTo: vi.fn(),
   }
   return { ganttMock, handlers, tasks }
 })
@@ -65,7 +67,7 @@ describe('GanttView', () => {
     expect(ganttMock.init).toHaveBeenCalled()
     expect(ganttMock.parse).toHaveBeenCalled()
     expect((ganttMock.config as { touch?: string }).touch).toBe('force')
-    expect((ganttMock.config as { touch_drag?: number }).touch_drag).toBe(500)
+    expect((ganttMock.config as { touch_drag?: number }).touch_drag).toBe(750)
 
     await user.click(screen.getByRole('button', { name: 'Hours' }))
     await user.click(screen.getByRole('button', { name: 'Days' }))

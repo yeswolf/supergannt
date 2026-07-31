@@ -25,6 +25,7 @@
   color: var(--msp-text);
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Remap dhtmlx tokens on the mount node AND .gantt_container (same element after init). */
@@ -124,6 +125,20 @@
 .wrap :global(.gantt_layout_cell .gantt_task_vscroll) {
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile: roomier scrollbars; timeline gets the full width when the grid is closed. */
+.narrow :global(.gantt_hor_scroll),
+.narrow :global(.gantt_ver_scroll) {
+  opacity: 1;
+}
+
+.narrow:not(.gridOpen) :global(.gantt_grid),
+.narrow:not(.gridOpen) :global(.gantt_grid_scale),
+.narrow:not(.gridOpen) :global(.gantt_grid_data) {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
 }
 
 .wrap :global(.gantt_grid_scale),

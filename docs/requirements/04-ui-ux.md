@@ -97,7 +97,9 @@ Tabs: **General**, **Predecessors**, **Resources**, **Advanced**.
 ## 5. Gantt view (MUST)
 
 - Timescale presets + task filters in the **ViewHeader** (not a second toolbar).
+- On **narrow viewports (≤820px)** the left task grid/tree is **hidden by default** and toggled via a **Show/Hide task list** control in the ViewHeader — timeline keeps the full width for touch pan/scroll.
 - Row height touch-friendly (**44px**); task bars ~**34px**; milestones stay small diamonds (never `bar_height: full` without clamping).
+- Touch: `touch: force`, longer `touch_drag`, timeline pan helper, and `order_branch` off on narrow so swipes scroll instead of reordering.
 - Grid / tree cells have readable left padding; bar labels have horizontal inset.
 - Theme remaps dhtmlx CSS variables (`--dhx-gantt-*` → `--msp-*`) so borders, text, summary bars, and row backgrounds follow the active theme.
 - CE build: column resize via custom drag on header edges (`ganttColumnResize`) — PRO `columns[].resize` is unavailable.
