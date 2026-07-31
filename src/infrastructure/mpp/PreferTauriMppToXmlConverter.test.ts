@@ -24,7 +24,7 @@ describe('PreferTauriMppToXmlConverter', () => {
     isTauri.mockReturnValue(true)
     invoke.mockResolvedValue('<Project/>')
     const fallback: MppToXmlConverter = { convert: vi.fn() }
-    const c = new PreferTauriMppToXmlConverter(fallback as never)
+    const c = new PreferTauriMppToXmlConverter(fallback)
     const xml = await c.convert(new Uint8Array([1, 2, 3]).buffer, 'a.mpp')
     expect(xml).toBe('<Project/>')
     expect(invoke).toHaveBeenCalledWith(
@@ -38,7 +38,7 @@ describe('PreferTauriMppToXmlConverter', () => {
     const fallback: MppToXmlConverter = {
       convert: vi.fn().mockResolvedValue('<FromHttp/>'),
     }
-    const c = new PreferTauriMppToXmlConverter(fallback as never)
+    const c = new PreferTauriMppToXmlConverter(fallback)
     const xml = await c.convert(new ArrayBuffer(0), 'b.mpp')
     expect(xml).toBe('<FromHttp/>')
     expect(fallback.convert).toHaveBeenCalled()
