@@ -64,6 +64,8 @@ describe('GanttView', () => {
     expect(screen.getByRole('region', { name: 'Gantt chart' })).toBeInTheDocument()
     expect(ganttMock.init).toHaveBeenCalled()
     expect(ganttMock.parse).toHaveBeenCalled()
+    expect((ganttMock.config as { touch?: string }).touch).toBe('force')
+    expect((ganttMock.config as { touch_drag?: number }).touch_drag).toBe(500)
 
     await user.click(screen.getByRole('button', { name: 'Hours' }))
     await user.click(screen.getByRole('button', { name: 'Days' }))

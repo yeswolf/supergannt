@@ -83,40 +83,80 @@ export function GanttView() {
     gantt.config.open_tree_initially = true
     gantt.config.work_time = true
     gantt.config.correct_work_time = true
+    // Force mobile touch handlers (tablets often report as desktop UA).
+    // Long-press threshold so a swipe scrolls instead of starting a drag.
+    gantt.config.touch = 'force'
+    gantt.config.touch_drag = 500
     // Touch rows; bars fill most of the row. Milestone diamonds clamped in CSS.
     gantt.config.row_height = 44
     gantt.config.bar_height = 34
     gantt.config.bar_height_padding = 5
     gantt.config.scale_height = 44
     gantt.config.min_task_grid_row_height = 40
-    gantt.config.columns = [
-      { name: 'wbs', label: 'WBS', width: 72, min_width: 48, resize: true },
-      { name: 'text', label: 'Task name', tree: true, width: 240, min_width: 120, resize: true },
-      {
-        name: 'resources',
-        label: 'Resources',
-        width: 160,
-        min_width: 80,
-        resize: true,
-        template: (task: { resources?: string }) => task.resources?.trim() ?? '',
-      },
-      {
-        name: 'start_date',
-        label: 'Start',
-        align: 'center',
-        width: 110,
-        min_width: 90,
-        resize: true,
-      },
-      {
-        name: 'duration',
-        label: 'Hours',
-        align: 'center',
-        width: 64,
-        min_width: 48,
-        resize: true,
-      },
-    ]
+
+    const applyColumns = () => {
+      const narrow = window.matchMedia('(max-width: 820px)').matches
+      gantt.config.columns = [
+        {
+          name: 'wbs',
+          label: 'WBS',
+          width: 72,
+          min_width: 48,
+          resize: true,
+          hide: narrow,
+        },
+        {
+          name: 'text',
+          label: 'Task name',
+          tree: true,
+          width: narrow ? 168 : 240,
+          min_width: 96,
+          resize: true,
+        },
+        {
+          name: 'resources',
+          label: 'Resources',
+          width: 160,
+          min_width: 80,
+          resize: true,
+          hide: narrow,
+          template: (task: { resources?: string }) => task.resources?.trim() ?? '',
+        },
+        {
+          name: 'start_date',
+          label: 'Start',
+          align: 'center',
+          width: narrow ? 96 : 110,
+          min_width: 80,
+          resize: true,
+        },
+        {
+          name: 'duration',
+          label: 'Hours',
+          align: 'center',
+          width: 64,
+          min_width: 48,
+          resize: true,
+          hide: narrow,
+        },
+      ]
+      if (narrow) {
+        gantt.config.grid_width = 280
+      } else {
+        delete (gantt.config as { grid_width?: number }).grid_width
+      }
+    }
+    applyColumns()
+    const mq = window.matchMedia('(max-width: 820px)')
+    const onMq = () => {
+      applyColumns()
+      if (readyRef.current) {
+        const api = gantt as typeof gantt & { render?: () => void; setSizes?: () => void }
+        api.render?.()
+        api.setSizes?.()
+      }
+    }
+    mq.addEventListener('change', onMq)
 
     // GPL/CE stubs getTaskType() → always "task", which hides milestone diamonds.
     const ganttAny = gantt as typeof gantt & {
@@ -235,6 +275,7 @@ export function GanttView() {
     root.addEventListener('wheel', onWheel, { passive: false })
 
     return () => {
+      mq.removeEventListener('change', onMq)
       detachColResize()
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('supergantt:gantt-zoom', onToolbarZoom)

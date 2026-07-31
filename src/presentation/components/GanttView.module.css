@@ -1,10 +1,11 @@
 .wrap {
   height: 100%;
-  min-height: 420px;
+  min-height: 0;
   min-width: 0;
   background: var(--msp-surface);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .scaleLabel {
@@ -18,8 +19,12 @@
 .chart {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  height: 100%;
   background: var(--msp-surface);
   color: var(--msp-text);
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Remap dhtmlx tokens on the mount node AND .gantt_container (same element after init). */
@@ -30,6 +35,10 @@
   color: var(--msp-text) !important;
   font-family: var(--msp-font) !important;
   font-size: var(--msp-text-sm) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 
   /* Remap dhtmlx theme tokens → SuperGantt themes (CE defaults stay light forever). */
   --dhx-gantt-font-family: var(--msp-font);
@@ -107,6 +116,14 @@
 .wrap :global(.gantt_data_area) {
   background: var(--msp-surface) !important;
   color: var(--msp-text) !important;
+  touch-action: pan-x pan-y;
+}
+
+.wrap :global(.gantt_ver_scroll),
+.wrap :global(.gantt_hor_scroll),
+.wrap :global(.gantt_layout_cell .gantt_task_vscroll) {
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .wrap :global(.gantt_grid_scale),
