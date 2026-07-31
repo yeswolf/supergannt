@@ -110,4 +110,31 @@ describe('GanttView', () => {
       'super-milestone',
     )
   })
+
+  it('toggles the task grid on narrow viewports', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: String(query).includes('820'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+
+    const user = userEvent.setup()
+    renderWithWorkspace(<GanttView />)
+
+    const toggle = screen.getByRole('button', { name: 'Show task list' })
+    expect(toggle).toBeInTheDocument()
+    expect((ganttMock.config as { show_grid?: boolean }).show_grid).toBe(false)
+
+    await user.click(toggle)
+    expect(screen.getByRole('button', { name: 'Hide task list' })).toBeInTheDocument()
+    expect((ganttMock.config as { show_grid?: boolean }).show_grid).toBe(true)
+  })
 })
