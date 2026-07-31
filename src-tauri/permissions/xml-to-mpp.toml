@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-xml-to-mpp"
+description = "Allows MSPDI XML → binary .mpp conversion"
+commands.allow = ["xml_to_mpp"]

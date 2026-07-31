@@ -177,10 +177,22 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Allows offline .mpp → MSPDI XML conversion",
+          "type": "string",
+          "const": "allow-mpp-to-xml",
+          "markdownDescription": "Allows offline .mpp → MSPDI XML conversion"
+        },
+        {
           "description": "Allows the native Save dialog command",
           "type": "string",
           "const": "allow-save-file",
           "markdownDescription": "Allows the native Save dialog command"
+        },
+        {
+          "description": "Allows MSPDI XML → binary .mpp conversion",
+          "type": "string",
+          "const": "allow-xml-to-mpp",
+          "markdownDescription": "Allows MSPDI XML → binary .mpp conversion"
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",

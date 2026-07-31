@@ -15,6 +15,8 @@ import { MppCodec } from '../../infrastructure/mpp/MppCodec'
 import { MpxCodec } from '../../infrastructure/mpx/MpxCodec'
 import { HttpMppToXmlConverter } from '../../infrastructure/mpp/HttpMppToXmlConverter'
 import { HttpXmlToMppConverter } from '../../infrastructure/mpp/HttpXmlToMppConverter'
+import { PreferTauriMppToXmlConverter } from '../../infrastructure/mpp/PreferTauriMppToXmlConverter'
+import { PreferTauriXmlToMppConverter } from '../../infrastructure/mpp/PreferTauriXmlToMppConverter'
 
 export type AppView =
   | 'gantt'
@@ -36,8 +38,8 @@ export interface AppServices {
 
 export function createAppServices(): AppServices {
   const ids = new UuidIdGenerator()
-  const mppConverter = new HttpMppToXmlConverter()
-  const mppWriter = new HttpXmlToMppConverter()
+  const mppConverter = new PreferTauriMppToXmlConverter(new HttpMppToXmlConverter())
+  const mppWriter = new PreferTauriXmlToMppConverter(new HttpXmlToMppConverter())
   const files = new FileUseCases(
     [new MppCodec(ids, mppConverter, mppWriter), new MspdiCodec(ids), new MpxCodec()],
     new LocalStorageProjectRepository(),

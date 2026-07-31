@@ -8,6 +8,7 @@
 | Production server | `npm start` / preview scripts | Serves built UI + API |
 | Docker | `npm run docker:up` / compose | App reachable (historically port **8080**) |
 | Packaged desktop | `npm run tauri:pack` | Tauri NSIS installer under `release-tauri/` |
+| Android offline (WIP) | `npm run android:build` | Tauri APK; see [android-offline.md](../android-offline.md) |
 
 ## 2. Desktop / Tauri (MUST)
 
@@ -17,6 +18,12 @@
 - Artifact: `release-tauri/SuperGantt_*_x64-setup.exe`.
 - Slim pack downloads portable Node (and JRE for `.mpp`) during install / first use into `%LOCALAPPDATA%\SuperGantt\runtime`.
 - Windows target: NSIS, current-user install when configured in `src-tauri/tauri.conf.json`.
+
+### 2.1a Android offline (WIP — branch `wip/android-offline`)
+
+- No Node sidecar: APK embeds Vite `dist` via `tauri.android.conf.json`.
+- MSPDI/MPX/PDF work offline in WebView; `.mpp` via Tauri commands → Kotlin/MPXJ bridge (stub until SDK link).
+- Commands: `npm run android:setup`, `android:init`, `android:build`. Details: [android-offline.md](../android-offline.md).
 
 ### 2.2 Icons in the package
 

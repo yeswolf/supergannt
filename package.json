@@ -21,6 +21,10 @@
     "tauri:stage": "node scripts/pack-tauri.mjs --stage",
     "tauri:pack": "node scripts/pack-tauri.mjs",
     "desktop:pack": "node scripts/pack-tauri.mjs",
+    "android:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-android.ps1",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build --apk --split-per-abi",
     "server:bundle": "node scripts/bundle-server.mjs",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up --build"
