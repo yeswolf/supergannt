@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-mpp-to-xml"
+description = "Allows offline .mpp → MSPDI XML conversion"
+commands.allow = ["mpp_to_xml"]

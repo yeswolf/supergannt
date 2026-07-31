@@ -8,12 +8,27 @@
   overflow: hidden;
 }
 
-.scaleLabel {
+.scaleSelect {
   flex-shrink: 0;
+  font: inherit;
   font-size: var(--msp-text-sm);
-  color: var(--msp-text-secondary);
   font-weight: 400;
-  white-space: nowrap;
+  padding: 0 1.6rem 0 0.45rem;
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  height: var(--msp-control-h);
+  min-height: var(--msp-touch-min, var(--msp-control-h));
+  min-width: 6.5rem;
+  max-width: 10rem;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.scaleSelect:focus {
+  outline: 2px solid var(--msp-accent);
+  outline-offset: 1px;
 }
 
 .chart {
@@ -133,9 +148,9 @@
   opacity: 1;
 }
 
-.narrow:not(.gridOpen) :global(.gantt_grid),
-.narrow:not(.gridOpen) :global(.gantt_grid_scale),
-.narrow:not(.gridOpen) :global(.gantt_grid_data) {
+.android:not(.gridOpen) :global(.gantt_grid),
+.android:not(.gridOpen) :global(.gantt_grid_scale),
+.android:not(.gridOpen) :global(.gantt_grid_data) {
   display: none !important;
   width: 0 !important;
   min-width: 0 !important;

@@ -87,7 +87,9 @@ describe('AppChrome', () => {
 
     runPaletteCommand(/Save as MPX/)
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
-    expect(document.querySelector('input[type="file"]')).toBeTruthy()
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(fileInput).toBeTruthy()
+    expect(fileInput.accept).toContain('.mpp')
     runPaletteCommand(/Open/)
   })
 })

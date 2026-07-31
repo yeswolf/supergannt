@@ -19,16 +19,6 @@ import styles from './GanttView.module.css'
 
 const NARROW_MQ = '(max-width: 820px)'
 
-const SCALE_GLYPH: Record<string, string> = {
-  hours: 'H',
-  days: 'D',
-  threedays: '3D',
-  week: 'W',
-  month: 'M',
-  quarter: 'Q',
-  year: 'Y',
-}
-
 const FILTERS: {
   id: GanttTaskFilter
   label: string
@@ -69,19 +59,26 @@ function applyZoomLevel(index: number): void {
     step: s.step,
     format: s.format,
   }))
-  const api = gantt as GanttApi
-  api.render?.()
 }
 
-function applyGridLayout(opts: { narrow: boolean; showGrid: boolean }): void {
+function isAndroidUa(): boolean {
+  return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+}
+
+function applyGridLayout(opts: {
+  narrow: boolean
+  android: boolean
+  showGrid: boolean
+}): void {
   const api = gantt as GanttApi
-  const { narrow, showGrid } = opts
-  const gridOn = narrow ? showGrid : true
+  const { narrow, android, showGrid } = opts
+  // Task tree stays visible on desktop/web; only Android can hide it for chart space.
+  const gridOn = android ? showGrid : true
 
   api.config.show_grid = gridOn
   // Reorder-by-drag fights vertical swipe on phones.
-  api.config.order_branch = !narrow
-  api.config.scroll_size = narrow ? 14 : 8
+  api.config.order_branch = !narrow && !android
+  api.config.scroll_size = narrow || android ? 14 : 8
   api.config.preserve_scroll = true
 
   if (!gridOn) {
@@ -89,7 +86,7 @@ function applyGridLayout(opts: { narrow: boolean; showGrid: boolean }): void {
     return
   }
 
-  if (narrow) {
+  if (narrow || android) {
     // Compact name-only tree so the chart still has room when the list is open.
     api.config.columns = [
       {
@@ -140,7 +137,9 @@ function applyGridLayout(opts: { narrow: boolean; showGrid: boolean }): void {
       resize: true,
     },
   ]
-  delete api.config.grid_width
+  // Explicit width — after scale render() dhtmlx can collapse the grid to 0
+  // when grid_width is unset and keep_grid_width is false.
+  api.config.grid_width = 646
 }
 
 /**
@@ -208,10 +207,14 @@ function installTimelineTouchPan(root: HTMLElement): () => void {
 }
 
 function useNarrowViewport(): boolean {
-  const [narrow, setNarrow] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia(NARROW_MQ).matches : false,
-  )
+  const [narrow, setNarrow] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false
+    }
+    return window.matchMedia(NARROW_MQ).matches
+  })
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
     const mq = window.matchMedia(NARROW_MQ)
     const onChange = () => setNarrow(mq.matches)
     onChange()
@@ -231,17 +234,30 @@ export function GanttView() {
   zoomIndexRef.current = zoomIndex
   const [taskFilter, setTaskFilter] = useState<GanttTaskFilter>('all')
   const narrow = useNarrowViewport()
-  /** Mobile: task grid hidden by default; toggled from the header. */
+  const android = isAndroidUa()
+  /** Android only: task grid hidden by default; toggled from the header. */
   const [showTaskGrid, setShowTaskGrid] = useState(false)
   const showTaskGridRef = useRef(showTaskGrid)
   showTaskGridRef.current = showTaskGrid
   const narrowRef = useRef(narrow)
   narrowRef.current = narrow
+  const androidRef = useRef(android)
+  androidRef.current = android
 
   const setZoom = useCallback((next: number) => {
     const clamped = clampZoomIndex(next)
     setZoomIndex(clamped)
-    if (readyRef.current) applyZoomLevel(clamped)
+    if (!readyRef.current) return
+    // Re-apply grid after scale change — plain render() drops the task tree.
+    applyZoomLevel(clamped)
+    applyGridLayout({
+      narrow: narrowRef.current,
+      android: androidRef.current,
+      showGrid: showTaskGridRef.current,
+    })
+    const api = gantt as GanttApi
+    api.render?.()
+    api.setSizes?.()
   }, [])
 
   const zoomIn = useCallback(() => setZoom(zoomIndexRef.current - 1), [setZoom])
@@ -249,8 +265,10 @@ export function GanttView() {
 
   const refreshLayout = useCallback(() => {
     if (!readyRef.current) return
+    applyZoomLevel(zoomIndexRef.current)
     applyGridLayout({
       narrow: narrowRef.current,
+      android: androidRef.current,
       showGrid: showTaskGridRef.current,
     })
     const api = gantt as GanttApi
@@ -299,6 +317,7 @@ export function GanttView() {
 
     applyGridLayout({
       narrow: narrowRef.current,
+      android: androidRef.current,
       showGrid: showTaskGridRef.current,
     })
 
@@ -437,8 +456,12 @@ export function GanttView() {
     applyZoomLevel(zoomIndexRef.current)
     applyGridLayout({
       narrow: narrowRef.current,
+      android: androidRef.current,
       showGrid: showTaskGridRef.current,
     })
+    const api = gantt as GanttApi
+    api.render?.()
+    api.setSizes?.()
     if (selectedTaskId && gantt.isTaskExists(selectedTaskId)) {
       gantt.selectTask(selectedTaskId)
     }
@@ -449,14 +472,14 @@ export function GanttView() {
   return (
     <div
       className={`${styles.wrap}${narrow ? ` ${styles.narrow}` : ''}${
-        showTaskGrid ? ` ${styles.gridOpen}` : ''
-      }`}
+        android ? ` ${styles.android}` : ''
+      }${showTaskGrid ? ` ${styles.gridOpen}` : ''}`}
     >
       <ViewHeader
         title="Gantt Chart"
         leading={
           <>
-            {narrow ? (
+            {android ? (
               <>
                 <IconAction
                   icon="taskSheet"
@@ -467,20 +490,21 @@ export function GanttView() {
                 <ViewHeaderSep />
               </>
             ) : null}
-            <IconActionGroup label="Timescale">
-              {GANTT_ZOOM_LEVELS.map((item, i) => (
-                <IconAction
-                  key={item.id}
-                  label={item.label}
-                  glyph={SCALE_GLYPH[item.id] ?? item.label.slice(0, 1)}
-                  pressed={i === zoomIndex}
-                  onClick={() => setZoom(i)}
-                />
+            <select
+              className={styles.scaleSelect}
+              aria-label="Timescale"
+              value={level.id}
+              onChange={(e) => {
+                const idx = GANTT_ZOOM_LEVELS.findIndex((item) => item.id === e.target.value)
+                if (idx >= 0) setZoom(idx)
+              }}
+            >
+              {GANTT_ZOOM_LEVELS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
               ))}
-            </IconActionGroup>
-            <span className={styles.scaleLabel} aria-live="polite">
-              {level.label}
-            </span>
+            </select>
             <IconActionGroup label="Task filter">
               {FILTERS.map((f) => (
                 <IconAction

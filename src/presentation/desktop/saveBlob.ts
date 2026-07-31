@@ -2,9 +2,9 @@
  * Persist a Blob to disk.
  *
  * Order:
- * 1) Tauri `save_file` command (when IPC survives remote navigate)
+ * 1) Tauri `save_file` (desktop dialog, or Android public Downloads)
  * 2) Chromium/WebView2 `showSaveFilePicker`
- * 3) `<a download>` fallback (browsers only — often a no-op in WebView2)
+ * 3) `<a download>` fallback (browsers only)
  */
 
 type SaveFilePickerOptions = {
@@ -45,6 +45,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+function isAndroid(): boolean {
+  return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 }
 
 function acceptForFileName(fileName: string): SaveFilePickerOptions['types'] {
@@ -97,23 +101,13 @@ async function saveWithFilePicker(blob: Blob, fileName: string): Promise<string 
   }
 }
 
-/** ok=false → Tauri IPC unavailable; ok=true → dialog ran (path may be null if cancelled). */
-async function tryTauriSave(
-  blob: Blob,
-  fileName: string,
-): Promise<{ ok: true; path: string | null } | { ok: false }> {
-  if (!isTauri()) return { ok: false }
-  try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    const bytes = await blobToBytes(blob)
-    const path = await invoke<string | null>('save_file', {
-      defaultName: fileName,
-      contentsBase64: bytesToBase64(bytes),
-    })
-    return { ok: true, path }
-  } catch {
-    return { ok: false }
-  }
+async function saveWithTauri(blob: Blob, fileName: string): Promise<string | null> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  const bytes = await blobToBytes(blob)
+  return invoke<string | null>('save_file', {
+    defaultName: fileName,
+    contentsBase64: bytesToBase64(bytes),
+  })
 }
 
 /**
@@ -123,13 +117,22 @@ export async function saveBlobToDisk(
   blob: Blob,
   fileName: string,
 ): Promise<string | null> {
-  const tauri = await tryTauriSave(blob, fileName)
-  if (tauri.ok) return tauri.path
+  if (isTauri()) {
+    try {
+      return await saveWithTauri(blob, fileName)
+    } catch (error) {
+      // Android has no File System Access / reliable <a download> — surface the native error.
+      if (isAndroid()) {
+        throw error instanceof Error ? error : new Error(String(error))
+      }
+      // Desktop: IPC may be unavailable before navigate; fall through.
+    }
+  }
 
   try {
     return await saveWithFilePicker(blob, fileName)
   } catch (pickerError) {
-    if (isTauri()) {
+    if (isTauri() && !isAndroid()) {
       throw pickerError instanceof Error
         ? pickerError
         : new Error('Could not open a Save dialog in the desktop shell')
