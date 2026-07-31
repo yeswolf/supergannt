@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Android / iOS capabilities for offline SuperGantt",
+  "windows": ["main"],
+  "webviews": ["main"],
+  "platforms": ["android", "iOS"],
+  "permissions": [
+    "core:default",
+    "allow-save-file",
+    "allow-mpp-to-xml",
+    "allow-xml-to-mpp"
+  ]
+}

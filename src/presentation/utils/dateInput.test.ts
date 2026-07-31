@@ -94,8 +94,6 @@ describe('openPlanFile', () => {
       files: { openFile: vi.fn().mockRejectedValue('nope') },
     } as unknown as AppServices
     await openPlanFile(new File(['x'], 'bad.xml'), services, (a) => actions.push(a))
-    expect(actions.some((a) => a.type === 'setStatus' && a.message === 'Failed to open file')).toBe(
-      true,
-    )
+    expect(actions.some((a) => a.type === 'setStatus' && a.message === 'nope')).toBe(true)
   })
 })

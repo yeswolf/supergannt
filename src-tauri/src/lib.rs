@@ -2,8 +2,12 @@
 
 #[cfg(desktop)]
 mod api;
+mod downloads;
+#[cfg(target_os = "android")]
+mod mpp_android;
 mod mpp;
 
+#[cfg(desktop)]
 use tauri::Manager;
 
 #[cfg(desktop)]
@@ -29,27 +33,37 @@ fn extension_filters(default_name: &str) -> Vec<(&'static str, Vec<&'static str>
   }
 }
 
-/// Native Save dialog + write bytes. Returns absolute path, or null if cancelled.
+/// Native Save dialog (desktop) or public Downloads folder (Android).
+/// Returns absolute/display path, or null if cancelled (desktop only).
 #[tauri::command]
-fn save_file(default_name: String, contents_base64: String) -> Result<Option<String>, String> {
-  #[cfg(mobile)]
+fn save_file(
+  app: tauri::AppHandle,
+  default_name: String,
+  contents_base64: String,
+) -> Result<Option<String>, String> {
+  let safe_name = std::path::Path::new(&default_name)
+    .file_name()
+    .and_then(|n| n.to_str())
+    .unwrap_or("project.bin")
+    .to_string();
+
+  #[cfg(target_os = "android")]
   {
-    let _ = (default_name, contents_base64);
-    return Err(
-      "Native save dialog is desktop-only for now. On Android use Share / Files (next iteration)."
-        .into(),
-    );
+    let path =
+      downloads::save_to_public_downloads(&app, &safe_name, &contents_base64)?;
+    return Ok(Some(path));
   }
 
   #[cfg(desktop)]
   {
     use base64::Engine;
+    let _ = app;
     let bytes = base64::engine::general_purpose::STANDARD
       .decode(contents_base64.as_bytes())
       .map_err(|e| format!("invalid file payload: {e}"))?;
 
-    let mut dialog = rfd::FileDialog::new().set_file_name(&default_name);
-    for (name, exts) in extension_filters(&default_name) {
+    let mut dialog = rfd::FileDialog::new().set_file_name(&safe_name);
+    for (name, exts) in extension_filters(&safe_name) {
       dialog = dialog.add_filter(name, &exts);
     }
 
@@ -58,6 +72,12 @@ fn save_file(default_name: String, contents_base64: String) -> Result<Option<Str
     };
     std::fs::write(&path, &bytes).map_err(|e| format!("write {}: {e}", path.display()))?;
     Ok(Some(path.display().to_string()))
+  }
+
+  #[cfg(all(mobile, not(target_os = "android")))]
+  {
+    let _ = (app, contents_base64);
+    Err("Save is only implemented on Android and desktop.".into())
   }
 }
 
@@ -102,7 +122,10 @@ fn show_boot_error(message: &str) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  let builder = tauri::Builder::default();
+  let builder = tauri::Builder::default().plugin(downloads::init());
+
+  #[cfg(target_os = "android")]
+  let builder = builder.plugin(mpp_android::init());
 
   #[cfg(desktop)]
   let builder = builder.manage(ApiState {
@@ -169,8 +192,7 @@ pub fn run() {
 
   #[cfg(mobile)]
   let builder = builder.setup(|_app| {
-    // Offline Android: UI is the bundled Vite `dist` (see tauri.android.conf.json).
-    // MPP open goes through `mpp_to_xml` → Kotlin/MPXJ once the bridge is linked.
+    // Offline Android: UI is bundled Vite `dist`; MPP via Kotlin/MPXJ plugin.
     Ok(())
   });
 

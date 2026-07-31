@@ -1,6 +1,6 @@
 # Android offline (Tauri 2)
 
-SuperGantt on Android is a **fully offline** WebView app: the Vite UI is bundled in the APK (no Node sidecar). Scheduling, MSPDI XML, MPX, and PDF export run in the WebView. Binary `.mpp` open/save uses a native bridge (Java/Kotlin MPXJ) — scaffolded, linked after SDK setup.
+SuperGantt on Android is a **fully offline** WebView app: the Vite UI is bundled in the APK (no Node sidecar). Scheduling, MSPDI XML, MPX, PDF, and binary `.mpp` open/save run on-device (MPXJ + OLE template writer).
 
 Branch: `wip/android-offline`.
 
@@ -9,14 +9,28 @@ Branch: `wip/android-offline`.
 | Capability | Offline on Android |
 |------------|--------------------|
 | UI / Gantt / sheets / themes | Yes (bundled `dist`) |
-| Open / save **MSPDI `.xml`** | Yes |
-| Save **`.mpx`**, export **PDF** | Yes |
-| Open **`.mpp`** | Bridge stub → MPXJ (next after SDK) |
-| Write dirty **`.mpp`** | Later (OLE template writer is desktop JAR today) |
+| Open / save **MSPDI `.xml`** | Yes → public **Downloads** |
+| Save **`.mpx`**, export **PDF** | Yes → public **Downloads** |
+| Open **`.mpp` / `.mpt`** | Yes (MPXJ) |
+| Save **`.mpp`** (identity + dirty OLE) | Yes (carrier / `blank.mpp` writer) |
+
+Saved files appear in the phone’s shared **Downloads** folder
+(`/storage/emulated/0/Download/…`), visible in Files → Downloads.
+
+## Permissions
+
+`src-tauri/android/AndroidManifest.xml` (copied on each APK build):
+
+- `INTERNET`
+- `WRITE_EXTERNAL_STORAGE` (maxSdk 28)
+- `READ_EXTERNAL_STORAGE` (maxSdk 32)
+- `requestLegacyExternalStorage` for API 29
+
+Public Downloads on API 29+ use MediaStore (no extra runtime grant).
 
 ## Prerequisites (Windows)
 
-1. **JDK 17 or 21** (not only 11) — set `JAVA_HOME`
+1. **JDK 17 or 21** — set `JAVA_HOME`
 2. **Android SDK + NDK r27** — set `ANDROID_HOME` and `NDK_HOME`
 3. **Rust Android targets**:
    ```powershell
@@ -24,41 +38,29 @@ Branch: `wip/android-offline`.
    ```
 4. Optional: Android Studio (emulator / device)
 
-Quick env (user profile):
-
-```powershell
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-$env:NDK_HOME = "$env:ANDROID_HOME\ndk\27.3.13750724"   # match installed NDK
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.*"  # adjust
-```
-
 Or run:
 
 ```powershell
 .\scripts\setup-android.ps1
 ```
 
-## Build
+## Build APK
 
 ```powershell
-npm install
-npm run build
-npm run android:init          # once — generates src-tauri/gen/android
-npm run android:build         # APK under src-tauri/gen/android/.../apk
+npm run android:build
+# → release-android\SuperGantt_1.0.2_arm64-v8a.apk (signed)
 ```
 
-Dev on a device/emulator:
+The build script stages:
 
-```powershell
-npm run android:dev
-```
+- `DownloadsPlugin.kt` — MediaStore public Downloads
+- `MppPlugin.kt` + `MppOleWriter.java` — MPXJ open/save
+- `assets/blank.mpp` — dirty MPP writer template
+- Gradle deps: `mpxj`, `aalto-xml`; local `java.awt.Color` stub (no androidawt Maven)
 
 ## Architecture
 
-- **Desktop (Windows):** splash → Node API sidecar (existing) + optional Tauri `mpp_to_xml` / `xml_to_mpp` via `mpp-convert.jar`
-- **Android:** `tauri.android.conf.json` serves `../dist` directly; no Node; converters prefer Tauri invoke, then HTTP (unused offline)
-- **Kotlin stub:** `src-tauri/android-mpp/MppBridge.kt` — wire MPXJ after `android init` (AWT `Color` stubs may be required; see [poi-on-android](https://github.com/centic9/poi-on-android) patterns)
+- **Desktop:** splash → Node API sidecar + Java `mpp-convert.jar`
+- **Android:** `tauri.android.conf.json` serves `../dist`; converters prefer Tauri invoke → Kotlin plugins
 
-## Identifier
-
-Android package id: `com.supergannt.planner` (avoids the `.app` suffix warning on the desktop id).
+Android package id: `com.supergannt.planner`.

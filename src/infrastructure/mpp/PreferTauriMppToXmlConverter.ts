@@ -1,5 +1,6 @@
 import { isTauri, invoke } from '@tauri-apps/api/core'
 import type { MppToXmlConverter } from '../../application/ports/MppToXmlConverter'
+import { errorMessage } from '../../presentation/errorMessage'
 import { HttpMppToXmlConverter } from './HttpMppToXmlConverter'
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -19,10 +20,14 @@ export class PreferTauriMppToXmlConverter implements MppToXmlConverter {
 
   async convert(bytes: ArrayBuffer, fileName: string): Promise<string> {
     if (isTauri()) {
-      return invoke<string>('mpp_to_xml', {
-        contentsBase64: bytesToBase64(new Uint8Array(bytes)),
-        fileName,
-      })
+      try {
+        return await invoke<string>('mpp_to_xml', {
+          contentsBase64: bytesToBase64(new Uint8Array(bytes)),
+          fileName,
+        })
+      } catch (error) {
+        throw new Error(`MPP open failed: ${errorMessage(error)}`)
+      }
     }
     return this.fallback.convert(bytes, fileName)
   }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { saveBlobToDisk } from '../desktop/saveBlob'
+import { errorMessage } from '../errorMessage'
 import { openPlanFile } from '../openPlanFile'
+import { planFileInputAccept } from '../planFileInputAccept'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import type { AppView } from '../state/workspace'
 import { useTheme } from '../theme/ThemeContext'
@@ -144,6 +146,9 @@ export function AppChrome() {
   }
 
   const onSave = async (format: 'mspdi' | 'mpx' | 'mpp' = 'mspdi') => {
+    const label =
+      format === 'mpp' ? 'Saving MPP…' : format === 'mpx' ? 'Saving MPX…' : 'Saving XML…'
+    dispatch({ type: 'setBusy', message: label })
     try {
       const result = await services.files.saveFile(project, undefined, format)
       const savedPath = await saveBlobToDisk(result.blob, result.fileName)
@@ -159,12 +164,15 @@ export function AppChrome() {
     } catch (error) {
       dispatch({
         type: 'setStatus',
-        message: error instanceof Error ? error.message : 'Failed to save file',
+        message: errorMessage(error, 'Failed to save file'),
       })
+    } finally {
+      dispatch({ type: 'setBusy', message: null })
     }
   }
 
   const onExportPdf = async () => {
+    dispatch({ type: 'setBusy', message: 'Exporting PDF…' })
     try {
       const { exportProjectPdf } = await import('../../infrastructure/pdf/exportProjectPdf')
       const fileName = `${project.name || 'project'}.pdf`
@@ -178,8 +186,10 @@ export function AppChrome() {
     } catch (error) {
       dispatch({
         type: 'setStatus',
-        message: error instanceof Error ? error.message : 'PDF export failed',
+        message: errorMessage(error, 'PDF export failed'),
       })
+    } finally {
+      dispatch({ type: 'setBusy', message: null })
     }
   }
 
@@ -653,7 +663,7 @@ export function AppChrome() {
       <input
         ref={fileRef}
         type="file"
-        accept=".xml,.mspdi,.mpp,.mpt,application/xml,text/xml,application/vnd.ms-project"
+        accept={planFileInputAccept()}
         className={styles.hidden}
         onChange={(e) => {
           const file = e.target.files?.[0]

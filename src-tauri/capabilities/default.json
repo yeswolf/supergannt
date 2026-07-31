@@ -3,6 +3,7 @@
   "identifier": "default",
   "description": "Default SuperGantt capabilities (desktop sidecar + offline converters)",
   "windows": ["main"],
+  "webviews": ["main"],
   "remote": {
     "urls": ["http://127.0.0.1:*", "http://localhost:*"]
   },

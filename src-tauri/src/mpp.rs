@@ -2,13 +2,16 @@
 //! and a native Android bridge (mobile — Kotlin/MPXJ, wired after `android init`).
 
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
-use tauri::AppHandle
+use tauri::AppHandle;
+
+#[cfg(desktop)]
+use std::io::Write;
+#[cfg(desktop)]
+use std::process::Command;
 
 fn b64_decode(s: &str) -> Result<Vec<u8>, String> {
   base64::engine::general_purpose::STANDARD
@@ -120,13 +123,9 @@ pub fn mpp_to_xml(
   contents_base64: String,
   file_name: String,
 ) -> Result<String, String> {
-  #[cfg(mobile)]
+  #[cfg(target_os = "android")]
   {
-    let _ = (app, contents_base64, file_name);
-    return Err(
-      "Android MPXJ bridge not linked yet. After SDK setup run `npm run android:init` and rebuild."
-        .into(),
-    );
+    return crate::mpp_android::mpp_to_xml(&app, &contents_base64, &file_name);
   }
 
   #[cfg(desktop)]
@@ -164,6 +163,12 @@ pub fn mpp_to_xml(
     cleanup(&dir);
     xml
   }
+
+  #[cfg(all(mobile, not(target_os = "android")))]
+  {
+    let _ = (app, contents_base64, file_name);
+    Err("MPP conversion is implemented on Android and desktop only.".into())
+  }
 }
 
 /// MSPDI XML → .mpp bytes (base64).
@@ -173,13 +178,9 @@ pub fn xml_to_mpp(
   xml: String,
   file_name: String,
 ) -> Result<String, String> {
-  #[cfg(mobile)]
+  #[cfg(target_os = "android")]
   {
-    let _ = (app, xml, file_name);
-    return Err(
-      "Binary .mpp write on Android lands after the MPXJ read bridge. Save as MSPDI XML for now."
-        .into(),
-    );
+    return crate::mpp_android::xml_to_mpp(&app, &xml, &file_name);
   }
 
   #[cfg(desktop)]
@@ -220,5 +221,11 @@ pub fn xml_to_mpp(
     };
     cleanup(&dir);
     encoded
+  }
+
+  #[cfg(all(mobile, not(target_os = "android")))]
+  {
+    let _ = (app, xml, file_name);
+    Err("MPP conversion is implemented on Android and desktop only.".into())
   }
 }

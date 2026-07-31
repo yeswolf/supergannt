@@ -49,13 +49,39 @@ vi.mock('dhtmlx-gantt', () => ({ default: ganttMock }))
 vi.mock('dhtmlx-gantt/codebase/dhtmlxgantt.css', () => ({}))
 
 describe('GanttView', () => {
+  const originalUserAgent = navigator.userAgent
+
   beforeEach(() => {
     handlers.clear()
     tasks.clear()
     vi.clearAllMocks()
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      writable: true,
+      value: originalUserAgent,
+    })
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
   })
 
   afterEach(() => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      writable: true,
+      value: originalUserAgent,
+    })
     vi.restoreAllMocks()
   })
 
@@ -69,10 +95,12 @@ describe('GanttView', () => {
     expect((ganttMock.config as { touch?: string }).touch).toBe('force')
     expect((ganttMock.config as { touch_drag?: number }).touch_drag).toBe(750)
 
-    await user.click(screen.getByRole('button', { name: 'Hours' }))
-    await user.click(screen.getByRole('button', { name: 'Days' }))
-    const weekBtn = screen.queryByRole('button', { name: 'Week' })
-    if (weekBtn) await user.click(weekBtn)
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Timescale' }), 'hours')
+    expect(screen.getByRole('combobox', { name: 'Timescale' })).toHaveValue('hours')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Timescale' }), 'days')
+    expect(screen.getByRole('combobox', { name: 'Timescale' })).toHaveValue('days')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Timescale' }), 'week')
+    expect(screen.getByRole('combobox', { name: 'Timescale' })).toHaveValue('week')
 
     await user.click(screen.getByRole('button', { name: 'Critical' }))
     await user.click(screen.getByRole('button', { name: 'Milestones' }))
@@ -111,19 +139,23 @@ describe('GanttView', () => {
     )
   })
 
-  it('toggles the task grid on narrow viewports', async () => {
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
+  it('keeps the task grid visible on desktop/web after timescale change', async () => {
+    const user = userEvent.setup()
+    renderWithWorkspace(<GanttView />)
+    expect((ganttMock.config as { show_grid?: boolean }).show_grid).toBe(true)
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Timescale' }), 'week')
+    expect(screen.getByRole('combobox', { name: 'Timescale' })).toHaveValue('week')
+    expect((ganttMock.config as { show_grid?: boolean }).show_grid).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Show task list' })).not.toBeInTheDocument()
+  })
+
+  it('toggles the task grid only on Android', async () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
       configurable: true,
-      value: vi.fn().mockImplementation((query: string) => ({
-        matches: String(query).includes('820'),
-        media: query,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
+      writable: true,
+      value:
+        'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
     })
 
     const user = userEvent.setup()

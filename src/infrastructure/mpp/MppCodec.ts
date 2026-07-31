@@ -4,6 +4,7 @@ import type { XmlToMppConverter } from '../../application/ports/XmlToMppConverte
 import type { IdGenerator } from '../../application/ports/IdGenerator'
 import type { Project } from '../../domain/entities/Project'
 import { MspdiCodec } from '../mspdi/MspdiCodec'
+import { stripOriginalMppTrailer } from './originalMppTrailer'
 
 /**
  * Binary Microsoft Project .mpp / .mpt:
@@ -45,8 +46,14 @@ export class MppCodec implements ProjectFileCodec {
       return project.with({ fileName })
     }
 
-    const xml = await this.converter.convert(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), fileName)
-    const project = await this.mspdi.parse(xml, fileName.replace(/\.(mpp|mpt)$/i, '.xml'))
+    const xml = await this.converter.convert(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      fileName,
+    )
+    const project = await this.mspdi.parse(
+      stripOriginalMppTrailer(xml),
+      fileName.replace(/\.(mpp|mpt)$/i, '.xml'),
+    )
     return project.with({
       fileName,
       dirty: false,
