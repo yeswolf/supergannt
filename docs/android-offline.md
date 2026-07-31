@@ -2,7 +2,7 @@
 
 SuperGantt on Android is a **fully offline** WebView app: the Vite UI is bundled in the APK (no Node sidecar). Scheduling, MSPDI XML, MPX, PDF, and binary `.mpp` open/save run on-device (MPXJ + OLE template writer).
 
-Branch: `wip/android-offline`.
+Shipped from **v1.0.2** — download `SuperGantt_*_arm64-v8a.apk` from [GitHub Releases](https://github.com/yeswolf/supergannt/releases/latest).
 
 ## Status
 
@@ -34,7 +34,7 @@ Public Downloads on API 29+ use MediaStore (no extra runtime grant).
 2. **Android SDK + NDK r27** — set `ANDROID_HOME` and `NDK_HOME`
 3. **Rust Android targets**:
    ```powershell
-   rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+   rustup target add aarch64-linux-android
    ```
 4. Optional: Android Studio (emulator / device)
 
@@ -47,7 +47,8 @@ Or run:
 ## Build APK
 
 ```powershell
-npm run android:build
+npm run android:build          # web + rust + arm64 APK
+npm run android:build:fast     # Kotlin/Java-only iteration (skip web/rust)
 # → release-android\SuperGantt_1.0.2_arm64-v8a.apk (signed)
 ```
 
@@ -55,8 +56,9 @@ The build script stages:
 
 - `DownloadsPlugin.kt` — MediaStore public Downloads
 - `MppPlugin.kt` + `MppOleWriter.java` — MPXJ open/save
+- AWT stubs + patched `UnmarshalHelper` + Xerces (Android JAXP gaps)
 - `assets/blank.mpp` — dirty MPP writer template
-- Gradle deps: `mpxj`, `aalto-xml`; local `java.awt.Color` stub (no androidawt Maven)
+- Gradle: arm64-only assemble, daemon, parallel/cache
 
 ## Architecture
 

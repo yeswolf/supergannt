@@ -9,7 +9,7 @@ Primary user jobs:
 1. Open real Microsoft Project plans (`.mpp` / `.mpt`).
 2. Edit the plan with familiar project-management concepts (tasks, links, resources, calendars, baselines).
 3. Save back in formats that other tools can open — especially **native `.mpp` that Microsoft Project opens**, plus MSPDI XML, MPX, and PDF export.
-4. Run the same product in **browser**, **Docker**, and **desktop (Tauri / WebView2 Windows installer)**.
+4. Run the same product in **browser**, **Docker**, **desktop (Tauri / WebView2 Windows installer)**, and **Android (offline APK)**.
 
 Tone of product goals from the original brief:
 

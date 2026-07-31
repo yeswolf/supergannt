@@ -26,6 +26,7 @@
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "android:build": "powershell -ExecutionPolicy Bypass -File scripts/build-android-apk.ps1",
+    "android:build:fast": "powershell -ExecutionPolicy Bypass -File scripts/build-android-apk.ps1 -SkipWeb -SkipRust",
     "server:bundle": "node scripts/bundle-server.mjs",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up --build"

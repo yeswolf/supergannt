@@ -57,6 +57,33 @@ class MppPlugin(private val activity: Activity) : Plugin(activity) {
       "org.apache.poi.javax.xml.stream.EventFactory",
       "com.fasterxml.aalto.stax.EventFactoryImpl",
     )
+    System.setProperty(
+      "javax.xml.datatype.DatatypeFactory",
+      "org.apache.xerces.jaxp.datatype.DatatypeFactoryImpl",
+    )
+    // Android's Harmony SAX rejects Apache features MPXJ sets (disallow-doctype-decl).
+    System.setProperty(
+      "javax.xml.parsers.SAXParserFactory",
+      "org.apache.xerces.jaxp.SAXParserFactoryImpl",
+    )
+    System.setProperty(
+      "javax.xml.parsers.DocumentBuilderFactory",
+      "org.apache.xerces.jaxp.DocumentBuilderFactoryImpl",
+    )
+    // Eager smoke: surface missing AWT/JAXB classes at startup in logcat.
+    io.execute {
+      try {
+        Class.forName("java.awt.Image")
+        Class.forName("org.mpxj.mspdi.MSPDIWriter")
+        MSPDIWriter() // trigger <clinit> / JAXB context
+        val template = activity.assets.open("blank.mpp").use { it.readBytes() }
+        val xml = convertMppToXml(template, "blank.mpp")
+        val back = convertXmlToMpp(xml)
+        Log.i(TAG, "smoke roundtrip OK xmlChars=${xml.length} mppBytes=${back.size}")
+      } catch (t: Throwable) {
+        Log.e(TAG, "smoke roundtrip FAIL", t)
+      }
+    }
   }
 
   @Command

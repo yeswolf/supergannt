@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/yeswolf/supergannt/releases/latest"><img src="https://img.shields.io/github/v/release/yeswolf/supergannt?style=for-the-badge&color=0f6cbd" alt="Release" /></a>
   <a href="https://github.com/yeswolf/supergannt/releases/latest"><img src="https://img.shields.io/github/downloads/yeswolf/supergannt/total?style=for-the-badge&color=107c10" alt="Downloads" /></a>
-  <a href="#-quick-start"><img src="https://img.shields.io/badge/platform-Windows%20·%20Web%20·%20Docker-5b5fc7?style=for-the-badge" alt="Platforms" /></a>
+  <a href="#-quick-start"><img src="https://img.shields.io/badge/platform-Windows%20·%20Android%20·%20Web%20·%20Docker-5b5fc7?style=for-the-badge" alt="Platforms" /></a>
   <a href="#-license--trademarks"><img src="https://img.shields.io/badge/license-independent-8a8886?style=for-the-badge" alt="License" /></a>
 </p>
 
@@ -25,7 +25,7 @@
 
 ---
 
-Open real **`.mpp`** plans. Edit them in the browser or on the desktop. Schedule like ProjectLibre. Save back as `.mpp`, MSPDI XML, MPX, or PDF.
+Open real **`.mpp`** plans. Edit them in the browser, on the Windows desktop, or on **Android**. Schedule like ProjectLibre. Save back as `.mpp`, MSPDI XML, MPX, or PDF — including **fully offline** on the phone.
 
 Built for people who live in Gantt charts — PMs, schedulers, and engineers who want a **fast local tool** that still interoperates with **Microsoft Project** and **ProjectLibre**.
 
@@ -137,7 +137,8 @@ Sample plan: [`06-advanced-tracking.mpp`](testdata/mpp/06-advanced-tracking.mpp)
 | ✏️ | **Edit** tasks, dates, duration, % complete, WBS, predecessors (`2FS+8h`), resources & assignments |
 | 🧠 | **Schedule** ASAP with FS / SS / FF / SF, lag/lead, constraints, critical path & baselines |
 | 💾 | **Save** as native **`.mpp`**, MSPDI **`.xml`**, **`.mpx`**, or **PDF** |
-| 🖥️ | **Browser** or **desktop** (Tauri / WebView2) |
+| 🖥️ | **Browser** or **Windows desktop** (Tauri / WebView2) |
+| 📱 | **Android** APK — offline open/save of `.mpp`, XML, MPX, PDF (no cloud) |
 | 🎨 | **Themes** — Light, Dark, Contrast, Darcula, Solarized |
 | ⌨️ | **Command palette** (Ctrl+K) for file actions + commands |
 | 🐳 | Fully offline with **Docker** |
@@ -160,12 +161,26 @@ Then open **http://localhost:5173** 🎉
 |---------|----------------|
 | `npm run dev` | 🌐 Web UI + MPP API |
 | `npm run tauri:pack` | 📦 Windows installer → `release-tauri/` |
+| `npm run android:build` | 📱 Signed arm64 APK → `release-android/` |
 | `npm run docker:up` | 🐳 All-in-one container on port **8080** |
 | `npm test` | ✅ Unit + integration tests |
 
-> ☕ **Java / MPP:** On first MPP open the app looks for JDK/JRE 17+. If none is found, it downloads **Eclipse Temurin 21 JRE** into the app runtime folder (`server/.runtime` in dev, or `%LOCALAPPDATA%\SuperGantt\runtime` in the desktop build).
+### Download installers
+
+Grab **Windows** (`.exe`) and **Android** (`.apk`, arm64) from the [latest GitHub release](https://github.com/yeswolf/supergannt/releases/latest).
+
+| Platform | Artifact | Notes |
+|----------|----------|--------|
+| Windows x64 | `SuperGantt_*_x64-setup.exe` | NSIS installer (WebView2) |
+| Android arm64 | `SuperGantt_*_arm64-v8a.apk` | Offline; saves to phone **Downloads** |
+
+Android build details: [`docs/android-offline.md`](docs/android-offline.md).
+
+> ☕ **Java / MPP (desktop & web):** On first MPP open the app looks for JDK/JRE 17+. If none is found, it downloads **Eclipse Temurin 21 JRE** into the app runtime folder (`server/.runtime` in dev, or `%LOCALAPPDATA%\SuperGantt\runtime` in the desktop build).
 >
 > For local development you can still run `npm run mpp:setup` once to build `mpp-convert.jar`.
+>
+> **Android** ships MPXJ inside the APK — no separate JDK on the phone.
 
 ---
 

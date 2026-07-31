@@ -14,7 +14,8 @@ Use these documents when implementing features, reviewing PRs, writing tests, or
 | [requirements/02-file-formats.md](./requirements/02-file-formats.md) | `.mpp` / MSPDI / MPX / PDF open-save rules, identity, Java runtime |
 | [requirements/03-scheduling.md](./requirements/03-scheduling.md) | ProjectLibre parity: links, constraints, effort triangle, calendars, milestones |
 | [requirements/04-ui-ux.md](./requirements/04-ui-ux.md) | Adaptive shell, themes, ViewHeader, Gantt, Task Info, Network, histograms |
-| [requirements/05-runtime-packaging.md](./requirements/05-runtime-packaging.md) | Web, Docker, Tauri desktop, installer, ports, JDK discovery |
+| [requirements/05-runtime-packaging.md](./requirements/05-runtime-packaging.md) | Web, Docker, Tauri desktop, Android APK, installer, ports, JDK discovery |
+| [android-offline.md](./android-offline.md) | Offline Android APK: MPP open/save, Downloads, build script |
 | [requirements/06-testing-verification.md](./requirements/06-testing-verification.md) | Tests, fixtures, coverage ≥80%, always-test-then-build rule |
 | [requirements/07-bugfixes-and-regressions.md](./requirements/07-bugfixes-and-regressions.md) | Confirmed bugs from late chats and required invariants |
 | [decisions/adr-index.md](./decisions/adr-index.md) | Architecture / vendor decisions (Aspose rejected, OLE path, etc.) |

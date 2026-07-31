@@ -2,9 +2,29 @@
 <#
 .SYNOPSIS
   Build SuperGantt Android arm64 APK (signed), staging Kotlin/Java plugins + MPXJ.
+
+.PARAMETER SkipWeb
+  Skip Vite/tsc when dist/ is already fresh.
+
+.PARAMETER SkipRust
+  Skip cargo when jniLibs .so already exists (Kotlin/Java-only iteration).
+
+.PARAMETER Clean
+  Clean Gradle app build outputs before assemble.
 #>
+param(
+  [switch]$SkipWeb,
+  [switch]$SkipRust,
+  [switch]$Clean
+)
+
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+
+function Write-Step([string]$msg) {
+  Write-Host ("== {0}  [{1:n1}s] ==" -f $msg, $sw.Elapsed.TotalSeconds)
+}
 
 $env:JAVA_HOME = if (Test-Path (Join-Path $env:LOCALAPPDATA 'SuperGantt\tools\jdk-21\bin\java.exe')) {
   Join-Path $env:LOCALAPPDATA 'SuperGantt\tools\jdk-21'
@@ -28,7 +48,8 @@ if (-not (Test-Path (Join-Path $cargoBin 'cargo.exe'))) {
   throw "cargo.exe not found in $cargoBin - install Rust (rustup)"
 }
 $env:Path = "$cargoBin;$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
-$env:CI = 'true'
+# Keep CI unset so Gradle daemon stays warm between runs.
+Remove-Item Env:CI -ErrorAction SilentlyContinue
 
 $buildTools = Get-ChildItem (Join-Path $env:ANDROID_HOME 'build-tools') -Directory |
   Sort-Object Name -Descending | Select-Object -First 1
@@ -45,7 +66,7 @@ $ksAlias = if ($env:SUPERGANNT_ANDROID_ALIAS) { $env:SUPERGANNT_ANDROID_ALIAS } 
 $ksPass = if ($env:SUPERGANNT_ANDROID_KS_PASS) { $env:SUPERGANNT_ANDROID_KS_PASS } else { 'supergannt' }
 
 if (-not (Test-Path $ksPath)) {
-  Write-Host "== creating keystore $ksPath =="
+  Write-Step "creating keystore $ksPath"
   & keytool -genkeypair -keystore $ksPath -alias $ksAlias -keyalg RSA -keysize 2048 -validity 10000 `
     -storepass $ksPass -keypass $ksPass `
     -dname 'CN=SuperGantt, OU=Mobile, O=SuperGantt, L=Local, ST=NA, C=US'
@@ -81,11 +102,38 @@ function Stage-AndroidSources {
   Copy-Item -Force (Join-Path $androidSrc 'DownloadsPlugin.kt') (Join-Path $javaPkg 'DownloadsPlugin.kt')
   Copy-Item -Force (Join-Path $androidSrc 'MppPlugin.kt') (Join-Path $javaPkg 'MppPlugin.kt')
   Copy-Item -Force (Join-Path $androidSrc 'mpp\MppOleWriter.java') (Join-Path $mppPkg 'MppOleWriter.java')
+  $mpxjCommon = Join-Path $app 'src\main\java\org\mpxj\common'
+  New-Item -ItemType Directory -Force -Path $mpxjCommon | Out-Null
+  Copy-Item -Force (Join-Path $androidSrc 'mpxj\UnmarshalHelper.java') (Join-Path $mpxjCommon 'UnmarshalHelper.java')
+
+  # MPXJ jar without UnmarshalHelper — app ships an Android/Xerces-compatible copy.
+  $libsDir = Join-Path $app 'libs'
+  New-Item -ItemType Directory -Force -Path $libsDir | Out-Null
+  $mpxjSrc = Get-ChildItem -Recurse (Join-Path $env:USERPROFILE '.gradle\caches\modules-2\files-2.1\net.sf.mpxj\mpxj\16.5.0') `
+    -Filter 'mpxj-16.5.0.jar' -ErrorAction SilentlyContinue |
+    Sort-Object Length -Descending | Select-Object -First 1 -ExpandProperty FullName
+  if (-not $mpxjSrc) {
+    throw 'mpxj-16.5.0.jar not in Gradle cache — run one Gradle sync/build that resolves net.sf.mpxj:mpxj:16.5.0 first'
+  }
+  $mpxjDst = Join-Path $libsDir 'mpxj-16.5.0-android.jar'
+  Copy-Item -Force $mpxjSrc $mpxjDst
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $zip = [System.IO.Compression.ZipFile]::Open($mpxjDst, 'Update')
+  $entry = $zip.GetEntry('org/mpxj/common/UnmarshalHelper.class')
+  if ($null -ne $entry) { $entry.Delete() }
+  $zip.Dispose()
+
   $awtPkg = Join-Path $app 'src\main\java\java\awt'
-  New-Item -ItemType Directory -Force -Path $awtPkg | Out-Null
+  $awtImgPkg = Join-Path $awtPkg 'image'
+  New-Item -ItemType Directory -Force -Path $awtPkg, $awtImgPkg | Out-Null
   Copy-Item -Force (Join-Path $androidSrc 'awt\Color.java') (Join-Path $awtPkg 'Color.java')
+  Copy-Item -Force (Join-Path $androidSrc 'awt\Image.java') (Join-Path $awtPkg 'Image.java')
+  Copy-Item -Force (Join-Path $androidSrc 'awt\Graphics.java') (Join-Path $awtPkg 'Graphics.java')
+  Copy-Item -Force (Join-Path $androidSrc 'awt\image\ImageObserver.java') (Join-Path $awtImgPkg 'ImageObserver.java')
+  Copy-Item -Force (Join-Path $androidSrc 'awt\image\ImageProducer.java') (Join-Path $awtImgPkg 'ImageProducer.java')
   Copy-Item -Force (Join-Path $androidSrc 'AndroidManifest.xml') (Join-Path $app 'src\main\AndroidManifest.xml')
   Copy-Item -Force (Join-Path $androidSrc 'proguard-rules.pro') (Join-Path $app 'proguard-rules.pro')
+  Copy-Item -Force (Join-Path $androidSrc 'gradle.properties') (Join-Path $root 'src-tauri\gen\android\gradle.properties')
 
   $blank = Join-Path $root 'src-tauri\resources\mpp\blank.mpp'
   if (-not (Test-Path $blank)) { $blank = Join-Path $root 'server\java\templates\blank.mpp' }
@@ -95,15 +143,31 @@ function Stage-AndroidSources {
   $gradleApp = Join-Path $app 'build.gradle.kts'
   $gradleText = Get-Content $gradleApp -Raw
 
-  if ($gradleText -notmatch 'net\.sf\.mpxj:mpxj') {
+  # Prefer stripped local MPXJ jar + explicit transitive deps (avoids duplicate UnmarshalHelper).
+  if ($gradleText -match 'implementation\("net\.sf\.mpxj:mpxj:') {
+    $gradleText = $gradleText -replace '(?m)^\s*implementation\("net\.sf\.mpxj:mpxj:[^"]+"\)\r?\n', ''
+  }
+  if ($gradleText -notmatch 'mpxj-16\.5\.0-android\.jar') {
     $deps = @'
-    implementation("net.sf.mpxj:mpxj:16.5.0")
+    implementation(files("libs/mpxj-16.5.0-android.jar"))
+    implementation("org.apache.poi:poi:5.5.1")
+    implementation("jakarta.xml.bind:jakarta.xml.bind-api:3.0.1")
+    implementation("org.glassfish.jaxb:jaxb-runtime:3.0.2")
+    implementation("com.github.joniles:rtfparserkit:1.16.0")
+    implementation("javax.xml.stream:stax-api:1.0-2")
     implementation("com.fasterxml:aalto-xml:1.3.3")
+    implementation("xerces:xercesImpl:2.12.2")
 '@
     $gradleText = $gradleText -replace '(dependencies\s*\{)', "`$1`r`n$deps"
   }
+  if ($gradleText -notmatch 'javax\.xml\.stream:stax-api') {
+    $gradleText = $gradleText -replace '(implementation\(files\("libs/mpxj-16\.5\.0-android\.jar"\)\))', "`$1`r`n    implementation(`"javax.xml.stream:stax-api:1.0-2`")"
+  }
 
-  # Drop failed androidawt coordinate if a previous build injected it
+  if ($gradleText -notmatch 'exclude\(group = "xml-apis"') {
+    $gradleText = $gradleText -replace '(dependencies\s*\{[^}]*\}\r?\n)', "`$1`r`nconfigurations.all {`r`n    exclude(group = `"xml-apis`", module = `"xml-apis`")`r`n}`r`n"
+  }
+
   $gradleText = $gradleText -replace '(?m)^\s*implementation\("ro\.andob\.androidawt:androidawt:[^"]+"\)\r?\n', ''
 
   if ($gradleText -match 'minSdk = 24') {
@@ -162,42 +226,80 @@ tasks.configureEach {
   }
 
   Set-Content -Path $gradleApp -Value $gradleText -NoNewline
-  Write-Host '== staged Android plugins, manifest, MPXJ deps, blank.mpp =='
+  Write-Host 'staged Android plugins, manifest, MPXJ deps, blank.mpp, gradle.properties'
 }
 
 Set-Location $root
-Write-Host '== web build =='
-cmd /c "npm run build"
-if ($LASTEXITCODE -ne 0) { throw 'web build failed' }
 
-Write-Host '== rust aarch64-linux-android =='
-Set-Location (Join-Path $root 'src-tauri')
-cmd /c "cargo build --package supergannt --target aarch64-linux-android --features tauri/custom-protocol --lib --release"
-if ($LASTEXITCODE -ne 0) { throw 'cargo failed' }
+$distIndex = Join-Path $root 'dist\index.html'
+$needWeb = -not $SkipWeb
+if ($SkipWeb -and -not (Test-Path $distIndex)) {
+  Write-Host 'dist/ missing — forcing web build'
+  $needWeb = $true
+}
+if ($needWeb) {
+  Write-Step 'web build'
+  cmd /c "npm run build"
+  if ($LASTEXITCODE -ne 0) { throw 'web build failed' }
+} else {
+  Write-Step 'web build SKIPPED'
+}
 
 $so = Join-Path $root 'src-tauri\target\aarch64-linux-android\release\libsupergannt_lib.so'
 $jni = Join-Path $root 'src-tauri\gen\android\app\src\main\jniLibs\arm64-v8a'
+$needRust = -not $SkipRust
+if ($SkipRust -and -not (Test-Path $so)) {
+  Write-Host 'native .so missing — forcing rust build'
+  $needRust = $true
+}
+if ($needRust) {
+  Write-Step 'rust aarch64-linux-android'
+  Set-Location (Join-Path $root 'src-tauri')
+  # Incremental release builds still help when only a few crates change.
+  $env:CARGO_INCREMENTAL = '1'
+  cmd /c "cargo build --package supergannt --target aarch64-linux-android --features tauri/custom-protocol --lib --release"
+  if ($LASTEXITCODE -ne 0) { throw 'cargo failed' }
+} else {
+  Write-Step 'rust build SKIPPED'
+}
+
 New-Item -ItemType Directory -Force -Path $jni | Out-Null
 Copy-Item -Force $so (Join-Path $jni 'libsupergannt_lib.so')
-Write-Host "== copied native lib ($((Get-Item $so).Length) bytes) =="
+Write-Host ("copied native lib ({0} bytes)" -f (Get-Item $so).Length)
 
+Write-Step 'stage Android sources'
 Stage-AndroidSources
 
-Write-Host '== gradle assembleRelease =='
+Write-Step 'gradle assembleArm64Release'
 Set-Location (Join-Path $root 'src-tauri\gen\android')
-cmd /c "gradlew.bat :app:assembleRelease --no-daemon"
+$gradleArgs = @(
+  ':app:assembleArm64Release',
+  '--parallel',
+  '--build-cache',
+  '-PabiList=arm64-v8a',
+  '-ParchList=arm64',
+  '-PtargetList=aarch64'
+)
+if ($Clean) { $gradleArgs = @(':app:clean') + $gradleArgs }
+# Daemon kept warm — much faster than --no-daemon on iterative builds.
+cmd /c ("gradlew.bat " + ($gradleArgs -join ' '))
 if ($LASTEXITCODE -ne 0) { throw 'gradle failed' }
 
 $outDir = Join-Path $root 'release-android'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-$apks = Get-ChildItem -Recurse -Filter '*.apk' (Join-Path $root 'src-tauri\gen\android\app\build\outputs\apk')
-$apks | ForEach-Object { Write-Host "APK: $($_.FullName) ($([math]::Round($_.Length / 1MB, 1)) MB)" }
-$best = $apks | Where-Object { $_.FullName -match 'arm64' } | Sort-Object Length -Descending | Select-Object -First 1
-if (-not $best) { $best = $apks | Where-Object { $_.FullName -match 'universal' } | Select-Object -First 1 }
-if (-not $best) { $best = $apks | Select-Object -First 1 }
-if (-not $best) { throw 'no APK produced' }
+$apkDir = Join-Path $root 'src-tauri\gen\android\app\build\outputs\apk\arm64\release'
+$best = Get-ChildItem -Filter '*.apk' $apkDir -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -notmatch 'unsigned' -or $true } |
+  Sort-Object Length -Descending |
+  Select-Object -First 1
+if (-not $best) {
+  $best = Get-ChildItem -Recurse -Filter '*arm64*.apk' (Join-Path $root 'src-tauri\gen\android\app\build\outputs\apk') |
+    Sort-Object Length -Descending | Select-Object -First 1
+}
+if (-not $best) { throw 'no arm64 APK produced' }
+Write-Host ("APK: {0} ({1} MB)" -f $best.FullName, [math]::Round($best.Length / 1MB, 1))
 
 $dest = Join-Path $outDir 'SuperGantt_1.0.2_arm64-v8a.apk'
-Write-Host '== sign APK =='
+Write-Step 'sign APK'
 Sign-Apk -InputApk $best.FullName -OutputApk $dest
-Write-Host "DONE → $dest ($([math]::Round((Get-Item $dest).Length / 1MB, 1)) MB, signed)"
+Write-Host ("DONE → {0} ({1} MB, signed) total {2:n1}s" -f $dest, [math]::Round((Get-Item $dest).Length / 1MB, 1), $sw.Elapsed.TotalSeconds)
