@@ -138,4 +138,74 @@ describe('MPP open/save round-trip (MS Project binary)', async () => {
     },
     180_000,
   )
+
+  it('preserves task order through MPP save with linked tasks', async () => {
+    if (!ready) return
+
+    // Build a project with 5 tasks linked FS chain, in known order
+    const ids = new SeqIds()
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <Name>Ordered linked tasks</Name>
+  <Title>Test</Title>
+  <StartDate>2026-01-01T08:00:00</StartDate>
+  <CalendarUID>1</CalendarUID>
+  <Calendars>
+    <Calendar>
+      <UID>1</UID>
+      <Name>Standard</Name>
+      <IsBaseCalendar>1</IsBaseCalendar>
+      <WeekDays>
+        <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+        <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>16:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>16:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>16:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>16:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>16:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+      </WeekDays>
+    </Calendar>
+  </Calendars>
+  <Tasks>
+    <Task><UID>0</UID><ID>0</ID><Name>Project</Name><OutlineLevel>0</OutlineLevel></Task>
+    <Task><UID>1</UID><ID>1</ID><Name>First task</Name><Start>2026-01-01T08:00:00</Start><Finish>2026-01-01T16:00:00</Finish><Duration>PT0D8H0M0S</Duration><OutlineLevel>1</OutlineLevel></Task>
+    <Task><UID>2</UID><ID>2</ID><Name>Second task</Name><Start>2026-01-02T08:00:00</Start><Finish>2026-01-02T16:00:00</Finish><Duration>PT0D8H0M0S</Duration><OutlineLevel>1</OutlineLevel><PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink></Task>
+    <Task><UID>3</UID><ID>3</ID><Name>Third task</Name><Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T16:00:00</Finish><Duration>PT0D8H0M0S</Duration><OutlineLevel>1</OutlineLevel><PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink></Task>
+    <Task><UID>4</UID><ID>4</ID><Name>Fourth task</Name><Start>2026-01-06T08:00:00</Start><Finish>2026-01-06T16:00:00</Finish><Duration>PT0D8H0M0S</Duration><OutlineLevel>1</OutlineLevel><PredecessorLink><PredecessorUID>3</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink></Task>
+    <Task><UID>5</UID><ID>5</ID><Name>Fifth task</Name><Start>2026-01-07T08:00:00</Start><Finish>2026-01-07T16:00:00</Finish><Duration>PT0D8H0M0S</Duration><OutlineLevel>1</OutlineLevel><PredecessorLink><PredecessorUID>4</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink></Task>
+  </Tasks>
+  <Resources>
+    <Resource><UID>0</UID><ID>0</ID><Name>Unassigned</Name><Type>1</Type></Resource>
+  </Resources>
+</Project>`
+
+    const original = refreshProject(await new MspdiCodec(ids).parse(xml, 'linked.xml'))
+    const originalOrder = original.tasks.map((t) => t.name)
+    expect(originalOrder).toEqual([
+      'First task',
+      'Second task',
+      'Third task',
+      'Fourth task',
+      'Fifth task',
+    ])
+
+    // Serialize MSPDI → write MPP → reopen → check order
+    const { content: mspdiXml } = await new MspdiCodec(ids).serialize(original)
+    const mppBytes = await convertXmlToMppBuffer(mspdiXml, 'linked.xml')
+    expect(mppBytes[0]).toBe(0xd0)
+
+    const reopenedXml = await convertMppBufferToXml(mppBytes, 'round-linked.mpp')
+    const reopened = refreshProject(
+      await new MspdiCodec(new SeqIds()).parse(reopenedXml, 'round-linked.mpp'),
+    )
+
+    const reopenedOrder = reopened.tasks.map((t) => t.name)
+    expect(reopenedOrder).toEqual([
+      'First task',
+      'Second task',
+      'Third task',
+      'Fourth task',
+      'Fifth task',
+    ])
+  }, 180_000)
 })

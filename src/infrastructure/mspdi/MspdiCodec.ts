@@ -188,7 +188,13 @@ export class MspdiCodec implements ProjectFileCodec {
     const taskUidToId = new Map<number, string>()
     const rawTasks = asArray(root.Tasks?.Task)
     // Preserve MS Project display order (ID), not MPXJ/UID order
-    rawTasks.sort((a, b) => (Number(a.ID) || 0) - (Number(b.ID) || 0))
+    rawTasks.sort((a, b) => {
+      const aId = Number(a.ID)
+      const bId = Number(b.ID)
+      const aNum = Number.isFinite(aId) ? aId : Number.MAX_SAFE_INTEGER
+      const bNum = Number.isFinite(bId) ? bId : Number.MAX_SAFE_INTEGER
+      return aNum - bNum
+    })
     const tasks = rawTasks
       .filter((t) => Number(t.UID) !== 0)
       .map((t) => {
