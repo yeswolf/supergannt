@@ -1,32 +1,44 @@
-import { useEffect, useState } from 'react'
+import {
+  useEffect,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react'
 import { formatPredecessors } from '../../application/services/PredecessorNotation'
 import { formatTaskResourceNames } from '../../application/use-cases/ResourceUseCases'
+import type { Project } from '../../domain/entities/Project'
+import type { Task } from '../../domain/entities/Task'
+import { useArrowRowNavigation } from '../hooks/useArrowRowNavigation'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
+import type { WorkspaceAction } from '../state/workspace'
+import {
+  TASK_SHEET_LABELS,
+  type TaskColumnId,
+} from '../taskColumns/taskColumnDefs'
+import { TaskColumnsDialog } from '../taskColumns/TaskColumnsDialog'
+import { useTaskColumns } from '../taskColumns/taskColumnStore'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
 import styles from './DataTable.module.css'
+import { IconAction } from './IconAction'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
 import { ViewHeader } from './ViewHeader'
-
-const HEADERS = [
-  'ID',
-  'WBS',
-  'Name',
-  'Duration (h)',
-  '%',
-  'Start',
-  'Finish',
-  'Cost',
-  'Resource Names',
-  'Predecessors',
-] as const
 
 export function TaskSheetView() {
   const { project, selectedTaskId, selectedTaskIds } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
+  const { columns } = useTaskColumns()
+  const [columnsOpen, setColumnsOpen] = useState(false)
   const [draftPreds, setDraftPreds] = useState<Record<string, string>>({})
   const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
-    project.tasks.length,
+    `${project.tasks.length}:${columns.join(',')}`,
   )
+
+  useArrowRowNavigation({
+    ids: project.tasks.map((t) => t.id),
+    selectedId: selectedTaskId,
+    onSelect: (taskId) => dispatch({ type: 'selectTask', taskId }),
+  })
 
   useEffect(() => {
     const next: Record<string, string> = {}
@@ -38,20 +50,30 @@ export function TaskSheetView() {
 
   return (
     <div className={styles.panel}>
-      <ViewHeader title="Task Sheet" />
+      <ViewHeader
+        title="Task Sheet"
+        trailing={
+          <IconAction
+            icon="columns"
+            label="Task columns"
+            title="Configure task columns"
+            onClick={() => setColumnsOpen(true)}
+          />
+        }
+      />
       <div className={styles.tableWrap}>
         <table ref={tableRef} className={styles.table}>
           {colgroup}
           <thead>
             <tr>
-              {HEADERS.map((label, i) => (
+              {columns.map((id, i) => (
                 <ColumnHeader
-                  key={label}
+                  key={id}
                   index={i}
                   onResizeStart={onResizeStart}
                   onResizeAuto={onResizeAuto}
                 >
-                  {label}
+                  {TASK_SHEET_LABELS[id]}
                 </ColumnHeader>
               ))}
             </tr>
@@ -62,6 +84,7 @@ export function TaskSheetView() {
               return (
                 <tr
                   key={task.id}
+                  data-row-id={task.id}
                   tabIndex={0}
                   className={
                     multiSelected || selectedTaskId === task.id
@@ -87,148 +110,189 @@ export function TaskSheetView() {
                     dispatch({ type: 'openTaskInfo', taskId: task.id })
                   }
                 >
-                  <td>{index + 1}</td>
-                  <td>{task.wbs}</td>
-                  <td>
-                    <input
-                      style={{ paddingLeft: `calc(${task.outlineLevel} * var(--msp-indent))` }}
-                      value={task.name}
-                      aria-label={`Task ${task.wbs} name`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'updateTask',
-                          taskId: task.id,
-                          patch: { name: e.target.value },
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={task.duration.toHours()}
-                      disabled={task.summary}
-                      aria-label={`Task ${task.wbs} duration hours`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'updateTask',
-                          taskId: task.id,
-                          patch: { durationHours: Number(e.target.value) },
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={task.percentComplete}
-                      disabled={task.summary}
-                      aria-label={`Task ${task.wbs} percent complete`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'updateTask',
-                          taskId: task.id,
-                          patch: { percentComplete: Number(e.target.value) },
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="date"
-                      value={toDateInputValue(task.start)}
-                      disabled={task.summary}
-                      aria-label={`Task ${task.wbs} start date`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        if (!e.target.value) return
-                        dispatch({
-                          type: 'updateTask',
-                          taskId: task.id,
-                          patch: { start: fromDateInputValue(e.target.value) },
-                        })
-                      }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="date"
-                      value={toDateInputValue(task.finish)}
-                      disabled={task.summary}
-                      aria-label={`Task ${task.wbs} finish date`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        if (!e.target.value) return
-                        dispatch({
-                          type: 'updateTask',
-                          taskId: task.id,
-                          patch: { finish: fromDateInputValue(e.target.value) },
-                        })
-                      }}
-                    />
-                  </td>
-                  <td>{task.cost.format()}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className={styles.resourceCell}
-                      disabled={task.summary}
-                      title="Click to assign resources"
-                      aria-label={`Task ${task.wbs} resources`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        dispatch({
-                          type: 'openAssignDialog',
-                          taskId: task.id,
-                        })
-                      }}
-                    >
-                      {formatTaskResourceNames(project, task.id)}
-                    </button>
-                  </td>
-                  <td>
-                    <input
-                      value={draftPreds[task.id] ?? ''}
-                      disabled={task.summary}
-                      placeholder="e.g. 2FS+8h"
-                      aria-label={`Task ${task.wbs} predecessors`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        setDraftPreds((prev) => ({
-                          ...prev,
-                          [task.id]: e.target.value,
-                        }))
-                      }
-                      onBlur={() => {
-                        const notation = draftPreds[task.id] ?? ''
-                        const current = formatPredecessors(project, task.id)
-                        if (notation.trim() === current.trim()) return
-                        dispatch({
-                          type: 'setPredecessors',
-                          taskId: task.id,
-                          notation,
-                        })
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          ;(e.target as HTMLInputElement).blur()
-                        }
-                      }}
-                    />
-                  </td>
+                  {columns.map((col) => (
+                    <td key={col}>
+                      {renderTaskSheetCell({
+                        col,
+                        task,
+                        index,
+                        project,
+                        draftPreds,
+                        setDraftPreds,
+                        dispatch,
+                      })}
+                    </td>
+                  ))}
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
+      <TaskColumnsDialog open={columnsOpen} onClose={() => setColumnsOpen(false)} />
     </div>
   )
+}
+
+function renderTaskSheetCell(opts: {
+  col: TaskColumnId
+  task: Task
+  index: number
+  project: Project
+  draftPreds: Record<string, string>
+  setDraftPreds: Dispatch<SetStateAction<Record<string, string>>>
+  dispatch: Dispatch<WorkspaceAction>
+}): ReactNode {
+  const { col, task, index, project, draftPreds, setDraftPreds, dispatch } = opts
+
+  switch (col) {
+    case 'id':
+      return index + 1
+    case 'wbs':
+      return task.wbs
+    case 'name':
+      return (
+        <input
+          style={{ paddingLeft: `calc(${task.outlineLevel} * var(--msp-indent))` }}
+          value={task.name}
+          aria-label={`Task ${task.wbs} name`}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) =>
+            dispatch({
+              type: 'updateTask',
+              taskId: task.id,
+              patch: { name: e.target.value },
+            })
+          }
+        />
+      )
+    case 'duration':
+      return (
+        <input
+          type="number"
+          min={0}
+          step={0.5}
+          value={task.duration.toHours()}
+          disabled={task.summary}
+          aria-label={`Task ${task.wbs} duration hours`}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) =>
+            dispatch({
+              type: 'updateTask',
+              taskId: task.id,
+              patch: { durationHours: Number(e.target.value) },
+            })
+          }
+        />
+      )
+    case 'percent':
+      return (
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={task.percentComplete}
+          disabled={task.summary}
+          aria-label={`Task ${task.wbs} percent complete`}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) =>
+            dispatch({
+              type: 'updateTask',
+              taskId: task.id,
+              patch: { percentComplete: Number(e.target.value) },
+            })
+          }
+        />
+      )
+    case 'start':
+      return (
+        <input
+          type="date"
+          value={toDateInputValue(task.start)}
+          disabled={task.summary}
+          aria-label={`Task ${task.wbs} start date`}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            if (!e.target.value) return
+            dispatch({
+              type: 'updateTask',
+              taskId: task.id,
+              patch: { start: fromDateInputValue(e.target.value) },
+            })
+          }}
+        />
+      )
+    case 'finish':
+      return (
+        <input
+          type="date"
+          value={toDateInputValue(task.finish)}
+          disabled={task.summary}
+          aria-label={`Task ${task.wbs} finish date`}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            if (!e.target.value) return
+            dispatch({
+              type: 'updateTask',
+              taskId: task.id,
+              patch: { finish: fromDateInputValue(e.target.value) },
+            })
+          }}
+        />
+      )
+    case 'cost':
+      return task.cost.format()
+    case 'resources':
+      return (
+        <button
+          type="button"
+          className={styles.resourceCell}
+          disabled={task.summary}
+          title="Click to assign resources"
+          aria-label={`Task ${task.wbs} resources`}
+          onClick={(e) => {
+            e.stopPropagation()
+            dispatch({
+              type: 'openAssignDialog',
+              taskId: task.id,
+            })
+          }}
+        >
+          {formatTaskResourceNames(project, task.id)}
+        </button>
+      )
+    case 'predecessors':
+      return (
+        <input
+          value={draftPreds[task.id] ?? ''}
+          disabled={task.summary}
+          placeholder="e.g. 2FS+8h"
+          aria-label={`Task ${task.wbs} predecessors`}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) =>
+            setDraftPreds((prev) => ({
+              ...prev,
+              [task.id]: e.target.value,
+            }))
+          }
+          onBlur={() => {
+            const notation = draftPreds[task.id] ?? ''
+            const current = formatPredecessors(project, task.id)
+            if (notation.trim() === current.trim()) return
+            dispatch({
+              type: 'setPredecessors',
+              taskId: task.id,
+              notation,
+            })
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              ;(e.target as HTMLInputElement).blur()
+            }
+          }}
+        />
+      )
+    default:
+      return null
+  }
 }

@@ -35,10 +35,11 @@ On macOS, **Ctrl** means **⌘ Command** unless noted.
 
 ---
 
-## Gantt zoom
+## Gantt
 
 | Shortcut | Action |
 |:---------|:-------|
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Select previous / next visible row (Gantt, sheets, WBS/RBS, Network, usage) |
 | <kbd>Ctrl</kbd>+<kbd>=</kbd> / <kbd>Ctrl</kbd>+<kbd>+</kbd> | Zoom in |
 | <kbd>Ctrl</kbd>+<kbd>-</kbd> | Zoom out |
 | <kbd>Ctrl</kbd>+scroll wheel | Zoom in / out (over the chart) |
@@ -62,6 +63,7 @@ On macOS, **Ctrl** means **⌘ Command** unless noted.
 - Select a task first for Task Info, Assign, Indent/Outdent, Link/Unlink, and Delete.
 - Multi-select with <kbd>Ctrl</kbd>/<kbd>⌘</kbd> or <kbd>Shift</kbd>+click (Gantt grid / bars / timeline row).
 - Clicking the **empty part of a Gantt row** (outside the bar) also selects that task.
+- On Gantt / Task Sheet / Resources / Usage / WBS / RBS / Network, <kbd>↑</kbd>/<kbd>↓</kbd> walk visible rows (not while typing in a field).
 - Toolbar buttons show the same chords in their tooltips when available.
 
 ---

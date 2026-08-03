@@ -14,8 +14,14 @@ import {
   GANTT_ZOOM_LEVELS,
 } from '../../infrastructure/gantt/GanttZoomLevels'
 import { installGanttColumnResize } from '../../infrastructure/gantt/ganttColumnResize'
+import { adjacentVisibleTaskId } from '../../infrastructure/gantt/ganttArrowNav'
 import { taskIdFromTimelineEmptyClick } from '../../infrastructure/gantt/timelineRowSelect'
+import { isEditableKeyboardTarget } from '../projectShortcuts'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
+import { buildGanttTaskColumns } from '../taskColumns/buildGanttTaskColumns'
+import { TaskColumnsDialog } from '../taskColumns/TaskColumnsDialog'
+import { useTaskColumns } from '../taskColumns/taskColumnStore'
+import type { TaskColumnId } from '../taskColumns/taskColumnDefs'
 import { IconAction, IconActionGroup } from './IconAction'
 import { ViewHeader, ViewHeaderSep } from './ViewHeader'
 import styles from './GanttView.module.css'
@@ -40,6 +46,12 @@ type GanttApi = typeof gantt & {
   scrollTo?: (x: number | null, y: number | null) => void
   getTaskType?: (typeOrTask: unknown) => string
   deleteLink?: (id: string) => void
+  ext?: {
+    inlineEditors?: {
+      attachEvent?: (name: string, fn: (...args: unknown[]) => unknown) => string
+      detachEvent?: (id: string) => void
+    }
+  }
   config: typeof gantt.config & {
     types: { task: string; project: string; milestone: string }
     show_grid?: boolean
@@ -73,9 +85,10 @@ function applyGridLayout(opts: {
   narrow: boolean
   android: boolean
   showGrid: boolean
+  taskColumns: readonly TaskColumnId[]
 }): void {
   const api = gantt as GanttApi
-  const { narrow, android, showGrid } = opts
+  const { narrow, android, showGrid, taskColumns } = opts
   // Task tree stays visible on desktop/web; only Android can hide it for chart space.
   const gridOn = android ? showGrid : true
 
@@ -92,58 +105,17 @@ function applyGridLayout(opts: {
 
   if (narrow || android) {
     // Compact name-only tree so the chart still has room when the list is open.
-    api.config.columns = [
-      {
-        name: 'text',
-        label: 'Task name',
-        tree: true,
-        width: 200,
-        min_width: 120,
-        resize: true,
-      },
-    ]
-    api.config.grid_width = 210
+    const { columns, gridWidth } = buildGanttTaskColumns(['name'])
+    api.config.columns = columns
+    api.config.grid_width = Math.max(gridWidth, 210)
     return
   }
 
-  api.config.columns = [
-    { name: 'wbs', label: 'WBS', width: 72, min_width: 48, resize: true },
-    {
-      name: 'text',
-      label: 'Task name',
-      tree: true,
-      width: 240,
-      min_width: 120,
-      resize: true,
-    },
-    {
-      name: 'resources',
-      label: 'Resources',
-      width: 160,
-      min_width: 80,
-      resize: true,
-      template: (task: { resources?: string }) => task.resources?.trim() ?? '',
-    },
-    {
-      name: 'start_date',
-      label: 'Start',
-      align: 'center',
-      width: 110,
-      min_width: 90,
-      resize: true,
-    },
-    {
-      name: 'duration',
-      label: 'Hours',
-      align: 'center',
-      width: 64,
-      min_width: 48,
-      resize: true,
-    },
-  ]
+  const { columns, gridWidth } = buildGanttTaskColumns(taskColumns)
+  api.config.columns = columns
   // Explicit width — after scale render() dhtmlx can collapse the grid to 0
   // when grid_width is unset and keep_grid_width is false.
-  api.config.grid_width = 646
+  api.config.grid_width = gridWidth
 }
 
 /**
@@ -231,6 +203,8 @@ function useNarrowViewport(): boolean {
 export function GanttView() {
   const { project, selectedTaskId, services } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
+  const { columns: taskColumns } = useTaskColumns()
+  const [columnsOpen, setColumnsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const readyRef = useRef(false)
   /** Ignore dhtmlx link/task events while we clearAll+parse from React state. */
@@ -255,6 +229,10 @@ export function GanttView() {
   narrowRef.current = narrow
   const androidRef = useRef(android)
   androidRef.current = android
+  const selectedTaskIdRef = useRef(selectedTaskId)
+  selectedTaskIdRef.current = selectedTaskId
+  const taskColumnsRef = useRef(taskColumns)
+  taskColumnsRef.current = taskColumns
 
   const applyProjectToGantt = useCallback(
     (nextProject: typeof project, selectedId: string | null) => {
@@ -269,6 +247,7 @@ export function GanttView() {
           narrow: narrowRef.current,
           android: androidRef.current,
           showGrid: showTaskGridRef.current,
+          taskColumns: taskColumnsRef.current,
         })
         const api = gantt as GanttApi
         api.render?.()
@@ -302,6 +281,7 @@ export function GanttView() {
       narrow: narrowRef.current,
       android: androidRef.current,
       showGrid: showTaskGridRef.current,
+      taskColumns: taskColumnsRef.current,
     })
     const api = gantt as GanttApi
     api.render?.()
@@ -318,6 +298,7 @@ export function GanttView() {
       narrow: narrowRef.current,
       android: androidRef.current,
       showGrid: showTaskGridRef.current,
+      taskColumns: taskColumnsRef.current,
     })
     const api = gantt as GanttApi
     api.render?.()
@@ -326,7 +307,7 @@ export function GanttView() {
 
   useEffect(() => {
     refreshLayout()
-  }, [narrow, showTaskGrid, refreshLayout])
+  }, [narrow, showTaskGrid, taskColumns, refreshLayout])
 
   useEffect(() => {
     const root = containerRef.current
@@ -375,6 +356,7 @@ export function GanttView() {
       narrow: narrowRef.current,
       android: androidRef.current,
       showGrid: showTaskGridRef.current,
+      taskColumns: taskColumnsRef.current,
     })
 
     // GPL/CE stubs getTaskType() → always "task", which hides milestone diamonds.
@@ -560,14 +542,101 @@ export function GanttView() {
       return true
     })
 
+    // Inline Predecessors cell → ProjectLibre notation via our scheduler.
+    const inlineEditors = api.ext?.inlineEditors
+    const onBeforeEdit = inlineEditors?.attachEvent?.(
+      'onBeforeEditStart',
+      (state: { id?: string; columnName?: string }) => {
+        if (state.columnName !== 'predecessors') return true
+        const task = gantt.getTask(String(state.id))
+        if (!task || task.type === 'project') return false
+        return true
+      },
+    )
+    const onPredSave = inlineEditors?.attachEvent?.(
+      'onSave',
+      (state: { id?: string; columnName?: string }) => {
+        if (syncingFromProjectRef.current) return true
+        if (state.columnName !== 'predecessors') return true
+        const task = gantt.getTask(String(state.id)) as {
+          predecessors?: string
+          type?: string
+        }
+        if (!task || task.type === 'project') return true
+        const notation = String(task.predecessors ?? '')
+        try {
+          const next = DependencyUseCases.setPredecessorsFromNotation(
+            projectRef.current,
+            idsRef.current,
+            String(state.id),
+            notation,
+          )
+          projectRef.current = next
+          applyProjectToGanttRef.current(next, selectedTaskIdRef.current)
+          dispatch({
+            type: 'setProject',
+            project: next,
+            message: 'Predecessors updated.',
+          })
+        } catch (error) {
+          applyProjectToGanttRef.current(
+            projectRef.current,
+            selectedTaskIdRef.current,
+          )
+          dispatch({
+            type: 'setStatus',
+            message:
+              error instanceof Error ? error.message : 'Invalid predecessors.',
+          })
+        }
+        return true
+      },
+    )
+
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return
-      if (e.key === '=' || e.key === '+') {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+') {
+          e.preventDefault()
+          zoomIn()
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault()
+          zoomOut()
+        }
+        return
+      }
+
+      // Plain ↑/↓: move selection through visible Gantt rows (ProjectLibre-style).
+      if (
+        (e.key === 'ArrowDown' || e.key === 'ArrowUp') &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !isEditableKeyboardTarget(e.target)
+      ) {
         e.preventDefault()
-        zoomIn()
-      } else if (e.key === '-' || e.key === '_') {
-        e.preventDefault()
-        zoomOut()
+        const api = gantt as GanttApi & {
+          getVisibleTaskCount?: () => number
+          getTaskByIndex?: (index: number) => { id?: string | number } | null
+          showTask?: (id: string) => void
+        }
+        const count = api.getVisibleTaskCount?.() ?? 0
+        const nextId = adjacentVisibleTaskId({
+          currentId: selectedTaskIdRef.current,
+          direction: e.key === 'ArrowDown' ? 1 : -1,
+          visibleCount: count,
+          taskIdAt: (index) => {
+            const task = api.getTaskByIndex?.(index)
+            return task?.id != null ? String(task.id) : null
+          },
+        })
+        if (!nextId || !gantt.isTaskExists(nextId)) return
+        selectModifiersRef.current = { additive: false, fromClick: true }
+        dispatch({ type: 'selectTask', taskId: nextId, additive: false })
+        try {
+          gantt.selectTask(nextId)
+          api.showTask?.(nextId)
+        } catch {
+          /* ignore */
+        }
       }
     }
     const onWheel = (e: WheelEvent) => {
@@ -599,6 +668,8 @@ export function GanttView() {
       gantt.detachEvent(onLinkCreated)
       gantt.detachEvent(onLink)
       gantt.detachEvent(onLinkDelete)
+      if (onBeforeEdit) inlineEditors?.detachEvent?.(onBeforeEdit)
+      if (onPredSave) inlineEditors?.detachEvent?.(onPredSave)
       syncingFromProjectRef.current = true
       try {
         gantt.clearAll()
@@ -608,9 +679,6 @@ export function GanttView() {
       readyRef.current = false
     }
   }, [dispatch, zoomIn, zoomOut])
-
-  const selectedTaskIdRef = useRef(selectedTaskId)
-  selectedTaskIdRef.current = selectedTaskId
 
   // Data / filter changes: full reload. Selection-only updates use the effect below.
   useEffect(() => {
@@ -689,6 +757,12 @@ export function GanttView() {
                 />
               ))}
             </IconActionGroup>
+            <IconAction
+              icon="columns"
+              label="Task columns"
+              title="Configure task columns"
+              onClick={() => setColumnsOpen(true)}
+            />
             <ViewHeaderSep />
           </>
         }
@@ -699,6 +773,7 @@ export function GanttView() {
         role="region"
         aria-label="Gantt chart"
       />
+      <TaskColumnsDialog open={columnsOpen} onClose={() => setColumnsOpen(false)} />
     </div>
   )
 }

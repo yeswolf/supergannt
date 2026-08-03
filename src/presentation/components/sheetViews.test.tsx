@@ -5,6 +5,7 @@ import { ResourceView } from './ResourceView'
 import { TaskSheetView } from './TaskSheetView'
 import { NetworkView } from './NetworkView'
 import { AppChrome } from './AppChrome'
+import { reloadTaskColumnsFromStorage } from '../taskColumns/taskColumnStore'
 
 vi.mock('dhtmlx-gantt', () => ({
   default: {
@@ -53,6 +54,11 @@ describe('ResourceView', () => {
 })
 
 describe('TaskSheetView', () => {
+  beforeEach(() => {
+    localStorage.removeItem('supergantt.taskColumns')
+    reloadTaskColumnsFromStorage()
+  })
+
   it('edits task fields and opens assign / info flows', () => {
     renderWithWorkspace(<TaskSheetView />, { bootstrap: [{ type: 'loadDemo' }] })
     expect(screen.getByRole('heading', { name: 'Task Sheet' })).toBeInTheDocument()
@@ -76,6 +82,14 @@ describe('TaskSheetView', () => {
       /resources$/i.test(b.getAttribute('aria-label') ?? ''),
     )
     if (resourceBtn) fireEvent.click(resourceBtn)
+  })
+
+  it('opens task columns dialog', () => {
+    renderWithWorkspace(<TaskSheetView />, { bootstrap: [{ type: 'loadDemo' }] })
+    fireEvent.click(screen.getByRole('button', { name: 'Task columns' }))
+    expect(screen.getByRole('dialog', { name: 'Task columns' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show Cost' }))
+    expect(screen.queryByRole('columnheader', { name: 'Cost' })).not.toBeInTheDocument()
   })
 
   it('deletes the selected task row on Delete key', () => {

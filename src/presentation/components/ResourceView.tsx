@@ -1,5 +1,6 @@
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { toResourceSheet } from '../../application/services/ReportingService'
+import { useArrowRowNavigation } from '../hooks/useArrowRowNavigation'
 import { IconAction } from './IconAction'
 import styles from './DataTable.module.css'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
@@ -25,6 +26,12 @@ export function ResourceView() {
   const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
     project.resources.length,
   )
+
+  useArrowRowNavigation({
+    ids: project.resources.map((r) => r.id),
+    selectedId: selectedResourceId,
+    onSelect: (resourceId) => dispatch({ type: 'selectResource', resourceId }),
+  })
 
   return (
     <div className={styles.panel}>
@@ -53,6 +60,8 @@ export function ResourceView() {
               return (
                 <tr
                   key={resource.id}
+                  data-row-id={resource.id}
+                  tabIndex={0}
                   className={[
                     selectedResourceId === resource.id ? styles.selected : '',
                     util?.overallocated ? styles.danger : '',

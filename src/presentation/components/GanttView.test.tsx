@@ -22,6 +22,15 @@ const { ganttMock, handlers, tasks, links } = vi.hoisted(() => {
       link_attribute: 'data-link-id',
     },
     templates: {} as Record<string, unknown>,
+    ext: {
+      inlineEditors: {
+        attachEvent: vi.fn((name: string, fn: Handler) => {
+          handlers.set(`inline:${name}`, fn)
+          return `inline:${name}`
+        }),
+        detachEvent: vi.fn(),
+      },
+    },
     init: vi.fn(),
     clearAll: vi.fn(() => {
       // Mirror dhtmlx: clearing fires delete for every link currently loaded.
@@ -65,6 +74,12 @@ const { ganttMock, handlers, tasks, links } = vi.hoisted(() => {
     getSelectedId: vi.fn(() => null as string | null),
     unselectTask: vi.fn(),
     selectTask: vi.fn(),
+    showTask: vi.fn(),
+    getVisibleTaskCount: vi.fn(() => tasks.size),
+    getTaskByIndex: vi.fn((index: number) => {
+      const id = [...tasks.keys()][index]
+      return id ? { id } : null
+    }),
     deleteLink: vi.fn((id: string) => {
       links.delete(String(id))
       handlers.get('onAfterLinkDelete')?.(String(id))
@@ -283,6 +298,44 @@ describe('GanttView', () => {
       expect(screen.getByRole('button', { name: 'Delete task' })).toBeInTheDocument()
     })
     expect(ganttMock.selectTask).toHaveBeenCalledWith(taskId)
+  })
+
+  it('ArrowDown / ArrowUp move Gantt selection between visible tasks', async () => {
+    renderWithWorkspace(<GanttView />, {
+      bootstrap: [
+        { type: 'newProject' },
+        { type: 'addTask' },
+        { type: 'addTask' },
+        { type: 'addTask' },
+      ],
+    })
+
+    await waitFor(() => expect(tasks.size).toBeGreaterThanOrEqual(3))
+    const ids = [...tasks.keys()]
+    const [first, second] = ids
+
+    await act(async () => {
+      handlers.get('onTaskClick')?.(first!, {
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+      })
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+      )
+      await Promise.resolve()
+    })
+
+    expect(ganttMock.selectTask).toHaveBeenCalledWith(second)
+    expect(ganttMock.showTask).toHaveBeenCalledWith(second)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Delete task' })).toBeInTheDocument()
+    })
   })
 
   it('mouse FS link keeps dependency and shifts successor start after clearAll/parse sync', async () => {

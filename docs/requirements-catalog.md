@@ -108,6 +108,7 @@ See: `requirements/03-scheduling.md`, ADR-004, ADR-006.
 | D21 | MUST | Critical+selected: red bar stays visible | Critical selection blend |
 | D22 | MUST | ProjectLibre-style shortcuts; `keyboard-shortcuts.md` + README link | Shortcuts doc |
 | D23 | MUST | Click empty timeline row cell selects the task | Empty-row select |
+| D24 | MUST | Configurable task column set/order (Gantt + Task Sheet); editable Predecessors on Gantt | Task columns |
 
 See: `requirements/04-ui-ux.md`, `keyboard-shortcuts.md`.
 

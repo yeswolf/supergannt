@@ -3,7 +3,8 @@ import {
   buildResourceUsage,
   buildTaskUsage,
 } from '../../application/services/ViewModels'
-import { useWorkspaceState } from '../state/WorkspaceContext'
+import { useArrowRowNavigation } from '../hooks/useArrowRowNavigation'
+import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './DataTable.module.css'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
 import { ViewHeader } from './ViewHeader'
@@ -14,13 +15,32 @@ function uniqueDates(rows: { cells: { date: string }[] }[]): string[] {
   return [...set].sort()
 }
 
+function uniqueInOrder(ids: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const id of ids) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out
+}
+
 export function TaskUsageView() {
-  const { project } = useWorkspaceState()
+  const { project, selectedTaskId } = useWorkspaceState()
+  const dispatch = useWorkspaceDispatch()
   const rows = buildTaskUsage(project)
   const dates = uniqueDates(rows)
+  const taskIds = uniqueInOrder(rows.map((r) => r.taskId))
   const remeasureKey = `${rows.length}:${dates.length}`
   const { tableRef, colgroup, onResizeStart, onResizeAuto } =
     useResizableColumns(remeasureKey)
+
+  useArrowRowNavigation({
+    ids: taskIds,
+    selectedId: selectedTaskId,
+    onSelect: (taskId) => dispatch({ type: 'selectTask', taskId }),
+  })
 
   const headers = ['WBS', 'Task', 'Resource', 'Total (h)', ...dates.map((d) => d.slice(5))]
 
@@ -46,7 +66,17 @@ export function TaskUsageView() {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={`${row.taskId}-${row.resourceId ?? 'none'}`}>
+              <tr
+                key={`${row.taskId}-${row.resourceId ?? 'none'}`}
+                data-row-id={row.taskId}
+                tabIndex={0}
+                className={
+                  selectedTaskId === row.taskId ? styles.selected : undefined
+                }
+                onClick={() =>
+                  dispatch({ type: 'selectTask', taskId: row.taskId })
+                }
+              >
                 <td>{row.wbs}</td>
                 <td>{row.taskName}</td>
                 <td>{row.resourceName}</td>
@@ -67,13 +97,21 @@ export function TaskUsageView() {
 const HISTOGRAM_HEIGHT_PX = 120
 
 export function ResourceUsageView() {
-  const { project } = useWorkspaceState()
+  const { project, selectedResourceId } = useWorkspaceState()
+  const dispatch = useWorkspaceDispatch()
   const rows = buildResourceUsage(project)
   const histogram = buildResourceHistogram(project)
   const dates = uniqueDates(rows)
+  const resourceIds = uniqueInOrder(rows.map((r) => r.resourceId))
   const remeasureKey = `${rows.length}:${dates.length}`
   const { tableRef, colgroup, onResizeStart, onResizeAuto } =
     useResizableColumns(remeasureKey)
+
+  useArrowRowNavigation({
+    ids: resourceIds,
+    selectedId: selectedResourceId,
+    onSelect: (resourceId) => dispatch({ type: 'selectResource', resourceId }),
+  })
   // Peak of load vs capacity in view; use px heights (%, against min-height, never resolved).
   const maxScale = Math.max(
     1,
@@ -106,7 +144,17 @@ export function ResourceUsageView() {
             {rows.map((row, i) => (
               <tr
                 key={`${row.resourceId}-${row.taskId ?? i}`}
-                className={row.overallocated ? styles.danger : undefined}
+                data-row-id={row.resourceId}
+                tabIndex={0}
+                className={[
+                  selectedResourceId === row.resourceId ? styles.selected : '',
+                  row.overallocated ? styles.danger : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() =>
+                  dispatch({ type: 'selectResource', resourceId: row.resourceId })
+                }
               >
                 <td>{row.resourceName}</td>
                 <td>{row.taskName}</td>

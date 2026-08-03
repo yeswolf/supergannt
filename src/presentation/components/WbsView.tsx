@@ -2,9 +2,20 @@ import {
   buildWbsTree,
   type WbsNode,
 } from '../../application/services/ViewModels'
+import { useArrowRowNavigation } from '../hooks/useArrowRowNavigation'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './TreeViews.module.css'
 import { ViewHeader } from './ViewHeader'
+
+function flattenWbsIds(nodes: readonly WbsNode[]): string[] {
+  const out: string[] = []
+  const walk = (node: WbsNode) => {
+    out.push(node.id)
+    for (const child of node.children) walk(child)
+  }
+  for (const node of nodes) walk(node)
+  return out
+}
 
 function Node({ node, depth }: { node: WbsNode; depth: number }) {
   const dispatch = useWorkspaceDispatch()
@@ -13,6 +24,7 @@ function Node({ node, depth }: { node: WbsNode; depth: number }) {
     <li>
       <button
         type="button"
+        data-row-id={node.id}
         className={[
           styles.node,
           node.critical ? styles.critical : '',
@@ -42,8 +54,17 @@ function Node({ node, depth }: { node: WbsNode; depth: number }) {
 }
 
 export function WbsView() {
-  const { project } = useWorkspaceState()
+  const { project, selectedTaskId } = useWorkspaceState()
+  const dispatch = useWorkspaceDispatch()
   const tree = buildWbsTree(project)
+  const ids = flattenWbsIds(tree)
+
+  useArrowRowNavigation({
+    ids,
+    selectedId: selectedTaskId,
+    onSelect: (taskId) => dispatch({ type: 'selectTask', taskId }),
+  })
+
   return (
     <div className={styles.panel}>
       <ViewHeader title="WBS" />

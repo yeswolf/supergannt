@@ -1,4 +1,5 @@
 import { buildRbsTree } from '../../application/services/ViewModels'
+import { useArrowRowNavigation } from '../hooks/useArrowRowNavigation'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './TreeViews.module.css'
 import { ViewHeader } from './ViewHeader'
@@ -7,6 +8,13 @@ export function RbsView() {
   const { project, selectedResourceId } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const tree = buildRbsTree(project)
+  const resourceIds = tree.flatMap((group) => group.children.map((r) => r.id))
+
+  useArrowRowNavigation({
+    ids: resourceIds,
+    selectedId: selectedResourceId,
+    onSelect: (resourceId) => dispatch({ type: 'selectResource', resourceId }),
+  })
 
   return (
     <div className={styles.panel}>
@@ -25,6 +33,7 @@ export function RbsView() {
                 <li key={resource.id}>
                   <button
                     type="button"
+                    data-row-id={resource.id}
                     className={[
                       styles.node,
                       selectedResourceId === resource.id ? styles.selected : '',

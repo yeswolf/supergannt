@@ -35,6 +35,7 @@ Predecessors MUST be editable like ProjectLibre:
 
 - Task Information → Predecessors tab (type + lag hours + predecessor picker).
 - Task Sheet predecessors column with notation such as `2FS+8h`, `1SS`, comma-separated lists.
+- Gantt task-tree **Predecessors** column (when enabled in column prefs) edits the same notation via inline text.
 - Gantt link drawing maps to the same link types.
 - Toolbar **Link** on multi-selection chains FS in selection order; **Unlink** clears predecessors for selection.
 

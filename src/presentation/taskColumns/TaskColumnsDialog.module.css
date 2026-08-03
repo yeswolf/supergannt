@@ -1,0 +1,135 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.dialog {
+  width: min(420px, 100%);
+  max-height: min(90vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: var(--msp-surface);
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--msp-titlebar);
+  color: var(--msp-titlebar-text);
+  border-bottom: 1px solid var(--msp-titlebar-border);
+}
+
+.header h2 {
+  margin: 0;
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-xl);
+  font-weight: 400;
+}
+
+.close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: var(--msp-text-xl);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.close:hover {
+  opacity: 1;
+}
+
+.hint {
+  margin: 0;
+  padding: 0.65rem 0.9rem 0.35rem;
+  font-size: var(--msp-text-sm);
+  color: var(--msp-muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0.65rem 0.65rem;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: var(--msp-touch-min);
+  padding: 0.15rem 0.25rem;
+  border-bottom: 1px solid var(--msp-border);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.check span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.movers {
+  display: flex;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+
+.movers button {
+  appearance: none;
+  border: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+  color: var(--msp-text);
+  min-width: var(--msp-touch-min);
+  min-height: var(--msp-touch-min);
+  cursor: pointer;
+  border-radius: var(--msp-radius-sm, 2px);
+}
+
+.movers button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  border-top: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+}
+
+.reset {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--msp-accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0.35rem 0.25rem;
+}

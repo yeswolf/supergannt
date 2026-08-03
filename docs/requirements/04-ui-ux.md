@@ -109,6 +109,8 @@ Tabs: **General**, **Predecessors**, **Resources**, **Advanced**.
 - Grid / tree cells have readable left padding; bar labels have horizontal inset.
 - Theme remaps dhtmlx CSS variables (`--dhx-gantt-*` → `--msp-*`) so borders, text, summary bars, and row backgrounds follow the active theme.
 - CE build: column resize via custom drag on header edges (`ganttColumnResize`) — PRO `columns[].resize` is unavailable.
+- **Configurable task columns** (shared with Task Sheet): set + order persisted in `localStorage` (`Task columns` dialog). Desktop grid uses the configured set; narrow/Android keeps a compact name-only tree.
+- **Editable Predecessors** column (ProjectLibre notation e.g. `2FS+8h`) via inline text editor → `setPredecessorsFromNotation`.
 - Milestone diamond marks (GPL `getTaskType` stub patched).
 - Task name / dbl-click → Task Information.
 - Assign affordance without empty `--Assign` label.
@@ -118,6 +120,7 @@ Tabs: **General**, **Predecessors**, **Resources**, **Advanced**.
 
 - Clicking a task **bar**, **grid row**, or **empty timeline row** (outside the bar, same `.gantt_task_row`) MUST select that task in the workspace.
 - Selection MUST update the same chrome as Task Sheet focus: Delete / Task Info / Indent / Outdent / Link / Unlink / Assign appear when applicable (`selectTask` from Gantt `onTaskClick` / `onEmptyClick`).
+- **Arrow Up / Arrow Down** (no modifiers, not in an editable field) MUST move selection to the previous / next **visible** Gantt row and scroll it into view (`showTask`).
 - Multi-select: Ctrl/Cmd/Shift+click where supported.
 - Selection-only updates SHOULD NOT full `clearAll`/`parse` when avoidable; data changes still reload from project.
 
@@ -155,6 +158,8 @@ Tabs: **General**, **Predecessors**, **Resources**, **Advanced**.
 
 - HTML data tables (Task Sheet, Resources, Usage, assignments editors) support **column resize** (`useResizableColumns`) with defaults that fit content.
 - Wide tables MUST NOT blow the CSS grid (`min-width: 0` / `minmax(0, 1fr)` on main).
+- **Arrow Up / Arrow Down** navigate selection through visible rows on Task Sheet, Resources, Task/Resource Usage, WBS, RBS, and Network (same rules as Gantt §5.1: no modifiers, not in editable fields).
+- **Task columns** (Gantt tree + Task Sheet): visibility and order are user-configurable via **Task columns** dialog; prefs stored under `supergantt.taskColumns`. Task name cannot be hidden.
 
 ## 8. Resource usage histogram (MUST)
 

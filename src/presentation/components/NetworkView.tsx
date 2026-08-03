@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toNetworkDiagram } from '../../application/services/ReportingService'
+import { useArrowRowNavigation } from '../hooks/useArrowRowNavigation'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import styles from './NetworkView.module.css'
 import { ViewHeader } from './ViewHeader'
@@ -296,6 +297,12 @@ export function NetworkView() {
     return { nodes, boxes, width, height, edgeGeoms, colsPerBand }
   }, [project, viewportW])
 
+  useArrowRowNavigation({
+    ids: layout.nodes.map((n) => n.id),
+    selectedId: selectedTaskId,
+    onSelect: (taskId) => dispatch({ type: 'selectTask', taskId }),
+  })
+
   return (
     <div className={styles.panel}>
       <ViewHeader title="Network Diagram" />
@@ -311,6 +318,7 @@ export function NetworkView() {
               <button
                 key={node.id}
                 type="button"
+                data-row-id={node.id}
                 className={[
                   styles.node,
                   node.critical ? styles.critical : '',

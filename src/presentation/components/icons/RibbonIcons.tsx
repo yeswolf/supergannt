@@ -305,6 +305,11 @@ export const Icons = {
       <path d="M4 7h16M4 12h16M4 17h10" />
     </Svg>
   ),
+  columns: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M4 4h4v16H4zM10 4h4v16h-4zM16 4h4v16h-4z" />
+    </Svg>
+  ),
   critical: (p?: IconProps) => (
     <Svg {...p}>
       <path d="M12 3l9 16H3L12 3Z" />

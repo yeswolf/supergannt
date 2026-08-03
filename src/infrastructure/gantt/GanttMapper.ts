@@ -1,5 +1,6 @@
 import type { Project } from '../../domain/entities/Project'
 import type { LinkType } from '../../domain/entities/Dependency'
+import { formatPredecessors } from '../../application/services/PredecessorNotation'
 import { formatTaskResourceNames } from '../../application/use-cases/ResourceUseCases'
 
 export interface GanttTaskDto {
@@ -15,6 +16,11 @@ export interface GanttTaskDto {
   critical: boolean
   wbs: string
   resources: string
+  /** 1-based row index (ProjectLibre ID column). */
+  row: number
+  percent: number
+  cost: string
+  predecessors: string
 }
 
 export interface GanttLinkDto {
@@ -67,7 +73,7 @@ export function toGanttData(project: Project): {
   data: GanttTaskDto[]
   links: GanttLinkDto[]
 } {
-  const data: GanttTaskDto[] = project.tasks.map((task) => {
+  const data: GanttTaskDto[] = project.tasks.map((task, index) => {
     const hours = task.milestone ? 0 : Math.max(task.duration.toHours(), 1)
     const start = formatGanttDateTime(task.start)
     // Milestones are a point in time — same start/finish for diamond rendering.
@@ -85,6 +91,10 @@ export function toGanttData(project: Project): {
       critical: task.critical,
       wbs: task.wbs,
       resources: formatTaskResourceNames(project, task.id),
+      row: index + 1,
+      percent: task.percentComplete,
+      cost: task.cost.format(),
+      predecessors: formatPredecessors(project, task.id),
     }
   })
 
