@@ -194,4 +194,36 @@ describe('workspaceReducer', () => {
     })
     expect(s.taskInfoTab).toBe('resources')
   })
+
+  it('linkTasks shifts successor; unknown unlinkDependency is a no-op', () => {
+    let s = workspaceReducer(state(), { type: 'newProject' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    const [a, b] = s.project.tasks
+    const before = b!.start.getTime()
+
+    s = workspaceReducer(s, {
+      type: 'linkTasks',
+      predecessorId: a!.id,
+      successorId: b!.id,
+      linkType: 'FS',
+    })
+    expect(s.project.dependencies).toHaveLength(1)
+    const depId = s.project.dependencies[0]!.id
+    const shifted = s.project.tasks.find((t) => t.id === b!.id)!.start.getTime()
+    expect(shifted).toBeGreaterThan(before)
+
+    // Transient dhtmlx link id must not remove our dependency / unshift the bar.
+    const afterLink = s.project
+    s = workspaceReducer(s, { type: 'unlinkDependency', dependencyId: 'gantt-temp-1' })
+    expect(s.project).toBe(afterLink)
+    expect(s.project.dependencies).toHaveLength(1)
+    expect(s.project.tasks.find((t) => t.id === b!.id)!.start.getTime()).toBe(shifted)
+
+    s = workspaceReducer(s, { type: 'unlinkDependency', dependencyId: '1' })
+    expect(s.project).toBe(afterLink)
+
+    s = workspaceReducer(s, { type: 'unlinkDependency', dependencyId: depId })
+    expect(s.project.dependencies).toHaveLength(0)
+  })
 })

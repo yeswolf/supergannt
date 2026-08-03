@@ -38,6 +38,22 @@ export const DHTMLX_TO_LINK: Record<string, LinkType> = {
   '3': 'SF',
 }
 
+/**
+ * dhtmlx maps start→finish drag to SF (source=start task, target=finish task).
+ * Prefer FS with the finish-side task as predecessor (same endpoints, reverse roles).
+ */
+export function orientDraggedLink<T extends { source: unknown; target: unknown; type: unknown }>(
+  link: T,
+): T {
+  if (String(link.type) !== '3') return link
+  return {
+    ...link,
+    source: link.target,
+    target: link.source,
+    type: '0',
+  }
+}
+
 function pad(n: number): string {
   return String(n).padStart(2, '0')
 }

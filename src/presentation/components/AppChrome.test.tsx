@@ -5,6 +5,16 @@ import { renderWithWorkspace } from '../../test/workspaceTestUtils'
 import { AppChrome } from './AppChrome'
 import { GanttView } from './GanttView'
 
+const saveBlobToDisk = vi.fn(async (_blob: Blob, fileName: string) => fileName)
+const exportProjectPdf = vi.fn(async () => new Blob(['%PDF'], { type: 'application/pdf' }))
+
+vi.mock('../desktop/saveBlob', () => ({
+  saveBlobToDisk: (...args: unknown[]) => saveBlobToDisk(...(args as [Blob, string])),
+}))
+vi.mock('../../infrastructure/pdf/exportProjectPdf', () => ({
+  exportProjectPdf: (...args: unknown[]) => exportProjectPdf(...(args as [])),
+}))
+
 vi.mock('dhtmlx-gantt', () => ({
   default: {
     plugins: vi.fn(),
@@ -35,9 +45,9 @@ function runPaletteCommand(label: string | RegExp) {
 
 describe('AppChrome', () => {
   beforeEach(() => {
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    URL.createObjectURL = vi.fn(() => 'blob:mock')
-    URL.revokeObjectURL = vi.fn()
+    saveBlobToDisk.mockClear()
+    exportProjectPdf.mockClear()
+    saveBlobToDisk.mockImplementation(async (_blob: Blob, fileName: string) => fileName)
   })
 
   afterEach(() => {
@@ -57,7 +67,7 @@ describe('AppChrome', () => {
 
     runPaletteCommand('Load sample plan')
     runPaletteCommand(/Save as XML/)
-    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+    await waitFor(() => expect(saveBlobToDisk).toHaveBeenCalled())
   })
 
   it('puts edit actions in the view title row and supports the command palette', async () => {
@@ -83,10 +93,17 @@ describe('AppChrome', () => {
   it('exports PDF and opens file picker from the command palette', async () => {
     renderWithWorkspace(<AppChrome />)
     runPaletteCommand('Export PDF')
-    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+    await waitFor(() => expect(exportProjectPdf).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(saveBlobToDisk).toHaveBeenCalledWith(
+        expect.any(Blob),
+        expect.stringMatching(/\.pdf$/i),
+      ),
+    )
 
+    saveBlobToDisk.mockClear()
     runPaletteCommand(/Save as MPX/)
-    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+    await waitFor(() => expect(saveBlobToDisk).toHaveBeenCalled())
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
     expect(fileInput).toBeTruthy()
     expect(fileInput.accept).toContain('.mpp')

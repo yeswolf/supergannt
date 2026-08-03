@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import gantt from 'dhtmlx-gantt'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
+import * as DependencyUseCases from '../../application/use-cases/DependencyUseCases'
 import {
   filterGanttData,
   DHTMLX_TO_LINK,
+  orientDraggedLink,
   type GanttTaskFilter,
 } from '../../infrastructure/gantt/GanttMapper'
 import {
@@ -36,6 +38,7 @@ type GanttApi = typeof gantt & {
   getScrollState?: () => { x: number; y: number }
   scrollTo?: (x: number | null, y: number | null) => void
   getTaskType?: (typeOrTask: unknown) => string
+  deleteLink?: (id: string) => void
   config: typeof gantt.config & {
     types: { task: string; project: string; milestone: string }
     show_grid?: boolean
@@ -225,14 +228,22 @@ function useNarrowViewport(): boolean {
 }
 
 export function GanttView() {
-  const { project, selectedTaskId } = useWorkspaceState()
+  const { project, selectedTaskId, services } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const containerRef = useRef<HTMLDivElement>(null)
   const readyRef = useRef(false)
+  /** Ignore dhtmlx link/task events while we clearAll+parse from React state. */
+  const syncingFromProjectRef = useRef(false)
+  const projectRef = useRef(project)
+  projectRef.current = project
+  const idsRef = useRef(services.ids)
+  idsRef.current = services.ids
+  const taskFilterRef = useRef<GanttTaskFilter>('all')
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_GANTT_ZOOM_INDEX)
   const zoomIndexRef = useRef(zoomIndex)
   zoomIndexRef.current = zoomIndex
   const [taskFilter, setTaskFilter] = useState<GanttTaskFilter>('all')
+  taskFilterRef.current = taskFilter
   const narrow = useNarrowViewport()
   const android = isAndroidUa()
   /** Android only: task grid hidden by default; toggled from the header. */
@@ -243,6 +254,39 @@ export function GanttView() {
   narrowRef.current = narrow
   const androidRef = useRef(android)
   androidRef.current = android
+
+  const applyProjectToGantt = useCallback(
+    (nextProject: typeof project, selectedId: string | null) => {
+      if (!readyRef.current) return
+      const { data, links } = filterGanttData(nextProject, taskFilterRef.current)
+      syncingFromProjectRef.current = true
+      try {
+        gantt.clearAll()
+        gantt.parse({ data, links })
+        applyZoomLevel(zoomIndexRef.current)
+        applyGridLayout({
+          narrow: narrowRef.current,
+          android: androidRef.current,
+          showGrid: showTaskGridRef.current,
+        })
+        const api = gantt as GanttApi
+        api.render?.()
+        api.setSizes?.()
+        if (selectedId && gantt.isTaskExists(selectedId)) {
+          gantt.selectTask(selectedId)
+        }
+      } finally {
+        // dhtmlx may flush link-delete/add in a microtask after clearAll/parse.
+        Promise.resolve().then(() => {
+          syncingFromProjectRef.current = false
+        })
+      }
+    },
+    [],
+  )
+
+  const applyProjectToGanttRef = useRef(applyProjectToGantt)
+  applyProjectToGanttRef.current = applyProjectToGantt
 
   const setZoom = useCallback((next: number) => {
     const clamped = clampZoomIndex(next)
@@ -298,12 +342,20 @@ export function GanttView() {
     gantt.config.duration_step = 1
     gantt.config.time_step = 60
     gantt.config.open_tree_initially = true
-    gantt.config.work_time = true
-    gantt.config.correct_work_time = true
-    // Force mobile touch handlers (tablets often report as desktop UA).
-    // Long-press before drag so a swipe can scroll/pan.
-    api.config.touch = 'force'
-    api.config.touch_drag = 750
+    // We own scheduling (ProjectLibre calendar + FS/SS/…). Do not let dhtmlx
+    // "correct" bar dates after parse/link — that silently undoes successor shifts.
+    gantt.config.work_time = false
+    gantt.config.correct_work_time = false
+    // Touch mode requires a long-press (touch_drag) before link/task drag.
+    // Forcing it on desktop makes mouse linking look like "nothing happened".
+    // Only force on Android / coarse pointers (tablets that report as desktop UA).
+    const coarsePointer =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches
+    const forceTouch = androidRef.current || coarsePointer
+    api.config.touch = forceTouch ? 'force' : true
+    api.config.touch_drag = forceTouch ? 750 : true
     api.config.drag_timeline = {
       ignore: '.gantt_task_line, .gantt_task_link, .gantt_link_control',
       useKey: false,
@@ -350,6 +402,8 @@ export function GanttView() {
     applyZoomLevel(zoomIndexRef.current)
     gantt.init(root)
     readyRef.current = true
+    // E2E / diagnostics: singleton already global-ish; expose for playwright.
+    ;(window as unknown as { gantt?: typeof gantt }).gantt = gantt
     // CE build ignores columns[].resize (PRO). Install our own grid column drag-resize.
     const detachColResize = installGanttColumnResize(gantt, root)
     const detachTouchPan = installTimelineTouchPan(root)
@@ -372,6 +426,7 @@ export function GanttView() {
     const onDrag = gantt.attachEvent(
       'onAfterTaskDrag',
       (id: string, mode: string) => {
+        if (syncingFromProjectRef.current) return true
         const task = gantt.getTask(id)
         if (mode === 'resize' || mode === 'move') {
           const hours = Math.max(0, Number(task.duration) || 0)
@@ -389,21 +444,64 @@ export function GanttView() {
         return true
       },
     )
-    const onLink = gantt.attachEvent('onAfterLinkAdd', (_id: string, item: {
-      source: string
-      target: string
-      type: string
-    }) => {
-      dispatch({
-        type: 'linkTasks',
-        predecessorId: String(item.source),
-        successorId: String(item.target),
-        linkType: DHTMLX_TO_LINK[String(item.type)] ?? 'FS',
-      })
-      return true
-    })
+    // start(A)→finish(B) is SF in dhtmlx; treat as FS with B predecessor of A.
+    const onLinkCreated = gantt.attachEvent(
+      'onLinkCreated',
+      (link: { source: string; target: string; type: string | number }) => {
+        const oriented = orientDraggedLink(link)
+        link.source = String(oriented.source)
+        link.target = String(oriented.target)
+        link.type = oriented.type
+        return true
+      },
+    )
+    const onLink = gantt.attachEvent(
+      'onAfterLinkAdd',
+      (_id: string, item: { source: string; target: string; type: string | number }) => {
+        if (syncingFromProjectRef.current) return true
+        try {
+          const oriented = orientDraggedLink(item)
+          // Schedule immediately (don't wait for React effect) so bars move before
+          // dhtmlx touch refreshData paints the old dates again.
+          const next = DependencyUseCases.linkTasks(
+            projectRef.current,
+            idsRef.current,
+            String(oriented.source),
+            String(oriented.target),
+            DHTMLX_TO_LINK[String(oriented.type)] ?? 'FS',
+            0,
+          )
+          projectRef.current = next
+          applyProjectToGanttRef.current(next, null)
+          dispatch({
+            type: 'setProject',
+            project: next,
+            message: 'Dependency created.',
+          })
+        } catch (error) {
+          dispatch({
+            type: 'setStatus',
+            message: error instanceof Error ? error.message : 'Link failed.',
+          })
+          syncingFromProjectRef.current = true
+          try {
+            ;(gantt as GanttApi).deleteLink?.(_id)
+          } catch {
+            /* ignore */
+          } finally {
+            syncingFromProjectRef.current = false
+          }
+        }
+        return true
+      },
+    )
     const onLinkDelete = gantt.attachEvent('onAfterLinkDelete', (id: string) => {
-      dispatch({ type: 'unlinkDependency', dependencyId: String(id) })
+      if (syncingFromProjectRef.current) return true
+      const depId = String(id)
+      if (!projectRef.current.dependencies.some((d) => d.id === depId)) {
+        return true
+      }
+      dispatch({ type: 'unlinkDependency', dependencyId: depId })
       return true
     })
 
@@ -441,31 +539,23 @@ export function GanttView() {
       gantt.detachEvent(onSelect)
       gantt.detachEvent(onDbl)
       gantt.detachEvent(onDrag)
+      gantt.detachEvent(onLinkCreated)
       gantt.detachEvent(onLink)
       gantt.detachEvent(onLinkDelete)
-      gantt.clearAll()
+      syncingFromProjectRef.current = true
+      try {
+        gantt.clearAll()
+      } finally {
+        syncingFromProjectRef.current = false
+      }
       readyRef.current = false
     }
   }, [dispatch, zoomIn, zoomOut])
 
   useEffect(() => {
     if (!readyRef.current) return
-    const { data, links } = filterGanttData(project, taskFilter)
-    gantt.clearAll()
-    gantt.parse({ data, links })
-    applyZoomLevel(zoomIndexRef.current)
-    applyGridLayout({
-      narrow: narrowRef.current,
-      android: androidRef.current,
-      showGrid: showTaskGridRef.current,
-    })
-    const api = gantt as GanttApi
-    api.render?.()
-    api.setSizes?.()
-    if (selectedTaskId && gantt.isTaskExists(selectedTaskId)) {
-      gantt.selectTask(selectedTaskId)
-    }
-  }, [project, selectedTaskId, taskFilter])
+    applyProjectToGantt(project, selectedTaskId)
+  }, [project, selectedTaskId, taskFilter, applyProjectToGantt])
 
   const level = GANTT_ZOOM_LEVELS[zoomIndex]!
 

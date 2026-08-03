@@ -116,42 +116,26 @@ describe('Task Information OK (duration + FS predecessor)', () => {
       patch: { constraintType: 'startNoLaterThan', constraintDate: succ.start },
     })
 
-    // Exact Task Info OK dispatch order after fix
-    for (const action of [
-      {
-        type: 'updateTask' as const,
-        taskId: succ.id,
-        patch: {
-          constraintType: 'startNoLaterThan' as const,
-          constraintDate: succ.start,
-        },
+    state = workspaceReducer(state, {
+      type: 'applyTaskInformation',
+      taskId: succ.id,
+      advanced: {
+        constraintType: 'startNoLaterThan',
+        constraintDate: succ.start,
       },
-      {
-        type: 'setTaskAssignments' as const,
-        taskId: succ.id,
-        links: [{ resourceId: res.id, units: 1 }],
+      assignments: [{ resourceId: res.id, units: 1 }],
+      general: {
+        name: succ.name,
+        durationHours: 24,
+        percentComplete: 0,
+        notes: '',
       },
-      {
-        type: 'updateTask' as const,
-        taskId: succ.id,
-        patch: {
-          name: succ.name,
-          durationHours: 24,
-          percentComplete: 0,
-          notes: '',
-        },
-      },
-      {
-        type: 'setPredecessorLinks' as const,
-        taskId: succ.id,
-        links: [{ predecessorId: pred.id, type: 'FS' as const, lagHours: 0 }],
-      },
-    ]) {
-      state = workspaceReducer(state, action)
-    }
+      predecessors: [{ predecessorId: pred.id, type: 'FS', lagHours: 0 }],
+    })
 
     const pred2 = state.project.tasks.find((t) => t.id === pred.id)!
     const succ2 = state.project.tasks.find((t) => t.id === succ.id)!
+    expect(state.taskInfoOpen).toBe(false)
     expect(succ2.duration.toHours()).toBe(24)
     expect(succ2.start.getTime()).toBe(
       state.project.getCalendar().snapToWorkStart(pred2.finish).getTime(),

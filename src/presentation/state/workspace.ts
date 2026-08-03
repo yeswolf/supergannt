@@ -119,6 +119,18 @@ export type WorkspaceAction =
       taskId: string
       links: { predecessorId: string; type: LinkType; lagHours: number }[]
     }
+  /** Task Information OK — one reducer pass so FS can clear soft pins last. */
+  | {
+      type: 'applyTaskInformation'
+      taskId: string
+      advanced: {
+        constraintType: Parameters<typeof TaskUseCases.updateTask>[2]['constraintType']
+        constraintDate: Date | null
+      }
+      assignments: { resourceId: string; units: number }[]
+      general: Parameters<typeof TaskUseCases.updateTask>[2]
+      predecessors: { predecessorId: string; type: LinkType; lagHours: number }[]
+    }
   | { type: 'addResource' }
   | {
       type: 'updateResource'
@@ -362,6 +374,40 @@ export function workspaceReducer(
           statusMessage: error instanceof Error ? error.message : 'Invalid predecessors.',
         }
       }
+    case 'applyTaskInformation': {
+      try {
+        // Order: Advanced → Resources → General → Predecessors (FS last).
+        let project = TaskUseCases.updateTask(state.project, action.taskId, {
+          constraintType: action.advanced.constraintType,
+          constraintDate: action.advanced.constraintDate,
+        })
+        project = ResourceUseCases.setTaskAssignments(
+          project,
+          ids,
+          action.taskId,
+          action.assignments,
+        )
+        project = TaskUseCases.updateTask(project, action.taskId, action.general)
+        project = DependencyUseCases.setPredecessorLinks(
+          project,
+          ids,
+          action.taskId,
+          action.predecessors,
+        )
+        return {
+          ...state,
+          project,
+          taskInfoOpen: false,
+          statusMessage: 'Task updated.',
+        }
+      } catch (error) {
+        return {
+          ...state,
+          statusMessage:
+            error instanceof Error ? error.message : 'Could not apply task information.',
+        }
+      }
+    }
     case 'addResource':
       return {
         ...state,

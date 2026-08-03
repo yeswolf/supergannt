@@ -181,22 +181,56 @@ export function TaskInformationDialog() {
   }
 
   /**
-   * ProjectLibre Task Information OK applies every tab. Order matters:
-   * - Advanced/resources before General so duration hours are not wiped by
-   *   assignment triangle recalc when the Resources tab is unchanged.
-   * - Predecessors last so FS can clear soft pins and shift the bar without
-   *   Advanced re-applying SNLT/SNET afterward.
+   * ProjectLibre Task Information OK applies every tab in one reducer pass.
+   * Order: Advanced → Resources → General → Predecessors (FS clears soft pins last).
    */
-  const applyAllTabs = () => {
-    applyAdvanced()
-    applyResources()
-    applyGeneral()
-    applyPredecessors()
-  }
-
   const confirmOk = () => {
-    applyAllTabs()
-    dispatch({ type: 'closeTaskInfo' })
+    const start = startDate ? fromDateInputValue(startDate) : null
+    const finish = finishDate ? fromDateInputValue(finishDate) : null
+    const startChanged =
+      start !== null && toDateInputValue(start) !== toDateInputValue(task.start)
+    const finishChanged =
+      finish !== null && toDateInputValue(finish) !== toDateInputValue(task.finish)
+    const durationChanged = durationHours !== task.duration.toHours()
+
+    const general: {
+      name: string
+      percentComplete: number
+      notes: string
+      durationHours?: number
+      start?: Date
+      finish?: Date
+    } = {
+      name,
+      percentComplete,
+      notes,
+    }
+    if (durationChanged) {
+      general.durationHours = durationHours
+      if (startChanged && start) general.start = start
+    } else if (startChanged || finishChanged) {
+      if (start) general.start = start
+      if (finish) general.finish = finish
+    } else {
+      general.durationHours = durationHours
+    }
+
+    dispatch({
+      type: 'applyTaskInformation',
+      taskId: task.id,
+      advanced: {
+        constraintType,
+        constraintDate: constraintDate
+          ? fromDateInputValue(constraintDate)
+          : null,
+      },
+      assignments: assignments.map((a) => ({
+        resourceId: a.resourceId,
+        units: a.units,
+      })),
+      general,
+      predecessors: links.filter((l) => l.predecessorId),
+    })
   }
 
   const onDialogKeyDown = (e: KeyboardEvent) => {

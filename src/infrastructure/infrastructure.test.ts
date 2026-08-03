@@ -9,7 +9,7 @@ import {
   serializeProject,
 } from './serialization/ProjectJsonSerializer'
 import { LocalStorageProjectRepository } from './persistence/LocalStorageProjectRepository'
-import { toGanttData, DHTMLX_TO_LINK } from './gantt/GanttMapper'
+import { toGanttData, DHTMLX_TO_LINK, orientDraggedLink } from './gantt/GanttMapper'
 import { UuidIdGenerator } from './ids/UuidIdGenerator'
 
 class SeqIds implements IdGenerator {
@@ -115,6 +115,16 @@ describe('GanttMapper + UuidIdGenerator', () => {
     const { data, links } = toGanttData(project)
     expect(data.length).toBe(project.tasks.length)
     expect(DHTMLX_TO_LINK['0']).toBe('FS')
+    expect(orientDraggedLink({ source: '2', target: '1', type: '3' })).toEqual({
+      source: '1',
+      target: '2',
+      type: '0',
+    })
+    expect(orientDraggedLink({ source: '1', target: '2', type: '0' })).toEqual({
+      source: '1',
+      target: '2',
+      type: '0',
+    })
     expect(links.every((l) => l.source && l.target)).toBe(true)
     const milestone = data.find((t) => t.type === 'milestone')
     expect(milestone).toBeTruthy()

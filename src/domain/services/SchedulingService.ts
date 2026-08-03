@@ -72,8 +72,13 @@ export function scheduleProject(
   ): Date => {
     const lagHours = dep.lag.toHours()
     switch (dep.type) {
-      case 'FS':
+      case 'FS': {
+        // Finish-to-start: successor may start at/after predecessor finish (+ lag).
+        // Zero lag keeps the finish instant; scheduleOne snaps to work start, which
+        // advances past end-of-day so a full working-day predecessor pushes to the
+        // next morning (ProjectLibre ASAP).
         return calendar.addWorkingHours(pred.finish, lagHours)
+      }
       case 'SS':
         return calendar.addWorkingHours(pred.start, lagHours)
       case 'FF': {

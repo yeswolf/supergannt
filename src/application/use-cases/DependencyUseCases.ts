@@ -94,6 +94,9 @@ export function unlinkTasks(project: Project, taskIds: readonly string[]): Proje
 }
 
 export function unlinkDependency(project: Project, dependencyId: string): Project {
+  if (!project.dependencies.some((d) => d.id === dependencyId)) {
+    return project
+  }
   const dependencies = project.dependencies.filter((d) => d.id !== dependencyId)
   return refreshProject(project.with({ dependencies }).markDirty())
 }
