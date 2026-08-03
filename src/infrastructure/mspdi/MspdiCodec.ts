@@ -1,4 +1,4 @@
-import { XMLBuilder, XMLParser } from 'fast-xml-parser'
+﻿import { XMLBuilder, XMLParser } from 'fast-xml-parser'
 import type { ProjectFileCodec } from '../../application/ports/ProjectFileCodec'
 import { Project } from '../../domain/entities/Project'
 import { Task } from '../../domain/entities/Task'
@@ -187,6 +187,8 @@ export class MspdiCodec implements ProjectFileCodec {
 
     const taskUidToId = new Map<number, string>()
     const rawTasks = asArray(root.Tasks?.Task)
+    // Preserve MS Project display order (ID), not MPXJ/UID order
+    rawTasks.sort((a, b) => (Number(a.ID) ?? 0) - (Number(b.ID) ?? 0))
     const tasks = rawTasks
       .filter((t) => Number(t.UID) !== 0)
       .map((t) => {
