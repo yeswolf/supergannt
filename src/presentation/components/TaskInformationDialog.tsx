@@ -52,9 +52,22 @@ export function TaskInformationDialog() {
   const [links, setLinks] = useState<DraftLink[]>([])
   const [assignments, setAssignments] = useState<TaskAssignmentDraft[]>([])
   const dialogRef = useRef<HTMLDivElement>(null)
+  /** Prevents schedule/link refreshes from wiping an in-progress Start edit. */
+  const hydratedTaskIdRef = useRef<string | null>(null)
+  const startEditedRef = useRef(false)
 
   useEffect(() => {
-    if (!task || !taskInfoOpen) return
+    if (!taskInfoOpen) {
+      hydratedTaskIdRef.current = null
+      startEditedRef.current = false
+      return
+    }
+    if (!task) return
+    // Only hydrate when the dialog opens or the selected task changes — not when
+    // the same task is rescheduled underneath us (that was wiping Start edits).
+    if (hydratedTaskIdRef.current === task.id) return
+    hydratedTaskIdRef.current = task.id
+    startEditedRef.current = false
     setName(task.name)
     setDurationHours(task.duration.toHours())
     setPercentComplete(task.percentComplete)
@@ -76,7 +89,7 @@ export function TaskInformationDialog() {
     )
     setAssignments(draftsFromProject(project, task.id))
     setTab(taskInfoTab)
-  }, [task, taskInfoOpen, project.dependencies, project.assignments, taskInfoTab])
+  }, [task, taskInfoOpen, project, taskInfoTab])
 
   useEffect(() => {
     if (!taskInfoOpen || !task) return
@@ -106,7 +119,8 @@ export function TaskInformationDialog() {
     const start = startDate ? fromDateInputValue(startDate) : null
     const finish = finishDate ? fromDateInputValue(finishDate) : null
     const startChanged =
-      start !== null && toDateInputValue(start) !== toDateInputValue(task.start)
+      startEditedRef.current ||
+      (start !== null && toDateInputValue(start) !== toDateInputValue(task.start))
     const finishChanged =
       finish !== null && toDateInputValue(finish) !== toDateInputValue(task.finish)
     const durationChanged = durationHours !== task.duration.toHours()
@@ -127,9 +141,12 @@ export function TaskInformationDialog() {
     if (durationChanged) {
       patch.durationHours = durationHours
       if (startChanged && start) patch.start = start
-    } else if (startChanged || finishChanged) {
-      if (start) patch.start = start
-      if (finish) patch.finish = finish
+    } else if (startChanged && start) {
+      // Start-only: keep hours, shift the bar; successors reschedule from new finish.
+      // Constraint type (MSO earlier / SNET later) is chosen in updateTask.
+      patch.start = start
+    } else if (finishChanged && finish) {
+      patch.finish = finish
     } else {
       patch.durationHours = durationHours
     }
@@ -139,6 +156,7 @@ export function TaskInformationDialog() {
       taskId: task.id,
       patch,
     })
+    startEditedRef.current = false
   }
 
   const applyAdvanced = () => {
@@ -182,13 +200,15 @@ export function TaskInformationDialog() {
 
   /**
    * ProjectLibre Task Information OK applies every tab in one reducer pass.
-   * Order: Advanced → Resources → General → Predecessors (FS clears soft pins last).
+   * Dates (start/finish) are applied last in the reducer so predecessor rewrites
+   * cannot clear the SNET pin from a Start edit.
    */
   const confirmOk = () => {
     const start = startDate ? fromDateInputValue(startDate) : null
     const finish = finishDate ? fromDateInputValue(finishDate) : null
     const startChanged =
-      start !== null && toDateInputValue(start) !== toDateInputValue(task.start)
+      startEditedRef.current ||
+      (start !== null && toDateInputValue(start) !== toDateInputValue(task.start))
     const finishChanged =
       finish !== null && toDateInputValue(finish) !== toDateInputValue(task.finish)
     const durationChanged = durationHours !== task.duration.toHours()
@@ -208,9 +228,11 @@ export function TaskInformationDialog() {
     if (durationChanged) {
       general.durationHours = durationHours
       if (startChanged && start) general.start = start
-    } else if (startChanged || finishChanged) {
-      if (start) general.start = start
-      if (finish) general.finish = finish
+    } else if (startChanged && start) {
+      // Start-only (finish may have been preview-synced): keep hours, cascade deps.
+      general.start = start
+    } else if (finishChanged && finish) {
+      general.finish = finish
     } else {
       general.durationHours = durationHours
     }
@@ -219,6 +241,8 @@ export function TaskInformationDialog() {
       type: 'applyTaskInformation',
       taskId: task.id,
       advanced: {
+        // Start move applies its own MSO/SNET in updateTask; keep Advanced as-is
+        // for non-start OK paths (skipped entirely when general.start is set).
         constraintType,
         constraintDate: constraintDate
           ? fromDateInputValue(constraintDate)
@@ -236,8 +260,9 @@ export function TaskInformationDialog() {
   const onDialogKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
     const target = e.target as HTMLElement
-    const tag = target.tagName
-    if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT') return
+    // Leave real buttons alone (OK/Cancel/tabs). Shift+Enter keeps newline in Notes.
+    if (target.closest('button')) return
+    if (target.tagName === 'TEXTAREA' && e.shiftKey) return
     e.preventDefault()
     confirmOk()
   }
@@ -320,7 +345,26 @@ export function TaskInformationDialog() {
                   type="date"
                   value={startDate}
                   disabled={task.summary}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setStartDate(value)
+                    startEditedRef.current = true
+                    // Preview finish = start + duration (hours stay fixed).
+                    if (value) {
+                      const nextStart = fromDateInputValue(value)
+                      const nextFinish = project
+                        .getCalendar()
+                        .addWorkingHours(nextStart, durationHours)
+                      setFinishDate(toDateInputValue(nextFinish))
+                      // Later → SNET; earlier (incl. past) → MSO so the bar moves.
+                      if (nextStart.getTime() < task.start.getTime()) {
+                        setConstraintType('mustStartOn')
+                      } else {
+                        setConstraintType('startNoEarlierThan')
+                      }
+                      setConstraintDate(value)
+                    }
+                  }}
                 />
               </label>
               <label>

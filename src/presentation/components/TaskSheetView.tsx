@@ -62,18 +62,27 @@ export function TaskSheetView() {
               return (
                 <tr
                   key={task.id}
+                  tabIndex={0}
                   className={
                     multiSelected || selectedTaskId === task.id
                       ? styles.selected
                       : undefined
                   }
-                  onClick={(e) =>
+                  onClick={(e) => {
                     dispatch({
                       type: 'selectTask',
                       taskId: task.id,
                       additive: e.ctrlKey || e.metaKey || e.shiftKey,
                     })
-                  }
+                    e.currentTarget.focus()
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Delete') return
+                    const target = e.target as HTMLElement
+                    if (target.closest('input, textarea, select, button')) return
+                    e.preventDefault()
+                    dispatch({ type: 'deleteSelection' })
+                  }}
                   onDoubleClick={() =>
                     dispatch({ type: 'openTaskInfo', taskId: task.id })
                   }

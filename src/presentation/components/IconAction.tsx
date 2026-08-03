@@ -4,6 +4,8 @@ import styles from './IconAction.module.css'
 
 type IconActionProps = {
   label: string
+  /** Hover tooltip; defaults to label. Use for shortcut chords. */
+  title?: string
   icon?: RibbonIconName
   /** Compact text glyph when no SVG icon fits (e.g. timescale H/D/W). */
   glyph?: string
@@ -17,6 +19,7 @@ type IconActionProps = {
 
 export function IconAction({
   label,
+  title,
   icon,
   glyph,
   onClick,
@@ -33,7 +36,7 @@ export function IconAction({
       type="button"
       className={className}
       aria-label={label}
-      title={label}
+      title={title ?? label}
       aria-pressed={pressed === undefined ? undefined : pressed}
       disabled={disabled}
       data-icon-action=""

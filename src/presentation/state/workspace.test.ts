@@ -193,6 +193,15 @@ describe('workspaceReducer', () => {
       tab: 'resources',
     })
     expect(s.taskInfoTab).toBe('resources')
+
+    s = workspaceReducer(s, { type: 'closeTaskInfo' })
+    s = workspaceReducer(s, { type: 'selectTask', taskId: a! })
+    s = workspaceReducer(s, { type: 'selectTask', taskId: b!, additive: true })
+    const beforeDelete = s.project.tasks.length
+    s = workspaceReducer(s, { type: 'deleteSelection' })
+    expect(s.project.tasks.length).toBe(beforeDelete - 2)
+    expect(s.selectedTaskIds).toEqual([])
+    expect(s.selectedTaskId).toBeNull()
   })
 
   it('linkTasks shifts successor; unknown unlinkDependency is a no-op', () => {
@@ -225,5 +234,138 @@ describe('workspaceReducer', () => {
 
     s = workspaceReducer(s, { type: 'unlinkDependency', dependencyId: depId })
     expect(s.project.dependencies).toHaveLength(0)
+  })
+
+  it('changing start keeps hours, recomputes finish, and shifts FS successors', () => {
+    let s = workspaceReducer(state(), { type: 'newProject' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    const [a, b, c] = s.project.tasks
+    s = workspaceReducer(s, {
+      type: 'updateTask',
+      taskId: a!.id,
+      patch: { durationHours: 16 },
+    })
+    s = workspaceReducer(s, {
+      type: 'linkTasks',
+      predecessorId: a!.id,
+      successorId: b!.id,
+    })
+    s = workspaceReducer(s, {
+      type: 'linkTasks',
+      predecessorId: b!.id,
+      successorId: c!.id,
+    })
+
+    const aBefore = s.project.tasks.find((t) => t.id === a!.id)!
+    const bBefore = s.project.tasks.find((t) => t.id === b!.id)!
+    const hours = aBefore.duration.toHours()
+    const cal = s.project.getCalendar()
+    const newStart = cal.addWorkingHours(aBefore.start, 40)
+
+    s = workspaceReducer(s, {
+      type: 'updateTask',
+      taskId: a!.id,
+      patch: { start: newStart },
+    })
+
+    const a2 = s.project.tasks.find((t) => t.id === a!.id)!
+    const b2 = s.project.tasks.find((t) => t.id === b!.id)!
+    const c2 = s.project.tasks.find((t) => t.id === c!.id)!
+    expect(a2.duration.toHours()).toBe(hours)
+    expect(a2.start.getTime()).toBeGreaterThan(aBefore.start.getTime())
+    expect(a2.finish.getTime()).toBe(cal.addWorkingHours(a2.start, hours).getTime())
+    expect(b2.start.getTime()).toBeGreaterThan(bBefore.start.getTime())
+    expect(b2.start.getTime()).toBe(cal.snapToWorkStart(a2.finish).getTime())
+    expect(c2.start.getTime()).toBe(cal.snapToWorkStart(b2.finish).getTime())
+  })
+
+  it('Task Info OK start edit survives predecessors rewrite and cascades', () => {
+    let s = workspaceReducer(state(), { type: 'newProject' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    const [a, b] = s.project.tasks
+    s = workspaceReducer(s, {
+      type: 'updateTask',
+      taskId: a!.id,
+      patch: { durationHours: 16 },
+    })
+    s = workspaceReducer(s, {
+      type: 'linkTasks',
+      predecessorId: a!.id,
+      successorId: b!.id,
+    })
+    // Give A a predecessor so setPredecessorLinks runs withLinkDrivenSuccessor.
+    s = workspaceReducer(s, { type: 'addTask' })
+    const pred = s.project.tasks.find((t) => t.id !== a!.id && t.id !== b!.id)!
+    s = workspaceReducer(s, {
+      type: 'setPredecessorLinks',
+      taskId: a!.id,
+      links: [{ predecessorId: pred.id, type: 'FS', lagHours: 0 }],
+    })
+
+    const aBefore = s.project.tasks.find((t) => t.id === a!.id)!
+    const bBefore = s.project.tasks.find((t) => t.id === b!.id)!
+    const hours = aBefore.duration.toHours()
+    const cal = s.project.getCalendar()
+    const newStart = cal.addWorkingHours(aBefore.start, 32)
+
+    s = workspaceReducer(s, {
+      type: 'applyTaskInformation',
+      taskId: a!.id,
+      advanced: {
+        constraintType: 'asSoonAsPossible',
+        constraintDate: null,
+      },
+      assignments: [],
+      general: {
+        name: aBefore.name,
+        percentComplete: aBefore.percentComplete,
+        notes: aBefore.notes,
+        start: newStart,
+      },
+      predecessors: [{ predecessorId: pred.id, type: 'FS', lagHours: 0 }],
+    })
+
+    const a2 = s.project.tasks.find((t) => t.id === a!.id)!
+    const b2 = s.project.tasks.find((t) => t.id === b!.id)!
+    expect(a2.duration.toHours()).toBe(hours)
+    expect(a2.constraintType).toBe('startNoEarlierThan')
+    expect(a2.start.getTime()).toBeGreaterThanOrEqual(newStart.getTime() - 3600_000)
+    expect(a2.finish.getTime()).toBe(cal.addWorkingHours(a2.start, hours).getTime())
+    expect(b2.start.getTime()).toBeGreaterThan(bBefore.start.getTime())
+    expect(b2.start.getTime()).toBe(cal.snapToWorkStart(a2.finish).getTime())
+  })
+
+  it('rewriting the same predecessors keeps a Start-driven SNET pin', () => {
+    let s = workspaceReducer(state(), { type: 'newProject' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    s = workspaceReducer(s, { type: 'addTask' })
+    const [a, b] = s.project.tasks
+    s = workspaceReducer(s, {
+      type: 'linkTasks',
+      predecessorId: a!.id,
+      successorId: b!.id,
+    })
+    const cal = s.project.getCalendar()
+    const bBefore = s.project.tasks.find((t) => t.id === b!.id)!
+    const newStart = cal.addWorkingHours(bBefore.start, 24)
+    s = workspaceReducer(s, {
+      type: 'updateTask',
+      taskId: b!.id,
+      patch: { start: newStart },
+    })
+    const pinned = s.project.tasks.find((t) => t.id === b!.id)!
+    expect(pinned.constraintType).toBe('startNoEarlierThan')
+
+    s = workspaceReducer(s, {
+      type: 'setPredecessorLinks',
+      taskId: b!.id,
+      links: [{ predecessorId: a!.id, type: 'FS', lagHours: 0 }],
+    })
+    const b2 = s.project.tasks.find((t) => t.id === b!.id)!
+    expect(b2.constraintType).toBe('startNoEarlierThan')
+    expect(b2.start.getTime()).toBe(pinned.start.getTime())
   })
 })

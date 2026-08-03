@@ -6,7 +6,7 @@ Accepted.
 
 ## Context
 
-Aspose.Tasks (or similar) could accelerate `.mpp` write. The owner explicitly forbade Aspose (“без Aspose. Сам напиши все”) after exploring clean-room / OLE options.
+Aspose.Tasks (or similar) could accelerate `.mpp` write. The owner explicitly forbade Aspose (“without Aspose — write it yourself”) after exploring clean-room / OLE options.
 
 ## Decision
 

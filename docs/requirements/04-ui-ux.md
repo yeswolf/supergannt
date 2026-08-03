@@ -29,9 +29,9 @@ Color tokens live in `src/themes.css`; structural density tokens remain in `src/
 - Product name **SuperGantt** visible in the top bar.
 - Application icon MUST be a proper branded mark.
 - Icon assets:
-  - Web favicon SVG + PNG (`public/favicon.svg`, `public/app-icon.png`).
+  - Web favicon SVG + PNG (`public/favicon.svg`, `public/app-icon.png`) — transparent outside the rounded mark (no black plate).
   - Tauri window / tray icons (`src-tauri/icons/*`).
-  - Installer / shortcut ICO with **alpha** (`build/icon.ico`).
+  - Installer / shortcut ICO with **alpha** (`build/icon.ico`) — see [05-runtime-packaging.md](./05-runtime-packaging.md) §2.2.
 
 ### 2.3 Views
 
@@ -82,31 +82,49 @@ Tabs: **General**, **Predecessors**, **Resources**, **Advanced**.
 
 - **OK** applies **all tabs** (ProjectLibre-like), not only the visible tab.
 - **Enter** in any non-textarea, non-button field performs the same as OK (also Assign Resources dialog).
-- Textarea Notes: Enter inserts newline.
+- Textarea Notes: Enter inserts newline; **Shift+Enter** keeps newline without OK.
 - **Apply order (invariant):**
-  1. Advanced  
+  1. Advanced — **except** when General includes a **Start** move (skip soft ASAP that would fight SNET); hard MSO/MFO from Advanced may still apply.
   2. Resources  
-  3. General  
-  4. Predecessors **last**  
-  Rationale: resources must not wipe duration; predecessors must clear soft pins after Advanced and drive FS shift last. See [07-bugfixes-and-regressions.md](./07-bugfixes-and-regressions.md).
+  3. General (**non-date** fields)  
+  4. Predecessors  
+  5. **Start / Finish last** — Start applied as **SNET** at the chosen date (hours kept, successors cascade).  
+  Rationale: resources must not wipe duration; predecessors may clear soft pins only when links **change**; Start must win over Advanced ASAP and over predecessor rewrite. Scheduling details: [03-scheduling.md](./03-scheduling.md) §4–5.
+- Dialog form MUST NOT re-hydrate from project on every schedule/link tick while open (only on open / task id change) — otherwise Start edits are wiped before OK.
+- Changing Start in General previews Finish = start + hours and pins Advanced UI to SNET.
 
 ### 4.6 Close
 
-- Backdrop click / × closes; OK closes after apply.
+- Backdrop click / × / Escape closes; OK closes after apply.
 
 ## 5. Gantt view (MUST)
 
-- Timescale presets + task filters in the **ViewHeader** (not a second toolbar).
-- On **narrow viewports (≤820px)** the left task grid/tree is **hidden by default** and toggled via a **Show/Hide task list** control in the ViewHeader — timeline keeps the full width for touch pan/scroll.
+- Timescale via **dropdown** (hour / day / week / month / …) + task filters in the **ViewHeader** (not a second toolbar).
+- Task tree / left grid:
+  - **Desktop and web:** always visible.
+  - **Android only:** may hide by default; toggle Show/Hide task list in the ViewHeader.
+- Narrow CSS may still compress chrome; do **not** hide the tree on desktop/web merely because width ≤820px.
 - Row height touch-friendly (**44px**); task bars ~**34px**; milestones stay small diamonds (never `bar_height: full` without clamping).
-- Touch: `touch: force`, longer `touch_drag`, timeline pan helper, and `order_branch` off on narrow so swipes scroll instead of reordering.
+- Touch: `touch: force` + longer `touch_drag` **only on Android / coarse pointer**; desktop uses normal mouse linking. Timeline pan helper and `order_branch` off on narrow so swipes scroll instead of reordering.
 - Grid / tree cells have readable left padding; bar labels have horizontal inset.
 - Theme remaps dhtmlx CSS variables (`--dhx-gantt-*` → `--msp-*`) so borders, text, summary bars, and row backgrounds follow the active theme.
 - CE build: column resize via custom drag on header edges (`ganttColumnResize`) — PRO `columns[].resize` is unavailable.
 - Milestone diamond marks (GPL `getTaskType` stub patched).
 - Task name / dbl-click → Task Information.
 - Assign affordance without empty `--Assign` label.
-- Drag/link behaviors feed workspace actions that reschedule immediately.
+- Drag/link behaviors feed workspace actions that reschedule immediately ([03-scheduling](./03-scheduling.md) §4–5).
+
+### 5.1 Selection (MUST)
+
+- Clicking a task **bar**, **grid row**, or **empty timeline row** (outside the bar, same `.gantt_task_row`) MUST select that task in the workspace.
+- Selection MUST update the same chrome as Task Sheet focus: Delete / Task Info / Indent / Outdent / Link / Unlink / Assign appear when applicable (`selectTask` from Gantt `onTaskClick` / `onEmptyClick`).
+- Multi-select: Ctrl/Cmd/Shift+click where supported.
+- Selection-only updates SHOULD NOT full `clearAll`/`parse` when avoidable; data changes still reload from project.
+
+### 5.2 Critical + selected (MUST)
+
+- A **critical** (red) bar MUST remain visually critical when selected — MUST NOT be fully overpainted by the generic “row selected” fill so the bar disappears into the selection color on any theme.
+- Preferred: keep critical bar colors; show selection via accent **ring/outline** (or equivalent), not by replacing the critical fill.
 
 ## 6. Network Diagram (MUST)
 
@@ -150,16 +168,43 @@ Tabs: **General**, **Predecessors**, **Resources**, **Advanced**.
 - Open via palette / picker disabled while busy.
 - Drop ignored while busy.
 - Status bar shows busy message while active.
+- Open MUST be **single-flight** (generation/token); clear busy in `finally`.
+- Production open path MUST use `FileReader` when `File.text` is missing (jsdom / some WebViews).
 
 ## 10. Sample plan (MUST)
 
 - **Load sample plan** (palette) returns a scheduled project: `refreshProject`, FS chain, resource assignments with work hours — not a flat same-day draft with `finish === start`.
 
-## 11. Accessibility / basics (SHOULD)
+## 11. Keyboard shortcuts (MUST)
+
+ProjectLibre / MS Project–style chords MUST work. Canonical chord list: [`docs/keyboard-shortcuts.md`](../keyboard-shortcuts.md) (also linked from README).
+
+Minimum set:
+
+| Chord | Action |
+|-------|--------|
+| Ctrl/Cmd+K | Command palette (works even in inputs) |
+| Ctrl/Cmd+N / O / S | New / Open / Save XML |
+| Insert | Add task |
+| Delete | Delete selection |
+| Alt+Shift+← / → | Outdent / Indent |
+| Ctrl+F2 / Ctrl+Shift+F2 | Link / Unlink selection |
+| Shift+F2 | Task Information |
+| Ctrl+Shift+F | Assign resources |
+| Ctrl+= / Ctrl+- | Zoom in / out |
+
+Rules:
+
+- Task-row chords (Insert, Delete, indent, link, …) MUST NOT fire while focus is in `input` / `textarea` / `select` / `[contenteditable]` / dialog fields.
+- Delete on a focused task row / Gantt selection deletes the selection (same as toolbar Delete).
+- Escape closes palette / menus / dialogs as implemented.
+
+## 12. Accessibility / basics (SHOULD)
 
 - Dialogs use `role="dialog"`, labelled tabs, aria-labels on inputs where tested.
-- Keyboard: Enter→OK as specified; Escape/close patterns as implemented; `Ctrl/Cmd+K` opens palette.
+- Keyboard: Enter→OK; Escape/close; palette navigation ↑/↓/Enter as in shortcuts doc.
 
-## 12. Localization
+## 13. Localization
 
-- UI currently English (README / chrome). Russian appears in chat only; no i18n requirement unless newly agreed.
+- UI and all engineering docs are **English**.
+- Chat may use other languages; no i18n product requirement unless newly agreed.

@@ -6,6 +6,11 @@ import { planFileInputAccept } from '../planFileInputAccept'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import type { AppView } from '../state/workspace'
 import { useTheme } from '../theme/ThemeContext'
+import {
+  matchProjectShortcut,
+  PROJECT_SHORTCUT_HINTS,
+  type ProjectShortcut,
+} from '../projectShortcuts'
 import { Icons, type RibbonIconName } from './icons/RibbonIcons'
 import { APP_VIEWS, MORE_VIEWS, PRIMARY_VIEWS } from './nav/views'
 import styles from './AppChrome.module.css'
@@ -123,6 +128,8 @@ export function AppChrome() {
     selectedTaskIds,
     services,
     busyMessage,
+    taskInfoOpen,
+    assignDialogOpen,
   } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const { theme, setTheme, themes } = useTheme()
@@ -210,6 +217,7 @@ export function AppChrome() {
         label: 'New blank plan',
         icon: 'blank',
         keywords: 'file new blank',
+        hint: PROJECT_SHORTCUT_HINTS.newBlank,
         run: () => dispatch({ type: 'newProject' }),
       },
       {
@@ -224,6 +232,7 @@ export function AppChrome() {
         label: 'Open…',
         icon: 'open',
         keywords: 'file open mpp xml mspdi',
+        hint: PROJECT_SHORTCUT_HINTS.open,
         disabled: isBusy,
         run: () => fileRef.current?.click(),
       },
@@ -232,6 +241,7 @@ export function AppChrome() {
         label: 'Save as XML',
         icon: 'saveXml',
         keywords: 'file save mspdi xml',
+        hint: PROJECT_SHORTCUT_HINTS.saveXml,
         run: () => void onSave('mspdi'),
       },
       {
@@ -267,6 +277,7 @@ export function AppChrome() {
         label: 'Add task',
         icon: 'plus',
         keywords: 'insert task',
+        hint: PROJECT_SHORTCUT_HINTS.addTask,
         run: () =>
           dispatch({ type: 'addTask', afterTaskId: selectedTaskId ?? undefined }),
       },
@@ -281,6 +292,7 @@ export function AppChrome() {
         id: 'indent',
         label: 'Indent task',
         icon: 'indent',
+        hint: PROJECT_SHORTCUT_HINTS.indent,
         disabled: !selectedTaskId,
         run: () =>
           selectedTaskId && dispatch({ type: 'indentTask', taskId: selectedTaskId }),
@@ -289,6 +301,7 @@ export function AppChrome() {
         id: 'outdent',
         label: 'Outdent task',
         icon: 'outdent',
+        hint: PROJECT_SHORTCUT_HINTS.outdent,
         disabled: !selectedTaskId,
         run: () =>
           selectedTaskId && dispatch({ type: 'outdentTask', taskId: selectedTaskId }),
@@ -297,14 +310,15 @@ export function AppChrome() {
         id: 'delete-task',
         label: 'Delete task',
         icon: 'delete',
-        disabled: !selectedTaskId,
-        run: () =>
-          selectedTaskId && dispatch({ type: 'deleteTask', taskId: selectedTaskId }),
+        hint: PROJECT_SHORTCUT_HINTS.deleteSelection,
+        disabled: !selectedTaskId && selectedTaskIds.length === 0,
+        run: () => dispatch({ type: 'deleteSelection' }),
       },
       {
         id: 'link',
         label: 'Link selected tasks',
         icon: 'link',
+        hint: PROJECT_SHORTCUT_HINTS.link,
         disabled: !canLink,
         run: () => dispatch({ type: 'linkSelection' }),
       },
@@ -312,6 +326,7 @@ export function AppChrome() {
         id: 'unlink',
         label: 'Unlink selection',
         icon: 'unlink',
+        hint: PROJECT_SHORTCUT_HINTS.unlink,
         disabled: !canUnlink,
         run: () => dispatch({ type: 'unlinkSelection' }),
       },
@@ -319,6 +334,7 @@ export function AppChrome() {
         id: 'task-info',
         label: 'Task information',
         icon: 'information',
+        hint: PROJECT_SHORTCUT_HINTS.taskInfo,
         disabled: !selectedTaskId,
         run: () => dispatch({ type: 'openTaskInfo' }),
       },
@@ -326,6 +342,7 @@ export function AppChrome() {
         id: 'assign',
         label: 'Assign resources',
         icon: 'resources',
+        hint: PROJECT_SHORTCUT_HINTS.assign,
         disabled: !selectedTaskId,
         run: () => dispatch({ type: 'openAssignDialog' }),
       },
@@ -354,12 +371,14 @@ export function AppChrome() {
         id: 'zoom-in',
         label: 'Zoom in (Gantt)',
         icon: 'zoomIn',
+        hint: PROJECT_SHORTCUT_HINTS.zoomIn,
         run: () => ganttZoom('in'),
       },
       {
         id: 'zoom-out',
         label: 'Zoom out (Gantt)',
         icon: 'zoomOut',
+        hint: PROJECT_SHORTCUT_HINTS.zoomOut,
         run: () => ganttZoom('out'),
       },
       ...APP_VIEWS.map((v) => ({
@@ -376,9 +395,10 @@ export function AppChrome() {
     canUnlink,
     dispatch,
     isBusy,
-    project,
+    onExportPdf,
+    onSave,
     selectedTaskId,
-    services,
+    selectedTaskIds.length,
     setTheme,
     themes,
   ])
@@ -400,22 +420,93 @@ export function AppChrome() {
   }, [paletteQuery, paletteOpen, filteredCommands])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const meta = e.metaKey || e.ctrlKey
-      if (meta && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setPaletteOpen(true)
-        setPaletteQuery('')
+    const runShortcut = (action: ProjectShortcut) => {
+      switch (action) {
+        case 'palette':
+          setPaletteOpen(true)
+          setPaletteQuery('')
+          return
+        case 'newBlank':
+          dispatch({ type: 'newProject' })
+          return
+        case 'open':
+          if (!isBusy) fileRef.current?.click()
+          return
+        case 'saveXml':
+          void onSave('mspdi')
+          return
+        case 'zoomIn':
+          ganttZoom('in')
+          return
+        case 'zoomOut':
+          ganttZoom('out')
+          return
+        case 'addTask':
+          dispatch({ type: 'addTask', afterTaskId: selectedTaskId ?? undefined })
+          return
+        case 'deleteSelection':
+          if (selectedTaskId || selectedTaskIds.length > 0) {
+            dispatch({ type: 'deleteSelection' })
+          }
+          return
+        case 'indent':
+          if (selectedTaskId) dispatch({ type: 'indentTask', taskId: selectedTaskId })
+          return
+        case 'outdent':
+          if (selectedTaskId) dispatch({ type: 'outdentTask', taskId: selectedTaskId })
+          return
+        case 'link':
+          if (selectedTaskIds.length >= 2) dispatch({ type: 'linkSelection' })
+          return
+        case 'unlink':
+          if (selectedTaskId || selectedTaskIds.length > 0) {
+            dispatch({ type: 'unlinkSelection' })
+          }
+          return
+        case 'taskInfo':
+          if (selectedTaskId) dispatch({ type: 'openTaskInfo' })
+          return
+        case 'assign':
+          if (selectedTaskId) dispatch({ type: 'openAssignDialog' })
+          return
       }
+    }
+
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setPaletteOpen(false)
         setMoreOpen(false)
         setThemeMenu(false)
+        return
       }
+
+      const action = matchProjectShortcut(e)
+      if (!action) return
+
+      if (action === 'palette') {
+        e.preventDefault()
+        runShortcut(action)
+        return
+      }
+
+      // Dialogs / palette own their own keys (Enter, arrows, …).
+      if (paletteOpen || taskInfoOpen || assignDialogOpen) return
+
+      e.preventDefault()
+      runShortcut(action)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [
+    assignDialogOpen,
+    dispatch,
+    isBusy,
+    onSave,
+    paletteOpen,
+    selectedTaskId,
+    selectedTaskIds,
+    taskInfoOpen,
+  ])
 
   useEffect(() => {
     if (paletteOpen) {
@@ -648,6 +739,9 @@ export function AppChrome() {
                         <Icon />
                       </span>
                       <span>{cmd.label}</span>
+                      {cmd.hint ? (
+                        <kbd className={styles.paletteHint}>{cmd.hint}</kbd>
+                      ) : null}
                     </button>
                   </li>
                 )

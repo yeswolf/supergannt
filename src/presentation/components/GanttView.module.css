@@ -360,7 +360,8 @@
 }
 
 .wrap :global(.super-critical .gantt_task_progress) {
-  background: var(--msp-gantt-critical) !important;
+  /* Darken progress slightly so it stays visible on the critical fill */
+  background: color-mix(in srgb, var(--msp-gantt-critical) 72%, #000) !important;
 }
 
 .wrap :global(.gantt_row.odd),
@@ -368,10 +369,30 @@
   background: var(--msp-surface-alt) !important;
 }
 
-.wrap :global(.gantt_selected),
+/* Row selection only — never repaint the task bar fill (hides critical red). */
 .wrap :global(.gantt_row.gantt_selected),
 .wrap :global(.gantt_task_row.gantt_selected) {
   background: var(--msp-row-selected) !important;
+}
+
+/* Focus/selection ring on the bar; keep original bar / critical colors. */
+.wrap :global(.gantt_task_line.gantt_selected) {
+  box-shadow:
+    0 0 0 2px var(--msp-surface),
+    0 0 0 4px var(--msp-accent) !important;
+  z-index: 2;
+}
+
+.wrap :global(.gantt_task_line.super-critical.gantt_selected) {
+  background: var(--msp-gantt-critical) !important;
+  border-color: var(--msp-gantt-critical) !important;
+  box-shadow:
+    0 0 0 2px var(--msp-surface),
+    0 0 0 4px var(--msp-accent) !important;
+}
+
+.wrap :global(.gantt_task_line.super-critical.gantt_selected .gantt_task_progress) {
+  background: color-mix(in srgb, var(--msp-gantt-critical) 72%, #000) !important;
 }
 
 /*
@@ -403,6 +424,15 @@
 .wrap :global(.gantt_task_line.super-milestone.super-critical .gantt_task_content) {
   background: var(--msp-gantt-critical) !important;
   border-color: var(--msp-gantt-critical) !important;
+}
+
+.wrap :global(.gantt_task_line.gantt_milestone.gantt_selected .gantt_task_content),
+.wrap :global(.gantt_task_line.super-milestone.gantt_selected .gantt_task_content),
+.wrap :global(.gantt_task_line.gantt_milestone.super-critical.gantt_selected .gantt_task_content),
+.wrap :global(.gantt_task_line.super-milestone.super-critical.gantt_selected .gantt_task_content) {
+  box-shadow:
+    0 0 0 2px var(--msp-surface),
+    0 0 0 4px var(--msp-accent) !important;
 }
 
 .wrap :global(.gantt_link_arrow),

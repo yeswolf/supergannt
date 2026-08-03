@@ -4,6 +4,32 @@ import { renderWithWorkspace } from '../../test/workspaceTestUtils'
 import { ResourceView } from './ResourceView'
 import { TaskSheetView } from './TaskSheetView'
 import { NetworkView } from './NetworkView'
+import { AppChrome } from './AppChrome'
+
+vi.mock('dhtmlx-gantt', () => ({
+  default: {
+    plugins: vi.fn(),
+    config: {
+      types: { task: 'task', project: 'project', milestone: 'milestone' },
+      min_column_width: 40,
+      scales: [],
+    },
+    templates: {},
+    init: vi.fn(),
+    clearAll: vi.fn(),
+    parse: vi.fn(),
+    attachEvent: vi.fn(() => 'id'),
+    detachEvent: vi.fn(),
+    getTask: vi.fn(),
+    isTaskExists: vi.fn(() => false),
+    selectTask: vi.fn(),
+    render: vi.fn(),
+  },
+}))
+vi.mock('dhtmlx-gantt/codebase/dhtmlxgantt.css', () => ({}))
+vi.mock('../desktop/saveBlob', () => ({
+  saveBlobToDisk: vi.fn(async (_b: Blob, name: string) => name),
+}))
 
 describe('ResourceView', () => {
   it('lists resources and supports edits / add / delete', () => {
@@ -50,6 +76,24 @@ describe('TaskSheetView', () => {
       /resources$/i.test(b.getAttribute('aria-label') ?? ''),
     )
     if (resourceBtn) fireEvent.click(resourceBtn)
+  })
+
+  it('deletes the selected task row on Delete key', () => {
+    renderWithWorkspace(
+      <>
+        <AppChrome />
+        <TaskSheetView />
+      </>,
+      { bootstrap: [{ type: 'newProject' }, { type: 'addTask' }, { type: 'addTask' }] },
+    )
+
+    const nameInputs = screen.getAllByLabelText(/Task .+ name/)
+    expect(nameInputs.length).toBe(2)
+    const rows = screen.getAllByRole('row').slice(1)
+    fireEvent.click(rows[0]!)
+    fireEvent.keyDown(rows[0]!, { key: 'Delete' })
+
+    expect(screen.getAllByLabelText(/Task .+ name/).length).toBe(1)
   })
 })
 

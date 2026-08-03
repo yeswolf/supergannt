@@ -39,6 +39,33 @@ function withLinkDrivenSuccessor(
   return project.with({ tasks })
 }
 
+/** Stable signature so Task Info OK can rewrite the same predecessors without wiping SNET. */
+function predecessorLinksSignature(
+  links: readonly { predecessorId: string; type: LinkType; lagHours: number }[],
+): string {
+  return [...links]
+    .map((l) => `${l.predecessorId}|${l.type}|${l.lagHours}`)
+    .sort()
+    .join(';')
+}
+
+function predecessorLinksChanged(
+  project: Project,
+  successorId: string,
+  nextLinks: readonly { predecessorId: string; type: LinkType; lagHours: number }[],
+): boolean {
+  const current = project.dependencies
+    .filter((d) => d.successorId === successorId)
+    .map((d) => ({
+      predecessorId: d.predecessorId,
+      type: d.type,
+      lagHours: d.lag.toHours(),
+    }))
+  return (
+    predecessorLinksSignature(current) !== predecessorLinksSignature(nextLinks)
+  )
+}
+
 export function linkTasks(
   project: Project,
   ids: IdGenerator,
@@ -143,6 +170,12 @@ export function setPredecessorsFromNotation(
       throw new Error('A task cannot depend on itself')
     }
   }
+  const nextLinks = parsed.map((p) => ({
+    predecessorId: p.taskId,
+    type: p.type,
+    lagHours: p.lagHours,
+  }))
+  const driveSuccessor = predecessorLinksChanged(project, successorId, nextLinks)
   const kept = project.dependencies.filter((d) => d.successorId !== successorId)
   const created = parsed.map((p) =>
     Dependency.create({
@@ -153,13 +186,10 @@ export function setPredecessorsFromNotation(
       lag: Duration.hours(p.lagHours),
     }),
   )
-  const next =
-    created.length > 0
-      ? withLinkDrivenSuccessor(
-          project.with({ dependencies: [...kept, ...created] }),
-          successorId,
-        )
-      : project.with({ dependencies: [...kept, ...created] })
+  let next = project.with({ dependencies: [...kept, ...created] })
+  if (driveSuccessor && created.length > 0) {
+    next = withLinkDrivenSuccessor(next, successorId)
+  }
   return refreshProject(next.markDirty())
 }
 
@@ -169,8 +199,9 @@ export function setPredecessorLinks(
   successorId: string,
   links: readonly { predecessorId: string; type: LinkType; lagHours: number }[],
 ): Project {
-  const kept = project.dependencies.filter((d) => d.successorId !== successorId)
   const cleaned = links.filter((p) => p.predecessorId)
+  const driveSuccessor = predecessorLinksChanged(project, successorId, cleaned)
+  const kept = project.dependencies.filter((d) => d.successorId !== successorId)
   const created = cleaned.map((p) => {
     if (p.predecessorId === successorId) {
       throw new Error('A task cannot depend on itself')
@@ -183,12 +214,11 @@ export function setPredecessorLinks(
       lag: Duration.hours(p.lagHours),
     })
   })
-  const next =
-    created.length > 0
-      ? withLinkDrivenSuccessor(
-          project.with({ dependencies: [...kept, ...created] }),
-          successorId,
-        )
-      : project.with({ dependencies: [...kept, ...created] })
+  let next = project.with({ dependencies: [...kept, ...created] })
+  // Only clear soft pins when the predecessor set actually changes — Task Info OK
+  // rewrites the same rows and must not undo a Start-driven SNET move.
+  if (driveSuccessor && created.length > 0) {
+    next = withLinkDrivenSuccessor(next, successorId)
+  }
   return refreshProject(next.markDirty())
 }

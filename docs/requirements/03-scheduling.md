@@ -40,31 +40,59 @@ Predecessors MUST be editable like ProjectLibre:
 
 ### 4.3 Immediate reschedule (MUST)
 
-When dependencies are created or changed:
+When dependencies are created or changed (Task Info, Task Sheet notation, toolbar Link, **or Gantt mouse/touch link draw**):
 
-- Schedule MUST update **immediately**.
+- Schedule MUST update **immediately** (same gesture — no separate “Calculate”).
 - Successor bars MUST shift **the same way as ProjectLibre** (ASAP / link-driven).
+- Gantt MUST re-sync from workspace after the link (`setProject` / parse) so the bar does not stay painted at the old date.
 
 ### 4.4 FS (“after”) successor shift (MUST)
 
-If task B is linked as successor **FS** after predecessor A (“следующую после” / dependency type “после”):
+If task B is linked as successor **FS** after predecessor A (“next after” / finish-to-start):
 
-1. Soft constraints on B that would block push-out (**SNET, SNLT, FNET, FNLT, ALAP**) MUST be cleared to **ASAP** so the link can drive the bar.
-2. Hard locks (**MSO / MFO**) MUST be preserved.
-3. B’s start MUST land on calendar snap of A’s finish (+ lag), i.e. working-time FS formula.
+1. Soft constraints on B that would block push-out (**SNET, SNLT, FNET, FNLT, ALAP**) MUST be cleared to **ASAP** so the link can drive the bar — **only when the predecessor set actually changes**.
+2. Rewriting the **same** predecessor rows (typical Task Info OK) MUST **not** clear an intentional Start-driven SNET pin.
+3. Hard locks (**MSO / MFO**) MUST be preserved.
+4. B’s start MUST land on calendar snap of A’s finish (+ lag), i.e. working-time FS formula.
 
-Implemented via `withLinkDrivenSuccessor` + `SchedulingService` + `refreshProject`.
+Implemented via `withLinkDrivenSuccessor` + `predecessorLinksChanged` + `SchedulingService` + `refreshProject`.
 
-### 4.5 Task Information OK interaction (MUST)
+### 4.5 Gantt drag link orientation (MUST)
 
-Saving Task Information MUST apply predecessors in an order that does **not** re-apply soft constraints *after* the link-driven clear. See [07-bugfixes-and-regressions.md](./07-bugfixes-and-regressions.md).
+dhtmlx maps **start-handle → finish-handle** to SF. Product rule:
+
+- Drag from the **start** of task X onto the **finish** of task Y MUST become **FS with Y predecessor of X** (swap ends, type FS) — so “from the start of the second onto the end of the first” makes the first the predecessor of the second.
+- Forward finish→start drag remains normal FS.
+- Implemented by `orientDraggedLink` before `linkTasks`.
+
+### 4.6 Task Information OK and scheduling (MUST)
+
+When Task Information OK includes link and/or Start changes:
+
+1. Soft pins clear on predecessor **change** only (`withLinkDrivenSuccessor`); rewriting the same rows MUST NOT wipe Start-driven pins.
+2. If General includes a **Start** edit, apply that Start **last** via `updateTask({ start })` (constraint later→SNET / earlier→MSO per §5.1). Advanced **ASAP** MUST NOT run first and undo the move.
+3. Duration hours edited on General MUST survive OK when Resources are unchanged (`setTaskAssignments` no-op) — see [04](./04-ui-ux.md) Task Information OK order.
 
 ## 5. Constraints (MUST)
 
 Supported constraint types include ASAP, ALAP, MSO, MFO, SNET, SNLT, FNET, FNLT (labels as in Task Information Advanced).
 
-- Editing **Start** (sheet / dialog / Gantt drag) sets **Start No Earlier Than** when appropriate so predecessors can still push later (ProjectLibre behavior).
-- Finish edits without explicit duration derive working hours between start and finish.
+### 5.1 Start date edit (MUST — ProjectLibre)
+
+Whenever the user changes a task’s **Start** (Task Sheet date, Task Information General, or Gantt **move** drag):
+
+1. **Duration hours stay fixed** (do not shrink/expand from a stale Finish still in the form).
+2. **Finish** = calendar `addWorkingHours(start, durationHours)`.
+3. Constraint:
+   - **Later** than the current start → **Start No Earlier Than** (predecessors may still push later).
+   - **Earlier** than the current start (including **calendar past** / before project start) → **Must Start On** so the date sticks. Plain SNET cannot pull a task before the ASAP / project-start floor, so earlier edits must not no-op.
+4. If the chosen Start is **before `project.startDate`**, pull **project start** back to that snapped date so the timeline includes the past.
+5. All **link-driven successors** MUST reschedule — when the predecessor moves earlier, dependents shift earlier too.
+6. Gantt **resize** may change duration; **move** MUST NOT send a stale finish that would be treated as a duration edit.
+
+### 5.2 Finish edit
+
+- Finish edits **without** an accompanying Start change derive working hours between start and finish.
 
 ## 6. Effort / assignment triangle (MUST)
 
@@ -122,5 +150,7 @@ Empty assign control MUST NOT show a fake `--Assign` placeholder label when empt
 ## 9. Gantt interaction specifics (MUST)
 
 - Click **task name** → open **Task Information** (edit), not Assign.
-- Zoom in / zoom out controls present and aligned with ProjectLibre-style view zoom expectations.
+- Zoom in / zoom out controls present and aligned with ProjectLibre-style view zoom expectations (`Ctrl+=` / `Ctrl+-` / Ctrl+wheel).
 - Link creation updates schedule immediately (section 4.3).
+- **Desktop / web:** do **not** force dhtmlx `touch: 'force'` (long-press); mouse link draw must work on click-drag. Force touch only on **Android / coarse pointer**.
+- Own scheduling owns dates: `work_time` / `correct_work_time` off in dhtmlx so parse/link cannot silently undo successor shifts.

@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
+import { PROJECT_SHORTCUT_HINTS } from '../projectShortcuts'
 import { IconAction } from './IconAction'
 
 /** Selection-aware edit actions for the current view — rendered in ViewHeader. */
@@ -51,6 +52,7 @@ export function useWorkspaceActions(): ReactNode[] {
         key="add-task"
         icon="plus"
         label="Add task"
+        title={`Add task (${PROJECT_SHORTCUT_HINTS.addTask})`}
         primary
         onClick={() =>
           dispatch({ type: 'addTask', afterTaskId: selectedTaskId ?? undefined })
@@ -64,30 +66,35 @@ export function useWorkspaceActions(): ReactNode[] {
           key="info"
           icon="information"
           label="Task information"
+          title={`Task information (${PROJECT_SHORTCUT_HINTS.taskInfo})`}
           onClick={() => dispatch({ type: 'openTaskInfo' })}
         />,
         <IconAction
           key="assign"
           icon="resources"
           label="Assign resources"
+          title={`Assign resources (${PROJECT_SHORTCUT_HINTS.assign})`}
           onClick={() => dispatch({ type: 'openAssignDialog' })}
         />,
         <IconAction
           key="indent"
           icon="indent"
           label="Indent"
+          title={`Indent (${PROJECT_SHORTCUT_HINTS.indent})`}
           onClick={() => dispatch({ type: 'indentTask', taskId: selectedTaskId })}
         />,
         <IconAction
           key="outdent"
           icon="outdent"
           label="Outdent"
+          title={`Outdent (${PROJECT_SHORTCUT_HINTS.outdent})`}
           onClick={() => dispatch({ type: 'outdentTask', taskId: selectedTaskId })}
         />,
         <IconAction
           key="link"
           icon="link"
           label="Link selected tasks (FS)"
+          title={`Link selected tasks (${PROJECT_SHORTCUT_HINTS.link})`}
           disabled={!canLink}
           onClick={() => dispatch({ type: 'linkSelection' })}
         />,
@@ -95,6 +102,7 @@ export function useWorkspaceActions(): ReactNode[] {
           key="unlink"
           icon="unlink"
           label="Unlink selection"
+          title={`Unlink selection (${PROJECT_SHORTCUT_HINTS.unlink})`}
           disabled={!canUnlink}
           onClick={() => dispatch({ type: 'unlinkSelection' })}
         />,
@@ -102,7 +110,8 @@ export function useWorkspaceActions(): ReactNode[] {
           key="delete"
           icon="delete"
           label="Delete task"
-          onClick={() => dispatch({ type: 'deleteTask', taskId: selectedTaskId })}
+          title={`Delete task (${PROJECT_SHORTCUT_HINTS.deleteSelection})`}
+          onClick={() => dispatch({ type: 'deleteSelection' })}
         />,
       )
     } else {

@@ -29,14 +29,17 @@
 ### 2.2 Icons in the package
 
 - `src-tauri/icons/*` and `build/icon.ico` / `build/icon.png` as needed by the pack scripts.
-- Invalid ICO sizes that break packaging MUST be fixed before claiming pack success.
+- Ship a **multi-resolution ICO** (16, 24, 32, 48, 64, 128, 256) via `scripts/make-ico.mjs` with embedded **PNG + alpha**.
+- Corner pixels outside the rounded mark MUST have **alpha = 0** (no black plate).
+- Favicon SVG: transparent viewport outside the rounded rect.
+- Invalid ICO sizes that break `makensis` MUST be fixed before claiming pack success.
 
 ### 2.3 Window / save
 
 - Main window title SuperGantt, sensible min size, branded background.
-- Save/export MUST use a native dialog (`showSaveFilePicker` and/or Tauri `save_file`) — not a silent `<a download>` no-op in WebView2.
+- Save/export MUST use a native dialog (`showSaveFilePicker` and/or Tauri `save_file`) - not a silent `<a download>` no-op in WebView2.
 
-## 3. Port / “404 after install” (MUST)
+## 3. Port / "404 after install" (MUST)
 
 Historical defect (pre-Tauri desktop): installed exe showed **404** because it attached to a port that had API health but **no UI**, or conflicted with a leftover dev server on **8787**.
 
@@ -44,9 +47,9 @@ Historical defect (pre-Tauri desktop): installed exe showed **404** because it a
 
 1. Prefer port `8787` (or configured preferred port).
 2. Treat a port as **ready** only if `/api/health` succeeds **and** `/` returns HTML UI.
-3. If preferred port is free → spawn packaged Node API with `SUPERGANNT_STATIC_ROOT` pointing at staged UI.
-4. If preferred port is “wrong” (API without UI) or busy → scan subsequent ports for a free bind.
-5. Wait until ready with short probe timeouts; on failure → error dialog / quit — never leave a blank 404 window as the happy path.
+3. If preferred port is free, spawn packaged Node API with `SUPERGANNT_STATIC_ROOT` pointing at staged UI.
+4. If preferred port is wrong (API without UI) or busy, scan subsequent ports for a free bind.
+5. Wait until ready with short probe timeouts; on failure, show an error dialog / quit - never leave a blank 404 window as the happy path.
 
 ## 4. Java runtime for MPP (MUST)
 
@@ -61,10 +64,10 @@ Historical defect (pre-Tauri desktop): installed exe showed **404** because it a
 
 ## 6. Process requirements for agents/developers
 
-When asked to “собери exe / инсталлер”:
+When asked to build the Windows exe / installer:
 
 1. Run tests.
 2. Ensure production build succeeds.
 3. Run `npm run tauri:pack`.
 4. Report path + approximate size of the installer.
-5. If pack fails (ICO, signing, EPERM), fix root cause and re-run — do not hand the user a broken artifact.
+5. If pack fails (ICO, signing, EPERM), fix root cause and re-run - do not hand the user a broken artifact.

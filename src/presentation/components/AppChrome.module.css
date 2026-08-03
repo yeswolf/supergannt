@@ -407,6 +407,18 @@
   height: 1.15rem;
 }
 
+.paletteHint {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--msp-text-muted);
+  border: 1px solid var(--msp-border);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  white-space: nowrap;
+}
+
 .paletteEmpty {
   padding: 0.85rem;
   color: var(--msp-text-secondary);

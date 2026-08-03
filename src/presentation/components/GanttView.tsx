@@ -14,6 +14,7 @@ import {
   GANTT_ZOOM_LEVELS,
 } from '../../infrastructure/gantt/GanttZoomLevels'
 import { installGanttColumnResize } from '../../infrastructure/gantt/ganttColumnResize'
+import { taskIdFromTimelineEmptyClick } from '../../infrastructure/gantt/timelineRowSelect'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { IconAction, IconActionGroup } from './IconAction'
 import { ViewHeader, ViewHeaderSep } from './ViewHeader'
@@ -288,6 +289,9 @@ export function GanttView() {
   const applyProjectToGanttRef = useRef(applyProjectToGantt)
   applyProjectToGanttRef.current = applyProjectToGantt
 
+  /** Click modifiers for onTaskSelected (ctrl/meta/shift multi-select). */
+  const selectModifiersRef = useRef({ additive: false, fromClick: false })
+
   const setZoom = useCallback((next: number) => {
     const clamped = clampZoomIndex(next)
     setZoomIndex(clamped)
@@ -408,15 +412,54 @@ export function GanttView() {
     const detachColResize = installGanttColumnResize(gantt, root)
     const detachTouchPan = installTimelineTouchPan(root)
 
-    const onSelect = gantt.attachEvent('onTaskSelected', (id: string) => {
-      const additive =
-        typeof window !== 'undefined' &&
-        (window.event as MouseEvent | undefined)?.ctrlKey === true
-      dispatch({
-        type: 'selectTask',
-        taskId: String(id),
-        additive,
+    const onTaskClick = gantt.attachEvent(
+      'onTaskClick',
+      (id: string, e?: Event) => {
+        const ev = e as MouseEvent | undefined
+        const additive = Boolean(ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey))
+        selectModifiersRef.current = { additive, fromClick: true }
+        // Always sync workspace selection (toolbar / Delete / Task Info). Do not
+        // gate on syncingFromProjectRef — parse/select races would drop the click.
+        dispatch({
+          type: 'selectTask',
+          taskId: String(id),
+          additive,
+        })
+        return true
+      },
+    )
+    // Clicks on the timeline row (outside the bar) are onEmptyClick in dhtmlx —
+    // locate() intentionally returns null for .gantt_task_row. Select that task.
+    const onEmptyClick = gantt.attachEvent('onEmptyClick', (e: Event) => {
+      const id = taskIdFromTimelineEmptyClick(e, {
+        taskAttribute: String(gantt.config.task_attribute ?? 'data-task-id'),
+        linkAttribute: String(gantt.config.link_attribute ?? 'data-link-id'),
       })
+      if (!id || !gantt.isTaskExists(id)) return
+      const ev = e as MouseEvent
+      const additive = Boolean(ev.ctrlKey || ev.metaKey || ev.shiftKey)
+      selectModifiersRef.current = { additive, fromClick: true }
+      dispatch({ type: 'selectTask', taskId: id, additive })
+      try {
+        gantt.selectTask(id)
+      } catch {
+        /* ignore */
+      }
+    })
+    const onSelect = gantt.attachEvent('onTaskSelected', (id: string) => {
+      if (syncingFromProjectRef.current) {
+        selectModifiersRef.current = { additive: false, fromClick: false }
+        return true
+      }
+      // Keyboard / API selection (no prior onTaskClick): treat as single select.
+      if (!selectModifiersRef.current.fromClick) {
+        dispatch({
+          type: 'selectTask',
+          taskId: String(id),
+          additive: false,
+        })
+      }
+      selectModifiersRef.current = { additive: false, fromClick: false }
       return true
     })
     const onDbl = gantt.attachEvent('onTaskDblClick', (id: string) => {
@@ -429,17 +472,29 @@ export function GanttView() {
         if (syncingFromProjectRef.current) return true
         const task = gantt.getTask(id)
         if (mode === 'resize' || mode === 'move') {
-          const hours = Math.max(0, Number(task.duration) || 0)
-          dispatch({
-            type: 'updateTask',
-            taskId: String(id),
-            patch: {
-              start: new Date(task.start_date),
-              finish: new Date(task.end_date),
-              durationHours: hours,
-              percentComplete: Math.round(Number(task.progress) * 100),
-            },
-          })
+          if (mode === 'move') {
+            // Keep duration hours; finish + FS successors recompute in updateTask.
+            dispatch({
+              type: 'updateTask',
+              taskId: String(id),
+              patch: {
+                start: new Date(task.start_date),
+                percentComplete: Math.round(Number(task.progress) * 100),
+              },
+            })
+          } else {
+            const hours = Math.max(0, Number(task.duration) || 0)
+            dispatch({
+              type: 'updateTask',
+              taskId: String(id),
+              patch: {
+                start: new Date(task.start_date),
+                finish: new Date(task.end_date),
+                durationHours: hours,
+                percentComplete: Math.round(Number(task.progress) * 100),
+              },
+            })
+          }
         }
         return true
       },
@@ -537,6 +592,8 @@ export function GanttView() {
       window.removeEventListener('supergantt:gantt-zoom', onToolbarZoom)
       root.removeEventListener('wheel', onWheel)
       gantt.detachEvent(onSelect)
+      gantt.detachEvent(onTaskClick)
+      gantt.detachEvent(onEmptyClick)
       gantt.detachEvent(onDbl)
       gantt.detachEvent(onDrag)
       gantt.detachEvent(onLinkCreated)
@@ -552,10 +609,36 @@ export function GanttView() {
     }
   }, [dispatch, zoomIn, zoomOut])
 
+  const selectedTaskIdRef = useRef(selectedTaskId)
+  selectedTaskIdRef.current = selectedTaskId
+
+  // Data / filter changes: full reload. Selection-only updates use the effect below.
   useEffect(() => {
     if (!readyRef.current) return
-    applyProjectToGantt(project, selectedTaskId)
-  }, [project, selectedTaskId, taskFilter, applyProjectToGantt])
+    applyProjectToGantt(project, selectedTaskIdRef.current)
+  }, [project, taskFilter, applyProjectToGantt])
+
+  useEffect(() => {
+    if (!readyRef.current) return
+    if (!selectedTaskId) {
+      try {
+        gantt.unselectTask()
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+    if (!gantt.isTaskExists(selectedTaskId)) return
+    if (String(gantt.getSelectedId()) === String(selectedTaskId)) return
+    syncingFromProjectRef.current = true
+    try {
+      gantt.selectTask(selectedTaskId)
+    } finally {
+      Promise.resolve().then(() => {
+        syncingFromProjectRef.current = false
+      })
+    }
+  }, [selectedTaskId])
 
   const level = GANTT_ZOOM_LEVELS[zoomIndex]!
 

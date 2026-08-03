@@ -126,3 +126,9 @@
   background: var(--msp-row-selected);
   box-shadow: inset 2px 0 0 var(--msp-accent);
 }
+
+.critical.selected {
+  border-color: var(--msp-danger);
+  background: color-mix(in srgb, var(--msp-danger-soft) 55%, var(--msp-row-selected));
+  outline-color: var(--msp-accent);
+}

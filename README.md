@@ -20,6 +20,7 @@
   <a href="#-screenshots">📸 Screenshots</a> ·
   <a href="#-features">✨ Features</a> ·
   <a href="#-quick-start">🚀 Quick start</a> ·
+  <a href="docs/keyboard-shortcuts.md">⌨️ Shortcuts</a> ·
   <a href="https://github.com/yeswolf/supergannt/releases/latest">💿 Download</a>
 </p>
 
@@ -140,10 +141,12 @@ Sample plan: [`06-advanced-tracking.mpp`](testdata/mpp/06-advanced-tracking.mpp)
 | 🖥️ | **Browser** or **Windows desktop** (Tauri / WebView2) |
 | 📱 | **Android** APK — offline open/save of `.mpp`, XML, MPX, PDF (no cloud) |
 | 🎨 | **Themes** — Light, Dark, Contrast, Darcula, Solarized |
-| ⌨️ | **Command palette** (Ctrl+K) for file actions + commands |
+| ⌨️ | **Command palette** (Ctrl+K) + [keyboard shortcuts](docs/keyboard-shortcuts.md) (ProjectLibre-style) |
 | 🐳 | Fully offline with **Docker** |
 
 **Views:** Gantt · Task Sheet · Resources · Network · WBS · Usage · Calendars · Reports (incl. earned-value style summaries)
+
+Full chord list: **[Keyboard shortcuts](docs/keyboard-shortcuts.md)**.
 
 ---
 

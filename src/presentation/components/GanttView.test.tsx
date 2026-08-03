@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { act, screen, fireEvent } from '@testing-library/react'
+import { act, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { renderWithWorkspace } from '../../test/workspaceTestUtils'
@@ -18,6 +18,8 @@ const { ganttMock, handlers, tasks, links } = vi.hoisted(() => {
       types: { task: 'task', project: 'project', milestone: 'milestone' },
       min_column_width: 40,
       scales: [] as unknown[],
+      task_attribute: 'data-task-id',
+      link_attribute: 'data-link-id',
     },
     templates: {} as Record<string, unknown>,
     init: vi.fn(),
@@ -60,6 +62,8 @@ const { ganttMock, handlers, tasks, links } = vi.hoisted(() => {
       },
     ),
     isTaskExists: vi.fn((id: string) => tasks.has(String(id))),
+    getSelectedId: vi.fn(() => null as string | null),
+    unselectTask: vi.fn(),
     selectTask: vi.fn(),
     deleteLink: vi.fn((id: string) => {
       links.delete(String(id))
@@ -222,6 +226,63 @@ describe('GanttView', () => {
     await user.click(toggle)
     expect(screen.getByRole('button', { name: 'Hide task list' })).toBeInTheDocument()
     expect((ganttMock.config as { show_grid?: boolean }).show_grid).toBe(true)
+  })
+
+  it('gantt task click updates workspace selection and toolbar actions', async () => {
+    renderWithWorkspace(<GanttView />, {
+      bootstrap: [{ type: 'newProject' }, { type: 'addTask' }],
+    })
+
+    expect(screen.queryByRole('button', { name: 'Delete task' })).not.toBeInTheDocument()
+
+    await waitFor(() => expect(tasks.size).toBeGreaterThan(0))
+    const taskId = [...tasks.keys()][0]!
+
+    await act(async () => {
+      const click = handlers.get('onTaskClick')
+      expect(click).toBeTypeOf('function')
+      click?.(taskId, { ctrlKey: false, metaKey: false, shiftKey: false })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Delete task' })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'Task information' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Indent' })).toBeInTheDocument()
+  })
+
+  it('click on timeline row outside the bar selects the task', async () => {
+    renderWithWorkspace(<GanttView />, {
+      bootstrap: [{ type: 'newProject' }, { type: 'addTask' }],
+    })
+
+    await waitFor(() => expect(tasks.size).toBeGreaterThan(0))
+    const taskId = [...tasks.keys()][0]!
+
+    const row = document.createElement('div')
+    row.className = 'gantt_task_row'
+    row.setAttribute('data-task-id', taskId)
+    const cell = document.createElement('div')
+    cell.className = 'gantt_task_cell'
+    row.appendChild(cell)
+
+    await act(async () => {
+      const empty = handlers.get('onEmptyClick')
+      expect(empty).toBeTypeOf('function')
+      empty?.({
+        target: cell,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Delete task' })).toBeInTheDocument()
+    })
+    expect(ganttMock.selectTask).toHaveBeenCalledWith(taskId)
   })
 
   it('mouse FS link keeps dependency and shifts successor start after clearAll/parse sync', async () => {

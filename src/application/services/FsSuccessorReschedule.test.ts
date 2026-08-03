@@ -141,6 +141,37 @@ describe('FS successor reschedule on predecessor link', () => {
     )
   })
 
+  it('moving start keeps duration and shifts FS successors (stale finish ignored)', () => {
+    const ids = new SeqIds()
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, { name: 'A', durationHours: 16 })
+    project = TaskUseCases.addTask(project, ids, { name: 'B', durationHours: 8 })
+    project = TaskUseCases.addTask(project, ids, { name: 'C', durationHours: 8 })
+    const [a, b, c] = project.tasks
+    project = DependencyUseCases.linkTasks(project, ids, a!.id, b!.id, 'FS', 0)
+    project = DependencyUseCases.linkTasks(project, ids, b!.id, c!.id, 'FS', 0)
+
+    const aBefore = project.tasks.find((t) => t.id === a!.id)!
+    const hoursBefore = aBefore.duration.toHours()
+    const cal = project.getCalendar()
+    // Jump ~5 working days later while leaving the old finish in the patch
+    // (Task Information used to send both dates and shrink duration).
+    const newStart = cal.addWorkingHours(aBefore.start, 40)
+    project = TaskUseCases.updateTask(project, a!.id, {
+      start: newStart,
+      finish: aBefore.finish,
+    })
+
+    const a2 = project.tasks.find((t) => t.id === a!.id)!
+    const b2 = project.tasks.find((t) => t.id === b!.id)!
+    const c2 = project.tasks.find((t) => t.id === c!.id)!
+    expect(a2.duration.toHours()).toBe(hoursBefore)
+    expect(a2.constraintType).toBe('startNoEarlierThan')
+    expect(a2.start.getTime()).toBeGreaterThanOrEqual(newStart.getTime() - 3600_000)
+    expect(b2.start.getTime()).toBe(cal.snapToWorkStart(a2.finish).getTime())
+    expect(c2.start.getTime()).toBe(cal.snapToWorkStart(b2.finish).getTime())
+  })
+
   it('workspace linkSelection and setPredecessorLinks shift successor bars', () => {
     let s = createInitialState()
     s = workspaceReducer(s, { type: 'newProject' })

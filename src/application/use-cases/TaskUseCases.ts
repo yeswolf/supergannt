@@ -156,14 +156,20 @@ export function updateTask(
     const nextStart = patch.start ?? task.start
     let nextFinish = patch.finish ?? task.finish
 
+    const durationHoursProvided = patch.durationHours !== undefined
+    const durationHoursChanged =
+      durationHoursProvided &&
+      Math.abs((patch.durationHours as number) - task.duration.toHours()) > 0.001
+
     let nextHours = task.duration.toHours()
-    if (patch.durationHours !== undefined) nextHours = Math.max(0, patch.durationHours)
+    if (durationHoursProvided) nextHours = Math.max(0, patch.durationHours as number)
     else if (patch.durationDays !== undefined) nextHours = Math.max(0, patch.durationDays * 8)
     else if (patch.milestone === true) nextHours = 0
     else if (
-      // Finish edited without explicit duration → derive working hours from start→finish.
-      // Start-only edits keep duration (ProjectLibre / Gantt move).
+      // Finish-only edit (no start) → derive working hours from start→finish.
+      // Start moves keep duration; scheduler recomputes finish and pushes successors.
       patch.finish !== undefined &&
+      patch.start === undefined &&
       patch.durationHours === undefined &&
       patch.durationDays === undefined
     ) {
@@ -176,9 +182,10 @@ export function updateTask(
     const effortDriven = patch.effortDriven ?? task.effortDriven
 
     const durationEdited =
-      patch.durationHours !== undefined ||
+      durationHoursChanged ||
       patch.durationDays !== undefined ||
       (patch.finish !== undefined &&
+        patch.start === undefined &&
         patch.durationHours === undefined &&
         patch.durationDays === undefined &&
         patch.workHours === undefined)
@@ -226,9 +233,9 @@ export function updateTask(
 
     const nextDuration = Duration.hours(nextHours)
 
-    // Keep finish consistent with start+duration when start moves or duration changes
-    // without an explicit finish (scheduler will refine, but Task.create needs finish >= start).
-    if (patch.finish === undefined || durationEdited || workEdited) {
+    // Keep finish = start + duration whenever start moves or duration/work changes.
+    // Finish-only edits keep the patched finish (duration already derived above).
+    if (patch.start !== undefined || patch.finish === undefined || durationEdited || workEdited) {
       nextFinish = calendar.addWorkingHours(nextStart, nextHours)
     } else if (nextFinish.getTime() < nextStart.getTime()) {
       nextFinish = calendar.addWorkingHours(nextStart, nextHours)
@@ -237,15 +244,22 @@ export function updateTask(
     let constraintDate =
       patch.constraintDate !== undefined ? patch.constraintDate : task.constraintDate
 
-    // ProjectLibre: dragging a bar / editing Start sets Start No Earlier Than
-    // so predecessors can still push the task later.
+    // Explicit Start edit (sheet / dialog / Gantt move):
+    // - later → SNET (preds may still push further out, ProjectLibre drag)
+    // - earlier → MSO so the date actually sticks (SNET cannot pull before the
+    //   ASAP / project-start floor, so “move back / into the past” was a no-op)
     if (
       patch.start !== undefined &&
       patch.constraintType === undefined &&
       patch.start.getTime() !== task.start.getTime()
     ) {
-      constraintType = 'startNoEarlierThan'
-      constraintDate = patch.start
+      if (patch.start.getTime() < task.start.getTime()) {
+        constraintType = 'mustStartOn'
+        constraintDate = patch.start
+      } else {
+        constraintType = 'startNoEarlierThan'
+        constraintDate = patch.start
+      }
     }
 
     const draft = {
@@ -276,8 +290,24 @@ export function updateTask(
       }),
     })
   })
+
+  // Past Start (before project start) would otherwise snap to the project anchor.
+  let nextStartDate = project.startDate
+  if (patch.start !== undefined) {
+    const snapped = calendar.snapToWorkStart(patch.start)
+    if (snapped.getTime() < nextStartDate.getTime()) {
+      nextStartDate = snapped
+    }
+  }
+
   return refreshProject(
-    project.with({ tasks, assignments: nextAssignments }).markDirty(),
+    project
+      .with({
+        tasks,
+        assignments: nextAssignments,
+        startDate: nextStartDate,
+      })
+      .markDirty(),
   )
 }
 

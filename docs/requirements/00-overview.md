@@ -78,5 +78,7 @@ Documented from chat decisions (see also ADRs):
 
 ## 7. Language and docs
 
-- End-user README: English (shipping requirement from chat).
-- Internal requirements in `docs/`: detailed enough to implement without re-reading chat transcripts.
+- **All product and engineering docs are English** (README, `docs/requirements/*`, ADRs, shortcut guide, catalog).
+- End-user README: English (shipping requirement).
+- Internal requirements in `docs/` must be detailed enough to implement without re-reading chat transcripts.
+- Chat may be multilingual; write requirements and agent-facing docs in English only.

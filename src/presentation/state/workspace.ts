@@ -101,6 +101,7 @@ export type WorkspaceAction =
   | { type: 'addMilestone'; afterTaskId?: string }
   | { type: 'updateTask'; taskId: string; patch: Parameters<typeof TaskUseCases.updateTask>[2] }
   | { type: 'deleteTask'; taskId: string }
+  | { type: 'deleteSelection' }
   | { type: 'indentTask'; taskId: string }
   | { type: 'outdentTask'; taskId: string }
   | {
@@ -270,6 +271,28 @@ export function workspaceReducer(
         selectedTaskIds: state.selectedTaskIds.filter((id) => id !== action.taskId),
         statusMessage: 'Task deleted.',
       }
+    case 'deleteSelection': {
+      const ids =
+        state.selectedTaskIds.length > 0
+          ? [...state.selectedTaskIds]
+          : state.selectedTaskId
+            ? [state.selectedTaskId]
+            : []
+      if (ids.length === 0) return state
+      let project = state.project
+      for (const id of ids) {
+        if (project.tasks.some((t) => t.id === id)) {
+          project = TaskUseCases.deleteTask(project, id)
+        }
+      }
+      return {
+        ...state,
+        project,
+        selectedTaskId: null,
+        selectedTaskIds: [],
+        statusMessage: ids.length > 1 ? 'Tasks deleted.' : 'Task deleted.',
+      }
+    }
     case 'indentTask':
       return {
         ...state,
@@ -376,24 +399,46 @@ export function workspaceReducer(
       }
     case 'applyTaskInformation': {
       try {
-        // Order: Advanced → Resources → General → Predecessors (FS last).
-        let project = TaskUseCases.updateTask(state.project, action.taskId, {
-          constraintType: action.advanced.constraintType,
-          constraintDate: action.advanced.constraintDate,
-        })
+        // Advanced → Resources → General (non-date) → Predecessors → Start/Finish last.
+        // Predecessors can clear soft SNET; Start must win afterward. A Start edit also
+        // must not be undone by Advanced ASAP applied earlier in the same OK.
+        const { start, finish, ...generalRest } = action.general
+        const startMove = start !== undefined
+        let project = state.project
+        if (!startMove) {
+          project = TaskUseCases.updateTask(project, action.taskId, {
+            constraintType: action.advanced.constraintType,
+            constraintDate: action.advanced.constraintDate,
+          })
+        }
         project = ResourceUseCases.setTaskAssignments(
           project,
           ids,
           action.taskId,
           action.assignments,
         )
-        project = TaskUseCases.updateTask(project, action.taskId, action.general)
+        project = TaskUseCases.updateTask(project, action.taskId, generalRest)
         project = DependencyUseCases.setPredecessorLinks(
           project,
           ids,
           action.taskId,
           action.predecessors,
         )
+        if (startMove && start) {
+          // Direction (earlier→MSO / later→SNET) is decided inside updateTask.
+          // Forcing SNET here made “move Start back / into the past” a no-op.
+          project = TaskUseCases.updateTask(project, action.taskId, { start })
+        } else if (finish !== undefined) {
+          project = TaskUseCases.updateTask(project, action.taskId, {
+            finish,
+            ...(action.advanced.constraintType !== 'asSoonAsPossible'
+              ? {
+                  constraintType: action.advanced.constraintType,
+                  constraintDate: action.advanced.constraintDate,
+                }
+              : {}),
+          })
+        }
         return {
           ...state,
           project,
