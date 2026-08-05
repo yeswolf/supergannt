@@ -87,10 +87,16 @@ jobs:
 
       - name: Apply changes via patch
         run: |
-          awk '/^```diff /{flag=1; next} /^```$/{flag=0} flag' implement-output.md > fixes.patch
+          awk '/^```diff /,/^```$/' implement-output.md | grep -v '^```' > fixes.patch
           if [ -s fixes.patch ]; then
-            git apply fixes.patch
-            echo "PATCH_APPLIED=true" >> $GITHUB_ENV
+            if git apply --check fixes.patch; then
+              git apply fixes.patch
+              echo "PATCH_APPLIED=true" >> $GITHUB_ENV
+            else
+              echo "patch failed to apply — check implement-output.md"
+              echo "PATCH_APPLIED=false" >> $GITHUB_ENV
+              exit 1
+            fi
           else
             echo "no patches to apply"
             echo "PATCH_APPLIED=false" >> $GITHUB_ENV
@@ -100,7 +106,7 @@ jobs:
         run: |
           git config user.name "Claude Code"
           git config user.email "claude@anthropic.com"
-          git add -u
+          git add -A
           if git diff --cached --quiet; then
             echo "no changes to commit"
             echo "NO_CHANGES=true" >> $GITHUB_ENV
@@ -109,6 +115,15 @@ jobs:
             git push origin ${{ steps.implement.outputs.branch }}
             echo "NO_CHANGES=false" >> $GITHUB_ENV
           fi
+
+      - name: Create PR via gh
+        if: env.NO_CHANGES == 'false'
+        run: |
+          gh pr create --base master --head ${{ steps.implement.outputs.branch }} \
+            --title "${{ github.event.issue.title }}" \
+            --body "Closes #${{ github.event.issue.number }}\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract summary
         id: summary
