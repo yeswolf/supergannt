@@ -1,0 +1,61 @@
+name: 'Setup Obossyk Proxy'
+description: 'Clones, builds and starts the obossyk proxy for Claude Code'
+inputs:
+  magic-token:
+    description: 'GitHub token for cloning obossyk'
+    required: true
+  deepseek-token:
+    description: 'DeepSeek API token for obossyk credentials'
+    required: true
+  data-dir:
+    description: 'Directory for obossyk data'
+    required: false
+    default: '/tmp/obossyk-data'
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout obossyk (master)
+      uses: actions/checkout@v4
+      with:
+        repository: yeswolf/obossyk
+        ref: master
+        path: obossyk
+        token: ${{ inputs.magic-token }}
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Build obossyk proxy
+      run: |
+        cd obossyk
+        npm ci
+        npm run build
+      shell: bash
+
+    - name: Create credentials for obossyk
+      env:
+        DATA_DIR: ${{ inputs.data-dir }}
+      run: |
+        mkdir -p "$DATA_DIR"
+        echo '{"token":"${{ inputs.deepseek-token }}","userInfo":{},"savedAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$DATA_DIR/credentials.json"
+      shell: bash
+
+    - name: Start obossyk proxy
+      env:
+        DATA_DIR: ${{ inputs.data-dir }}
+      run: |
+        cd obossyk
+        nohup node dist/main.js > /tmp/obossyk-proxy.log 2>&1 &
+        for i in $(seq 1 30); do
+          if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
+            echo "proxy ready"
+            exit 0
+          fi
+          sleep 0.5
+        done
+        echo "proxy failed to start" >&2
+        tail -40 /tmp/obossyk-proxy.log >&2
+        exit 1
+      shell: bash

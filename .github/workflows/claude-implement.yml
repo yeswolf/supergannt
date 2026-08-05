@@ -46,46 +46,11 @@ jobs:
           ref: master
           fetch-depth: 0
 
-      - name: Checkout obossyk (master)
-        run: |
-          git clone https://${{ secrets.MAGIC_TOKEN }}@github.com/yeswolf/obossyk.git obossyk
-        env:
-          GIT_ASKPASS: echo
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup obossyk proxy
+        uses: ./.github/actions/setup-obossyk
         with:
-          node-version: '22'
-
-      - name: Build obossyk proxy
-        run: |
-          cd obossyk
-          npm ci
-          npm run build
-
-      - name: Create credentials for obossyk
-        env:
-          DATA_DIR: /tmp/obossyk-data
-        run: |
-          mkdir -p "$DATA_DIR"
-          echo '{"token":"${{ secrets.DEEPSEEK_BEARER_TOKEN }}","userInfo":{},"savedAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$DATA_DIR/credentials.json"
-
-      - name: Start obossyk proxy
-        env:
-          DATA_DIR: /tmp/obossyk-data
-        run: |
-          cd obossyk
-          nohup node dist/main.js > /tmp/obossyk-proxy.log 2>&1 &
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
-              echo "proxy ready"
-              exit 0
-            fi
-            sleep 0.5
-          done
-          echo "proxy failed to start" >&2
-          tail -40 /tmp/obossyk-proxy.log >&2
-          exit 1
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          deepseek-token: ${{ secrets.DEEPSEEK_BEARER_TOKEN }}
 
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
