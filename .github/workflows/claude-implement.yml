@@ -1,0 +1,170 @@
+name: Claude Code Implement
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to implement'
+        required: true
+        type: string
+
+jobs:
+  claude-implement:
+    if: |
+      contains(github.event.comment.body, '/implement')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Verify issue context
+        run: |
+          if [ "${{ github.event.issue.pull_request }}" != "" ]; then
+            echo "This is a PR comment, not an issue — exiting gracefully"
+            exit 0
+          fi
+          echo "Issue context confirmed, proceeding"
+        shell: bash
+
+      - name: Check for task label
+        run: |
+          HAS_TASK=$(echo '${{ toJson(github.event.issue.labels) }}' | grep -q '"name":"task"' && echo true || echo false)
+          if [ "$HAS_TASK" != "true" ]; then
+            echo "Issue does not have 'task' label, exiting gracefully"
+            exit 0
+          fi
+          echo "task label found, proceeding"
+        shell: bash
+
+      - name: Checkout supergannt
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Setup magic
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          deepseek-token: ${{ secrets.DEEPSEEK_BEARER_TOKEN }}
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Claude Code implement
+        id: implement
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
+          ANTHROPIC_API_KEY: unused
+          ANTHROPIC_AUTH_TOKEN: unused
+          CLAUDE_CODE_GLOB_NO_IGNORE: "false"
+        run: |
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          BRANCH="feature/issue-${ISSUE_NUMBER}-$(echo "${ISSUE_TITLE}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          git checkout -b "$BRANCH"
+
+          cat > /tmp/issue.md << 'ISSUE_EOF'
+          ${{ github.event.issue.body }}
+          ISSUE_EOF
+
+          claude -p --dangerously-skip-permissions --max-turns 50 \
+            "Implement the feature described in /tmp/issue.md. \
+            Issue title: ${ISSUE_TITLE}. \
+            Do not read node_modules, dist, data, logs, package-lock.json, wasm, or binary files. \
+            Prefer reading source under src/, tests/, and docs/ only. \
+            Your task: \
+            1) Read /tmp/issue.md to understand the requirements \
+            2) Implement the feature completely \
+            3) Output each changed file as a unified diff block starting with \`\`\`diff FILENAME on its own line \
+            4) After all diffs, output a one-line summary starting with IMPLEMENT_SUMMARY: describing what was done" \
+            > implement-output.md 2>&1
+
+      - name: Apply changes via patch
+        run: |
+          awk '/^```diff /{flag=1; next} /^```$/{flag=0} flag' implement-output.md > fixes.patch
+          if [ -s fixes.patch ]; then
+            git apply fixes.patch
+            echo "PATCH_APPLIED=true" >> $GITHUB_ENV
+          else
+            echo "no patches to apply"
+            echo "PATCH_APPLIED=false" >> $GITHUB_ENV
+          fi
+
+      - name: Commit and push branch
+        run: |
+          git config user.name "Claude Code"
+          git config user.email "claude@anthropic.com"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            echo "NO_CHANGES=true" >> $GITHUB_ENV
+          else
+            git commit -m "${{ github.event.issue.title }}"
+            git push origin ${{ steps.implement.outputs.branch }}
+            echo "NO_CHANGES=false" >> $GITHUB_ENV
+          fi
+
+      - name: Extract summary
+        id: summary
+        run: |
+          SUMMARY=$(grep -o 'IMPLEMENT_SUMMARY:.*' implement-output.md | sed 's/IMPLEMENT_SUMMARY://' | head -1)
+          if [ -z "$SUMMARY" ]; then
+            SUMMARY=$(head -5 implement-output.md | tr '\n' ' ')
+          fi
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+
+      - name: Post comment to issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+
+            let summary;
+            try {
+              const raw = fs.readFileSync('implement-output.md', 'utf8');
+              const match = raw.match(/IMPLEMENT_SUMMARY:\s*(.*)/);
+              summary = match ? match[1] : raw.substring(0, 500).trim();
+            } catch (e) {
+              summary = 'Implementation completed but no output was captured.';
+            }
+
+            const hasChanges = process.env.NO_CHANGES !== 'true';
+            const branch = '${{ steps.implement.outputs.branch }}';
+            const repoUrl = 'https://github.com/' + context.repo.owner + '/' + context.repo.repo;
+            const branchUrl = repoUrl + '/tree/' + branch;
+            const prUrl = repoUrl + '/compare/master...' + branch + '?expand=1';
+            let body;
+            if (hasChanges) {
+              body = '## 🛠️ Claude Code Implementation\n\n' +
+                '**Branch:** [' + branch + '](' + branchUrl + ')\n\n' +
+                '**Create PR:** [Open pull request](' + prUrl + ')\n\n' +
+                summary;
+            } else {
+              body = '## 🛠️ Claude Code Implementation\n\n' +
+                'No changes were made.\n\n' +
+                summary;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: body
+            });
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-implement-logs
+          path: |
+            implement-output.md
+            /tmp/magic-proxy.log
+            /tmp/magic-data/traffic-log.jsonl

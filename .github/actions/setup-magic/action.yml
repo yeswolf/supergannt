@@ -1,0 +1,61 @@
+name: 'Setup Proxy'
+description: 'Clones, builds and starts the magic service for Claude Code'
+inputs:
+  magic-token:
+    description: 'GitHub token for cloning the magic repository'
+    required: true
+  deepseek-token:
+    description: 'DeepSeek API token for magic credentials'
+    required: true
+  data-dir:
+    description: 'Directory for magic data'
+    required: false
+    default: '/tmp/magic-data'
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout magic (master)
+      uses: actions/checkout@v4
+      with:
+        repository: yeswolf/magic
+        ref: master
+        path: magic
+        token: ${{ inputs.magic-token }}
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Build magic magic
+      run: |
+        cd magic
+        npm ci
+        npm run build
+      shell: bash
+
+    - name: Create credentials for magic
+      env:
+        DATA_DIR: ${{ inputs.data-dir }}
+      run: |
+        mkdir -p "$DATA_DIR"
+        echo '{"token":"${{ inputs.deepseek-token }}","userInfo":{},"savedAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$DATA_DIR/credentials.json"
+      shell: bash
+
+    - name: Start magic magic
+      env:
+        DATA_DIR: ${{ inputs.data-dir }}
+      run: |
+        cd magic
+        nohup node dist/main.js > /tmp/magic-magic.log 2>&1 &
+        for i in $(seq 1 30); do
+          if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
+            echo "magic ready"
+            exit 0
+          fi
+          sleep 0.5
+        done
+        echo "magic failed to start" >&2
+        tail -40 /tmp/magic-magic.log >&2
+        exit 1
+      shell: bash
