@@ -155,7 +155,9 @@ jobs:
         if: steps.commit.outputs.has_changes == 'true'
         id: pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer MAGIC_TOKEN (PAT): GITHUB_TOKEN cannot create PRs unless the
+          # repo setting "Allow GitHub Actions to create and approve pull requests" is on.
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
           URL=$(gh pr create --base master --head "${{ steps.meta.outputs.branch }}" \
             --title "${{ steps.meta.outputs.title }}" \
