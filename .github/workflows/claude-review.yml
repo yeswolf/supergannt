@@ -20,18 +20,24 @@ jobs:
         contains(github.event.comment.body, '/claude-review')
       ) && github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
       pull-requests: write
       issues: write
     steps:
-      - name: Checkout repository
+      - name: Checkout supergannt
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout obossyk (master)
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: obossyk/obossyk
+          ref: master
+          path: obossyk
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve PR details
         id: pr
@@ -62,25 +68,24 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
+      - name: Build obossyk proxy
+        run: |
           cd obossyk
           npm ci
           npm run build
 
-      - name: Create credentials
+      - name: Create credentials for obossyk
         env:
           DATA_DIR: /tmp/obossyk-data
         run: |
           mkdir -p "$DATA_DIR"
           echo '{"token":"${{ secrets.DEEPSEEK_BEARER_TOKEN }}","userInfo":{},"savedAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$DATA_DIR/credentials.json"
 
-      - name: Start proxy
+      - name: Start obossyk proxy
         env:
           DATA_DIR: /tmp/obossyk-data
         run: |
+          cd obossyk
           nohup node dist/main.js > /tmp/obossyk-proxy.log 2>&1 &
           for i in $(seq 1 30); do
             if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
@@ -100,7 +105,6 @@ jobs:
         run: |
           git diff --stat ${{ steps.pr.outputs.base_sha }}...${{ steps.pr.outputs.head_sha }} > /tmp/pr-stat.txt
           git diff ${{ steps.pr.outputs.base_sha }}...${{ steps.pr.outputs.head_sha }} > /tmp/pr.diff
-          # Keep prompt payload bounded; Claude can still open source files as needed.
           if [ "$(wc -c < /tmp/pr.diff)" -gt 500000 ]; then
             head -c 500000 /tmp/pr.diff > /tmp/pr.diff.trimmed
             echo -e "\n\n[diff truncated to 500KB]" >> /tmp/pr.diff.trimmed
