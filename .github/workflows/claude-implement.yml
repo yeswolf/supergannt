@@ -1,0 +1,230 @@
+name: Claude Code Implement
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to implement'
+        required: true
+        type: string
+
+jobs:
+  claude-implement:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        contains(github.event.comment.body, '/implement') &&
+        github.event.issue.pull_request == null
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Resolve issue number
+        id: issue
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout supergannt
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Load issue details
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUMBER="${{ steps.issue.outputs.number }}"
+          gh issue view "$ISSUE_NUMBER" --json title,body,labels > /tmp/issue.json
+          TITLE=$(jq -r '.title' /tmp/issue.json)
+          jq -r '.body // ""' /tmp/issue.json > /tmp/issue.md
+          HAS_TASK=$(jq -r '[.labels[].name] | any(. == "task")' /tmp/issue.json)
+          if [ "$HAS_TASK" != "true" ]; then
+            echo "Issue #$ISSUE_NUMBER does not have 'task' label" >&2
+            cat /tmp/issue.json >&2
+            exit 1
+          fi
+          BRANCH="feature/issue-${ISSUE_NUMBER}-$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
+          {
+            echo "title<<EOF"
+            echo "$TITLE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "Loaded issue #$ISSUE_NUMBER → branch $BRANCH"
+          echo "---- issue.md ----"
+          cat /tmp/issue.md
+
+      - name: Setup magic
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Claude Code implement
+        id: implement
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
+          ANTHROPIC_API_KEY: unused
+          ANTHROPIC_AUTH_TOKEN: unused
+          CLAUDE_CODE_GLOB_NO_IGNORE: "false"
+        run: |
+          ISSUE_TITLE="${{ steps.meta.outputs.title }}"
+          BRANCH="${{ steps.meta.outputs.branch }}"
+          git checkout -b "$BRANCH"
+
+          set +e
+          claude -p --dangerously-skip-permissions --max-turns 50 \
+            "Implement the GitHub issue described in /tmp/issue.md. \
+            Issue title: ${ISSUE_TITLE}. \
+            Working directory is the git repo root. You may create/edit files anywhere except node_modules, dist, data, logs, magic/, and build outputs. \
+            Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
+            Critical rules: \
+            1) Read /tmp/issue.md first and follow its acceptance criteria exactly. \
+            2) Make the required file changes with Write/Edit tools immediately — do not only explore. \
+            3) Creating a new file requires the Write tool (or an equivalent shell write). Printed diffs alone are not enough. \
+            4) Keep going until acceptance criteria are met on disk, then verify with Read or Bash. \
+            5) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed." \
+            > implement-output.md 2>&1
+          CLAUDE_EXIT=$?
+          set -e
+          echo "claude_exit=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$CLAUDE_EXIT" -ne 0 ]; then
+            echo "::warning::Claude exited with code $CLAUDE_EXIT (see implement-output.md)"
+            tail -50 implement-output.md || true
+            if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
+              echo "magic still healthy after Claude failure"
+            else
+              echo "::error::magic proxy is down after Claude failure"
+              tail -80 /tmp/magic-proxy.log || true
+            fi
+          fi
+
+      - name: Apply printed diffs (fallback)
+        run: |
+          awk '/^```diff($| )/{flag=1; next} /^```$/{flag=0} flag' implement-output.md > fixes.patch || true
+          if [ -s fixes.patch ]; then
+            git apply fixes.patch || git apply --3way fixes.patch || true
+            echo "attempted to apply printed diffs"
+          else
+            echo "no printed diffs"
+          fi
+
+      - name: Commit and push branch
+        id: commit
+        run: |
+          git config user.name "Claude Code"
+          git config user.email "claude@anthropic.com"
+
+          echo "---- working tree after Claude ----"
+          git status --short || true
+
+          git add -A
+
+          echo "---- staged ----"
+          git diff --cached --stat || true
+          git status --short || true
+
+          if git diff --cached --quiet; then
+            echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Claude produced no file changes for issue #${{ steps.issue.outputs.number }}"
+            exit 1
+          fi
+
+          git commit -m "${{ steps.meta.outputs.title }}"
+          git push -u origin "${{ steps.meta.outputs.branch }}"
+          echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR via gh
+        if: steps.commit.outputs.has_changes == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL=$(gh pr create --base master --head "${{ steps.meta.outputs.branch }}" \
+            --title "${{ steps.meta.outputs.title }}" \
+            --body "Closes #${{ steps.issue.outputs.number }}
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Created PR: $URL"
+
+      - name: Extract summary
+        if: always()
+        id: summary
+        run: |
+          SUMMARY=$(grep -o 'IMPLEMENT_SUMMARY:.*' implement-output.md | sed 's/IMPLEMENT_SUMMARY://' | head -1 || true)
+          if [ -z "$SUMMARY" ]; then
+            SUMMARY=$(head -20 implement-output.md | tr '\n' ' ' | cut -c1-400)
+          fi
+          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+
+      - name: Post comment to issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+
+            let summary;
+            try {
+              const raw = fs.readFileSync('implement-output.md', 'utf8');
+              const match = raw.match(/IMPLEMENT_SUMMARY:\s*(.*)/);
+              summary = match ? match[1] : raw.substring(0, 500).trim();
+            } catch (e) {
+              summary = 'Implementation completed but no output was captured.';
+            }
+
+            const hasChanges = '${{ steps.commit.outputs.has_changes }}' === 'true';
+            const branch = '${{ steps.meta.outputs.branch }}';
+            const issueNumber = ${{ steps.issue.outputs.number }};
+            const prUrl = '${{ steps.pr.outputs.url }}';
+            const repoUrl = 'https://github.com/' + context.repo.owner + '/' + context.repo.repo;
+            const branchUrl = repoUrl + '/tree/' + branch;
+            let body;
+            if (hasChanges) {
+              body = '## 🛠️ Claude Code Implementation\n\n' +
+                '**Branch:** [' + branch + '](' + branchUrl + ')\n\n' +
+                (prUrl ? '**PR:** ' + prUrl + '\n\n' : '') +
+                summary;
+            } else {
+              body = '## 🛠️ Claude Code Implementation\n\n' +
+                '**Failed:** no file changes were produced.\n\n' +
+                summary;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: body
+            });
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-implement-logs
+          path: |
+            implement-output.md
+            /tmp/magic-proxy.log
+            /tmp/magic-magic.log
+            /tmp/magic-data/traffic-log.jsonl
+            /tmp/issue.md
+          if-no-files-found: warn

@@ -1,0 +1,11 @@
+# Preserve LF for GitHub workflows and actions to avoid CRLF warnings
+.github/**/*.yml text eol=lf
+.github/**/*.yaml text eol=lf
+
+# Preserve LF for shell scripts
+*.sh text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.mpp binary
