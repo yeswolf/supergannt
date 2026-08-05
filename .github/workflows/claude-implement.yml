@@ -19,7 +19,7 @@ jobs:
         github.event.issue.pull_request == null
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 180
     permissions:
       contents: write
       pull-requests: write
@@ -88,17 +88,20 @@ jobs:
           git checkout -b "$BRANCH"
 
           set +e
-          claude -p --dangerously-skip-permissions --max-turns 50 \
+          claude -p --dangerously-skip-permissions --max-turns 999999 \
             "Implement the GitHub issue described in /tmp/issue.md. \
             Issue title: ${ISSUE_TITLE}. \
             Working directory is the git repo root. You may create/edit files anywhere except node_modules, dist, data, logs, magic/, and build outputs. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
             Critical rules: \
             1) Read /tmp/issue.md first and follow its acceptance criteria exactly. \
-            2) Make the required file changes with Write/Edit tools immediately — do not only explore. \
-            3) Creating a new file requires the Write tool (or an equivalent shell write). Printed diffs alone are not enough. \
-            4) Keep going until acceptance criteria are met on disk, then verify with Read or Bash. \
-            5) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed." \
+            2) Within the first 8 tool turns, start writing code with Write/Edit. Exploration is capped: at most 8 Read/Glob/Grep calls before the first Write/Edit. \
+            3) Do NOT use the Agent tool. Do NOT spawn subagents. Do NOT burn turns on TaskCreate/TaskUpdate loops. \
+            4) Prefer Read/Glob/Grep over Bash for file discovery. Do not run long find/ls -R loops. \
+            5) Creating a new file requires the Write tool (or an equivalent shell write). Printed diffs alone are not enough. \
+            6) Keep going until acceptance criteria are met on disk (source + unit tests), then verify with a short test command if available. \
+            7) Never end_turn with only prose — if work remains, call Write/Edit. \
+            8) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed." \
             > implement-output.md 2>&1
           CLAUDE_EXIT=$?
           set -e
