@@ -6,6 +6,14 @@ import type { Project } from '../../domain/entities/Project'
 import type { IdGenerator } from '../ports/IdGenerator'
 import { refreshProject } from '../services/ProjectRefresh'
 import { parsePredecessorsField } from '../services/PredecessorNotation'
+import {
+  inspectDependencies,
+  type InspectionReport,
+} from '../../domain/services/CircularDependencyDetector'
+import {
+  inspectDependencies,
+  type InspectionReport,
+} from '../../domain/services/CircularDependencyDetector'
 
 /**
  * After a predecessor is added/changed, let the link drive the successor bar
@@ -191,6 +199,11 @@ export function setPredecessorsFromNotation(
     next = withLinkDrivenSuccessor(next, successorId)
   }
   return refreshProject(next.markDirty())
+}
+
+/** Run the full dependency inspection on the current project. */
+export function inspectProject(project: Project): InspectionReport {
+  return inspectDependencies(project.tasks, project.dependencies)
 }
 
 export function setPredecessorLinks(

@@ -1,0 +1,14 @@
+{
+  "description": "3-node cycle: Design → Build → Test → Design",
+  "tasks": [
+    { "id": "t1", "name": "Design" },
+    { "id": "t2", "name": "Build" },
+    { "id": "t3", "name": "Test" }
+  ],
+  "dependencies": [
+    { "id": "d1", "predecessorId": "t1", "successorId": "t2", "type": "FS", "lagHours": 0 },
+    { "id": "d2", "predecessorId": "t2", "successorId": "t3", "type": "FS", "lagHours": 0 },
+    { "id": "d3", "predecessorId": "t3", "successorId": "t1", "type": "FS", "lagHours": 0 }
+  ],
+  "expectedCycles": 1
+}

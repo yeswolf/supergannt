@@ -1,0 +1,18 @@
+{
+  "description": "Chain A→B→C→D→E with back-edge E→C creating cycle C→D→E→C",
+  "tasks": [
+    { "id": "a", "name": "Task A" },
+    { "id": "b", "name": "Task B" },
+    { "id": "c", "name": "Task C" },
+    { "id": "d", "name": "Task D" },
+    { "id": "e", "name": "Task E" }
+  ],
+  "dependencies": [
+    { "id": "ab", "predecessorId": "a", "successorId": "b", "type": "FS", "lagHours": 0 },
+    { "id": "bc", "predecessorId": "b", "successorId": "c", "type": "FS", "lagHours": 0 },
+    { "id": "cd", "predecessorId": "c", "successorId": "d", "type": "FS", "lagHours": 0 },
+    { "id": "de", "predecessorId": "d", "successorId": "e", "type": "FS", "lagHours": 0 },
+    { "id": "ec", "predecessorId": "e", "successorId": "c", "type": "FS", "lagHours": 0 }
+  ],
+  "expectedCycles": 1
+}

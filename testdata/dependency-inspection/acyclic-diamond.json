@@ -1,0 +1,16 @@
+{
+  "description": "Diamond DAG: A→B, A→C, B→D, C→D — acyclic",
+  "tasks": [
+    { "id": "a", "name": "Start" },
+    { "id": "b", "name": "Path 1" },
+    { "id": "c", "name": "Path 2" },
+    { "id": "d", "name": "End" }
+  ],
+  "dependencies": [
+    { "id": "ab", "predecessorId": "a", "successorId": "b", "type": "FS", "lagHours": 0 },
+    { "id": "ac", "predecessorId": "a", "successorId": "c", "type": "FS", "lagHours": 0 },
+    { "id": "bd", "predecessorId": "b", "successorId": "d", "type": "FS", "lagHours": 0 },
+    { "id": "cd", "predecessorId": "c", "successorId": "d", "type": "FS", "lagHours": 0 }
+  ],
+  "expectedCycles": 0
+}

@@ -1,0 +1,14 @@
+{
+  "description": "Three-way cycle: A → B → C → A",
+  "tasks": [
+    { "id": "a", "name": "Alpha" },
+    { "id": "b", "name": "Beta" },
+    { "id": "c", "name": "Gamma" }
+  ],
+  "dependencies": [
+    { "id": "ab", "predecessorId": "a", "successorId": "b", "type": "FS", "lagHours": 0 },
+    { "id": "bc", "predecessorId": "b", "successorId": "c", "type": "FS", "lagHours": 0 },
+    { "id": "ca", "predecessorId": "c", "successorId": "a", "type": "FS", "lagHours": 0 }
+  ],
+  "expectedCycles": 1
+}

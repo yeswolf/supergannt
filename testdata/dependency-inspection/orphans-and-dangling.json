@@ -1,0 +1,16 @@
+{
+  "description": "Graph with isolated task, no-pred task, no-succ task, and dangling refs",
+  "tasks": [
+    { "id": "t1", "name": "Connected Task" },
+    { "id": "t2", "name": "Isolated Orphan" },
+    { "id": "t3", "name": "No Predecessor" },
+    { "id": "t4", "name": "No Successor" }
+  ],
+  "dependencies": [
+    { "id": "d1", "predecessorId": "t3", "successorId": "t1", "type": "FS", "lagHours": 0 },
+    { "id": "d2", "predecessorId": "t1", "successorId": "t4", "type": "FS", "lagHours": 0 },
+    { "id": "d3", "predecessorId": "missing-pred", "successorId": "t1", "type": "FS", "lagHours": 0 },
+    { "id": "d4", "predecessorId": "t4", "successorId": "missing-succ", "type": "FS", "lagHours": 0 }
+  ],
+  "expectedCycles": 0
+}

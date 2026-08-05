@@ -1,0 +1,10 @@
+{
+  "description": "Self-loop: task depends on itself",
+  "tasks": [
+    { "id": "t1", "name": "Design" }
+  ],
+  "dependencies": [
+    { "id": "d1", "predecessorId": "t1", "successorId": "t1", "type": "FS", "lagHours": 0 }
+  ],
+  "expectedCycles": 1
+}

@@ -1,0 +1,12 @@
+{
+  "description": "Simple 2-task cycle: A depends on B, B depends on A",
+  "tasks": [
+    { "id": "t1", "name": "Task A" },
+    { "id": "t2", "name": "Task B" }
+  ],
+  "dependencies": [
+    { "id": "d1", "predecessorId": "t1", "successorId": "t2", "type": "FS", "lagHours": 0 },
+    { "id": "d2", "predecessorId": "t2", "successorId": "t1", "type": "FS", "lagHours": 0 }
+  ],
+  "expectedCycles": 1
+}

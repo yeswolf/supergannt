@@ -1,0 +1,183 @@
+.panel {
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  border-radius: 6px;
+  margin: 8px 0;
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.panel.inspection-error {
+  border-left: 4px solid #e74c3c;
+}
+
+.panel.inspection-warning {
+  border-left: 4px solid #f39c12;
+}
+
+.panel.inspection-info {
+  border-left: 4px solid #3498db;
+}
+
+.panel.inspection-ok {
+  border-left: 4px solid #2ecc71;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.badge.inspection-error {
+  background: #e74c3c;
+}
+
+.badge.inspection-warning {
+  background: #f39c12;
+}
+
+.badge.inspection-info {
+  background: #3498db;
+}
+
+.badge.inspection-ok {
+  background: #2ecc71;
+}
+
+.summary {
+  margin: 0 0 8px;
+  color: #555;
+  font-style: italic;
+}
+
+.section {
+  margin-top: 10px;
+}
+
+.section h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cycleItem {
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: #fef2f2;
+  border-radius: 4px;
+  border: 1px solid #fecaca;
+}
+
+.cyclePath {
+  font-weight: 600;
+  color: #b91c1c;
+  margin-bottom: 4px;
+}
+
+.cycleChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cycleChip {
+  display: inline-block;
+  padding: 1px 6px;
+  background: #e74c3c;
+  color: #fff;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: monospace;
+}
+
+.orphanItem {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  background: #f8f9fa;
+  border-radius: 3px;
+}
+
+.orphanName {
+  font-weight: 500;
+}
+
+.orphanReason {
+  font-size: 11px;
+  color: #888;
+}
+
+.orphan-isolated .orphanReason {
+  color: #e74c3c;
+}
+
+.redundantItem {
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  background: #fffbeb;
+  border-radius: 3px;
+  border: 1px solid #fde68a;
+  font-size: 12px;
+}
+
+.redundantEdge {
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.redundantDetail {
+  display: block;
+  color: #92400e;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.danglingItem {
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  background: #fef3c7;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.danglingItem code {
+  font-size: 11px;
+  background: #fde68a;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
+.allClear {
+  text-align: center;
+  padding: 16px;
+  color: #2ecc71;
+  font-weight: 500;
+}
