@@ -48,8 +48,9 @@ jobs:
 
       - name: Checkout obossyk (master)
         run: |
-          git config --global url."https://${{ secrets.MAGIC_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git clone --depth 1 --branch master https://github.com/yeswolf/obossyk.git obossyk
+          git clone https://${{ secrets.MAGIC_TOKEN }}@github.com/yeswolf/obossyk.git obossyk
+        env:
+          GIT_ASKPASS: echo
 
       - name: Setup Node
         uses: actions/setup-node@v4
