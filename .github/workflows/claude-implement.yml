@@ -100,8 +100,9 @@ jobs:
             4) Prefer Read/Glob/Grep over Bash for file discovery. Do not run long find/ls -R loops. \
             5) Creating a new file requires the Write tool (or an equivalent shell write). Printed diffs alone are not enough. \
             6) Keep going until acceptance criteria are met on disk (source + unit tests), then verify with a short test command if available. \
-            7) Never end_turn with only prose — if work remains, call Write/Edit. \
-            8) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed." \
+            7) Never end_turn with only prose or a \"how can I help\" menu — if work remains, call Write/Edit. \
+            8) Do not summarize the codebase and stop; implement the issue. \
+            9) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed." \
             > implement-output.md 2>&1
           CLAUDE_EXIT=$?
           set -e
