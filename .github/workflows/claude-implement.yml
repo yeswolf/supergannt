@@ -52,7 +52,7 @@ jobs:
           repository: yeswolf/obossyk
           ref: master
           path: obossyk
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.MAGIC_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
