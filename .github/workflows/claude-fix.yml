@@ -22,12 +22,9 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout obossyk (master)
-        uses: actions/checkout@v4
-        with:
-          repository: yeswolf/obossyk
-          ref: master
-          path: obossyk
-          token: ${{ secrets.MAGIC_TOKEN }}
+        run: |
+          git config --global url."https://${{ secrets.MAGIC_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git clone --depth 1 --branch master https://github.com/yeswolf/obossyk.git obossyk
 
       - name: Resolve PR details
         id: pr
