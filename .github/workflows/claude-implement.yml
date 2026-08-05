@@ -15,7 +15,7 @@ jobs:
     if: |
       contains(github.event.comment.body, '/implement')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     permissions:
       contents: write
       pull-requests: write
@@ -40,38 +40,43 @@ jobs:
           echo "task label found, proceeding"
         shell: bash
 
-      - name: Checkout master
+      - name: Checkout supergannt
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
         with:
           ref: master
           fetch-depth: 0
+
+      - name: Checkout obossyk (master)
+        uses: actions/checkout@v4
+        with:
+          repository: obossyk/obossyk
+          ref: master
+          path: obossyk
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
+      - name: Build obossyk proxy
+        run: |
           cd obossyk
           npm ci
           npm run build
 
-      - name: Create credentials
+      - name: Create credentials for obossyk
         env:
           DATA_DIR: /tmp/obossyk-data
         run: |
           mkdir -p "$DATA_DIR"
           echo '{"token":"${{ secrets.DEEPSEEK_BEARER_TOKEN }}","userInfo":{},"savedAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$DATA_DIR/credentials.json"
 
-      - name: Start proxy
+      - name: Start obossyk proxy
         env:
           DATA_DIR: /tmp/obossyk-data
         run: |
+          cd obossyk
           nohup node dist/main.js > /tmp/obossyk-proxy.log 2>&1 &
           for i in $(seq 1 30); do
             if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
