@@ -24,7 +24,7 @@ jobs:
       - name: Checkout obossyk (master)
         uses: actions/checkout@v4
         with:
-          repository: obossyk/obossyk
+          repository: yeswolf/obossyk
           ref: master
           path: obossyk
           token: ${{ secrets.GITHUB_TOKEN }}
