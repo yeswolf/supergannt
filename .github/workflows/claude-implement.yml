@@ -121,9 +121,7 @@ jobs:
           CLAUDE_EXIT=$?
 
           # One in-job retry if the model explored and quit without writing files.
-          if git status --porcelain | grep -qvE '^\?\?'; then
-            :
-          elif [ -z "$(git status --porcelain)" ]; then
+          if [ -z "$(git status --porcelain)" ]; then
             echo "==== No file changes after first Claude pass — retrying once ===="
             RETRY_PROMPT="${PROMPT} IMPORTANT: previous pass wrote nothing. Start with Write/Edit immediately. No more exploration-only turns."
             run_claude implement-output-retry.md "$RETRY_PROMPT"
@@ -170,8 +168,11 @@ jobs:
           git status --short || true
 
           git add -A
-          # Agent must not commit CI/workflow changes in implement runs.
-          git reset -q -- .github 2>/dev/null || true
+          # Agent must not commit CI/workflow or Claude stdout artifacts.
+          git reset -q -- .github \
+            implement-output.md implement-output-retry.md \
+            fix-output.md review.md review-output.md fixes.patch \
+            2>/dev/null || true
 
           echo "---- staged ----"
           git diff --cached --stat || true

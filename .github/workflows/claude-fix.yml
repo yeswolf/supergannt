@@ -257,7 +257,10 @@ jobs:
           git config user.name "Claude Code"
           git config user.email "claude@anthropic.com"
           git add -A
-          git reset -q -- .github 2>/dev/null || true
+          git reset -q -- .github \
+            implement-output.md implement-output-retry.md \
+            fix-output.md review.md review-output.md fixes.patch \
+            2>/dev/null || true
           if git diff --cached --quiet; then
             echo "NO_CHANGES=true" >> "$GITHUB_ENV"
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
