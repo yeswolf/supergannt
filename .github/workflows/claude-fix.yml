@@ -243,6 +243,28 @@ jobs:
             echo "::warning::Claude exited with code ${CLAUDE_EXIT}"
             tail -80 fix-output.md || true
           fi
+
+          # Print-mode often edits files then ends without the required trailer.
+          # Second turn: force a checklist against the latest review + current diff.
+          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md; then
+            echo "==== Checklist follow-up (no FIX_CHECKLIST in first turn) ===="
+            git diff --stat "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff-stat.txt || true
+            git diff "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff.txt || true
+            {
+              echo ""
+              echo "==== CHECKLIST FOLLOW-UP ===="
+            } >> fix-output.md
+            claude -p --dangerously-skip-permissions --max-turns 20 \
+              "Do NOT edit files. Read /tmp/latest-review.md (full latest review) and /tmp/fix-diff-stat.txt plus /tmp/fix-diff.txt (what changed on the PR branch vs base). \
+              Emit ONLY this trailer covering EVERY Issues Found + Suggestions item from the review: \
+              FIX_CHECKLIST: \
+              - [DONE|SKIPPED] <item>: <one-line proof from the diff or current code> \
+              FIX_SUMMARY: <one line> \
+              Mark DONE only if the diff/code clearly addresses the item; otherwise SKIPPED with why." \
+              >> fix-output.md 2>&1 \
+              || echo "::warning::checklist follow-up Claude exited non-zero"
+          fi
+
           # Keep the job going so we can still commit partial disk edits / post logs.
           true
           set -e
