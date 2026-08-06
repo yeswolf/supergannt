@@ -1,4 +1,5 @@
 import type { DragEvent } from 'react'
+import { useState } from 'react'
 import { AppChrome } from './components/AppChrome'
 import { GanttView } from './components/GanttView'
 import { TaskSheetView } from './components/TaskSheetView'
@@ -15,15 +16,30 @@ import { AssignResourcesDialog } from './components/AssignResourcesDialog'
 import { openPlanFile } from './openPlanFile'
 import { viewLabel } from './components/nav/views'
 import { useWorkspaceDispatch, useWorkspaceState } from './state/WorkspaceContext'
+import type { InspectionIssue } from '../application/services/ProjectInspector'
 import styles from './AppShell.module.css'
 
 function isFileDrag(e: DragEvent): boolean {
   return Array.from(e.dataTransfer.types).includes('Files')
 }
 
+function issueIcon(type: InspectionIssue['type']): string {
+  switch (type) {
+    case 'circular_dependency':
+      return '🔴'
+    case 'orphan_dependency':
+      return '🟡'
+    case 'duplicate_dependency':
+      return '🟠'
+    case 'self_dependency':
+      return '⛔'
+  }
+}
+
 export function AppShell() {
-  const { view, project, statusMessage, busyMessage, services } = useWorkspaceState()
+  const { view, project, statusMessage, busyMessage, services, inspectionIssues } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
+  const [issuesExpanded, setIssuesExpanded] = useState(false)
 
   return (
     <div
@@ -56,6 +72,29 @@ export function AppShell() {
         {view === 'resourceCalendar' ? <ResourceCalendarView /> : null}
         {view === 'reports' ? <ReportsView /> : null}
       </main>
+      {inspectionIssues.length > 0 ? (
+        <div className={styles.issuesPane} role="alert" aria-live="polite">
+          <button
+            type="button"
+            className={styles.issuesToggle}
+            onClick={() => setIssuesExpanded(!issuesExpanded)}
+            aria-expanded={issuesExpanded}
+          >
+            ⚠ {inspectionIssues.length} issue{inspectionIssues.length !== 1 ? 's' : ''} found
+            <span aria-hidden>{issuesExpanded ? ' ▾' : ' ▸'}</span>
+          </button>
+          {issuesExpanded ? (
+            <ul className={styles.issuesList}>
+              {inspectionIssues.map((issue, i) => (
+                <li key={i} className={styles.issueItem}>
+                  <span className={styles.issueIcon}>{issueIcon(issue.type)}</span>
+                  <span className={styles.issueText}>{issue.message}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
       <footer className={styles.statusBar} role="status">
         <span>
           {busyMessage ?? statusMessage ?? `${viewLabel(view)} · Ready`}

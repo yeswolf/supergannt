@@ -8,6 +8,7 @@ import * as ProjectUseCases from '../../application/use-cases/ProjectUseCases'
 import type { LinkType } from '../../domain/entities/Dependency'
 import type { ResourceType } from '../../domain/entities/Resource'
 import type { Project } from '../../domain/entities/Project'
+import { inspectProject, type InspectionIssue } from '../../application/services/ProjectInspector'
 import { UuidIdGenerator } from '../../infrastructure/ids/UuidIdGenerator'
 import { LocalStorageProjectRepository } from '../../infrastructure/persistence/LocalStorageProjectRepository'
 import { MspdiCodec } from '../../infrastructure/mspdi/MspdiCodec'
@@ -61,6 +62,8 @@ export interface WorkspaceState {
   statusMessage: string | null
   /** Non-null while a plan file is being opened/imported. */
   busyMessage: string | null
+  /** Inspection issues for the current project (circular deps, orphans, etc). */
+  inspectionIssues: readonly InspectionIssue[]
   services: AppServices
 }
 
@@ -76,8 +79,22 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     assignDialogOpen: false,
     statusMessage: 'Blank plan — add a task or open a file.',
     busyMessage: null,
+    inspectionIssues: [],
     services,
   }
+}
+
+
+function withInspections(state: WorkspaceState, project: Project): WorkspaceState {
+  return { ...state, project, inspectionIssues: inspectProject(project) }
+}
+
+function withInspectionsAndProject(
+  state: WorkspaceState,
+  project: Project,
+  extra: Partial<WorkspaceState>,
+): WorkspaceState {
+  return { ...state, ...extra, project, inspectionIssues: inspectProject(project) }
 }
 
 export type WorkspaceAction =
@@ -218,59 +235,42 @@ export function workspaceReducer(
     case 'closeAssignDialog':
       return { ...state, assignDialogOpen: false }
     case 'setProject':
-      return {
-        ...state,
-        project: action.project,
+      return withInspectionsAndProject(state, action.project, {
         statusMessage: action.message ?? state.statusMessage,
-      }
+      })
     case 'setStatus':
       return { ...state, statusMessage: action.message }
     case 'setBusy':
       return { ...state, busyMessage: action.message }
     case 'newProject':
-      return {
-        ...state,
-        project: createEmptyProject(ids),
+      return withInspectionsAndProject(state, createEmptyProject(ids), {
         selectedTaskId: null,
         selectedTaskIds: [],
         statusMessage: 'Created a blank project.',
-      }
+      })
     case 'loadDemo':
-      return {
-        ...state,
-        project: createDemoProject(ids),
+      return withInspectionsAndProject(state, createDemoProject(ids), {
         selectedTaskId: null,
         selectedTaskIds: [],
         statusMessage: 'Loaded sample project.',
-      }
+      })
     case 'addTask':
-      return {
-        ...state,
-        project: TaskUseCases.addTask(state.project, ids, {
+      return withInspectionsAndProject(state, TaskUseCases.addTask(state.project, ids, {
           afterTaskId: action.afterTaskId,
-        }),
-        statusMessage: 'Task added.',
-      }
+        }), { statusMessage: 'Task added.' })
     case 'addMilestone':
-      return {
-        ...state,
-        project: TaskUseCases.addMilestone(state.project, ids, action.afterTaskId),
+      return withInspectionsAndProject(state, TaskUseCases.addMilestone(state.project, ids, action.afterTaskId), {
         statusMessage: 'Milestone added (0h).',
-      }
+      })
     case 'updateTask':
-      return {
-        ...state,
-        project: TaskUseCases.updateTask(state.project, action.taskId, action.patch),
-      }
+      return withInspections(state, TaskUseCases.updateTask(state.project, action.taskId, action.patch))
     case 'deleteTask':
-      return {
-        ...state,
-        project: TaskUseCases.deleteTask(state.project, action.taskId),
+      return withInspectionsAndProject(state, TaskUseCases.deleteTask(state.project, action.taskId), {
         selectedTaskId:
           state.selectedTaskId === action.taskId ? null : state.selectedTaskId,
         selectedTaskIds: state.selectedTaskIds.filter((id) => id !== action.taskId),
         statusMessage: 'Task deleted.',
-      }
+      })
     case 'deleteSelection': {
       const ids =
         state.selectedTaskIds.length > 0
@@ -285,115 +285,88 @@ export function workspaceReducer(
           project = TaskUseCases.deleteTask(project, id)
         }
       }
-      return {
-        ...state,
-        project,
+      return withInspectionsAndProject(state, project, {
         selectedTaskId: null,
         selectedTaskIds: [],
         statusMessage: ids.length > 1 ? 'Tasks deleted.' : 'Task deleted.',
-      }
+      })
     }
     case 'indentTask':
-      return {
-        ...state,
-        project: HierarchyUseCases.indentTaskUseCase(state.project, action.taskId),
-      }
+      return withInspections(state, HierarchyUseCases.indentTaskUseCase(state.project, action.taskId))
     case 'outdentTask':
-      return {
-        ...state,
-        project: HierarchyUseCases.outdentTaskUseCase(state.project, action.taskId),
-      }
+      return withInspections(state, HierarchyUseCases.outdentTaskUseCase(state.project, action.taskId))
     case 'linkTasks':
       try {
-        return {
-          ...state,
-          project: DependencyUseCases.linkTasks(
+        return withInspectionsAndProject(state, DependencyUseCases.linkTasks(
             state.project,
             ids,
             action.predecessorId,
             action.successorId,
             action.linkType ?? 'FS',
             action.lagHours ?? 0,
-          ),
-          statusMessage: 'Dependency created.',
-        }
+          ), { statusMessage: 'Dependency created.' })
       } catch (error) {
         return {
           ...state,
+          inspectionIssues: inspectProject(state.project),
           statusMessage: error instanceof Error ? error.message : 'Link failed.',
         }
       }
     case 'linkSelection':
       try {
-        return {
-          ...state,
-          project: DependencyUseCases.linkTaskChain(
+        return withInspectionsAndProject(state, DependencyUseCases.linkTaskChain(
             state.project,
             ids,
             state.selectedTaskIds,
-          ),
-          statusMessage: 'Linked selected tasks (FS).',
-        }
+          ), { statusMessage: 'Linked selected tasks (FS).' })
       } catch (error) {
         return {
           ...state,
+          inspectionIssues: inspectProject(state.project),
           statusMessage: error instanceof Error ? error.message : 'Link failed.',
         }
       }
     case 'unlinkSelection':
-      return {
-        ...state,
-        project: DependencyUseCases.unlinkTasks(
+      return withInspectionsAndProject(state, DependencyUseCases.unlinkTasks(
           state.project,
           state.selectedTaskIds.length > 0
             ? state.selectedTaskIds
             : state.selectedTaskId
               ? [state.selectedTaskId]
               : [],
-        ),
-        statusMessage: 'Unlinked predecessors for selection.',
-      }
+        ), { statusMessage: 'Unlinked predecessors for selection.' })
     case 'unlinkDependency':
-      return {
-        ...state,
-        project: DependencyUseCases.unlinkDependency(
+      return withInspections(state, DependencyUseCases.unlinkDependency(
           state.project,
           action.dependencyId,
-        ),
-      }
+        ))
     case 'setPredecessors':
       try {
-        return {
-          ...state,
-          project: DependencyUseCases.setPredecessorsFromNotation(
+        return withInspectionsAndProject(state, DependencyUseCases.setPredecessorsFromNotation(
             state.project,
             ids,
             action.taskId,
             action.notation,
-          ),
-          statusMessage: 'Predecessors updated.',
-        }
+          ), { statusMessage: 'Predecessors updated.' })
       } catch (error) {
         return {
           ...state,
+          inspectionIssues: inspectProject(state.project),
           statusMessage: error instanceof Error ? error.message : 'Invalid predecessors.',
         }
       }
     case 'setPredecessorLinks':
       try {
-        return {
-          ...state,
-          project: DependencyUseCases.setPredecessorLinks(
+        return withInspectionsAndProject(state, DependencyUseCases.setPredecessorLinks(
             state.project,
             ids,
             action.taskId,
             action.links,
-          ),
-          statusMessage: 'Predecessors updated.',
-        }
+          ), { statusMessage: 'Predecessors updated.' })
       } catch (error) {
         return {
           ...state,
+          inspectionIssues: inspectProject(state.project),
           statusMessage: error instanceof Error ? error.message : 'Invalid predecessors.',
         }
       }
@@ -439,129 +412,96 @@ export function workspaceReducer(
               : {}),
           })
         }
-        return {
-          ...state,
-          project,
+        return withInspectionsAndProject(state, project, {
           taskInfoOpen: false,
           statusMessage: 'Task updated.',
-        }
+        })
       } catch (error) {
         return {
           ...state,
+          inspectionIssues: inspectProject(state.project),
           statusMessage:
             error instanceof Error ? error.message : 'Could not apply task information.',
         }
       }
     }
     case 'addResource':
-      return {
-        ...state,
-        project: ResourceUseCases.addResource(state.project, ids),
+      return withInspectionsAndProject(state, ResourceUseCases.addResource(state.project, ids), {
         statusMessage: 'Resource added.',
-      }
+      })
     case 'updateResource':
-      return {
-        ...state,
-        project: ResourceUseCases.updateResource(
+      return withInspections(state, ResourceUseCases.updateResource(
           state.project,
           action.resourceId,
           action.patch,
-        ),
-      }
+        ))
     case 'setResourceCalendar':
       try {
-        return {
-          ...state,
-          project: ResourceUseCases.setResourceCalendar(
+        return withInspectionsAndProject(state, ResourceUseCases.setResourceCalendar(
             state.project,
             action.resourceId,
             action.calendarId,
-          ),
-          statusMessage: 'Resource calendar updated.',
-        }
+          ), { statusMessage: 'Resource calendar updated.' })
       } catch (error) {
         return {
           ...state,
+          inspectionIssues: inspectProject(state.project),
           statusMessage:
             error instanceof Error ? error.message : 'Could not set resource calendar.',
         }
       }
     case 'ensureResourceCalendar':
       try {
-        return {
-          ...state,
-          project: ResourceUseCases.ensureResourceCalendar(
+        return withInspectionsAndProject(state, ResourceUseCases.ensureResourceCalendar(
             state.project,
             ids,
             action.resourceId,
-          ),
-          statusMessage: 'Resource calendar ready for exceptions.',
-        }
+          ), { statusMessage: 'Resource calendar ready for exceptions.' })
       } catch (error) {
         return {
           ...state,
+          inspectionIssues: inspectProject(state.project),
           statusMessage:
             error instanceof Error ? error.message : 'Could not create resource calendar.',
         }
       }
     case 'deleteResource':
-      return {
-        ...state,
-        project: ResourceUseCases.deleteResource(state.project, action.resourceId),
+      return withInspectionsAndProject(state, ResourceUseCases.deleteResource(state.project, action.resourceId), {
         selectedResourceId:
           state.selectedResourceId === action.resourceId
             ? null
             : state.selectedResourceId,
-      }
+      })
     case 'assignResource':
-      return {
-        ...state,
-        project: ResourceUseCases.assignResource(
+      return withInspectionsAndProject(state, ResourceUseCases.assignResource(
           state.project,
           ids,
           action.taskId,
           action.resourceId,
           action.units,
-        ),
-        statusMessage: 'Resource assigned.',
-      }
+        ), { statusMessage: 'Resource assigned.' })
     case 'unassignResource':
-      return {
-        ...state,
-        project: ResourceUseCases.unassignResource(
+      return withInspectionsAndProject(state, ResourceUseCases.unassignResource(
           state.project,
           action.assignmentId,
-        ),
-        statusMessage: 'Resource unassigned.',
-      }
+        ), { statusMessage: 'Resource unassigned.' })
     case 'setTaskAssignments':
-      return {
-        ...state,
-        project: ResourceUseCases.setTaskAssignments(
+      return withInspectionsAndProject(state, ResourceUseCases.setTaskAssignments(
           state.project,
           ids,
           action.taskId,
           action.links,
-        ),
-        statusMessage: 'Task resources updated.',
-      }
+        ), { statusMessage: 'Task resources updated.' })
     case 'setBaseline':
-      return {
-        ...state,
-        project: ProjectUseCases.setBaseline(state.project),
+      return withInspectionsAndProject(state, ProjectUseCases.setBaseline(state.project), {
         statusMessage: 'Baseline saved.',
-      }
+      })
     case 'clearBaseline':
-      return {
-        ...state,
-        project: ProjectUseCases.clearBaseline(state.project),
+      return withInspectionsAndProject(state, ProjectUseCases.clearBaseline(state.project), {
         statusMessage: 'Baseline cleared.',
-      }
+      })
     case 'updateProjectInfo':
-      return {
-        ...state,
-        project: ProjectUseCases.updateProjectInfo(state.project, action.patch),
-      }
+      return withInspections(state, ProjectUseCases.updateProjectInfo(state.project, action.patch))
     default:
       return state
   }
