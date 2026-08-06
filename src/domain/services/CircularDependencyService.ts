@@ -173,6 +173,8 @@ export function findRedundantDependencies(
     adj.set(d.predecessorId, list)
   }
 
+  // Build transitive reachability for every node: runs BFS from each node with
+  // outgoing edges (transitive-closure scan, O(N×(V+E)) for N sources).
   const transitiveReach = new Map<TaskId, Map<TaskId, TaskId[]>>()
   for (const [node] of adj) {
     const reachable = new Map<TaskId, TaskId[]>()

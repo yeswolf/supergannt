@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Task } from '../entities/Task'
 import { Dependency } from '../entities/Dependency'
 import { Duration } from '../value-objects/Duration'
@@ -13,6 +16,9 @@ import {
   wouldCreateCycle,
 } from './CircularDependencyService'
 import type { CircularPath, DependencyInspectionReport } from './CircularDependencyService'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const TESTDATA_DIR = path.resolve(__dirname, '../../../testdata')
 
 const day = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number)
@@ -246,6 +252,110 @@ describe('CircularDependencyService', () => {
       expect(report.cycles.length).toBeGreaterThanOrEqual(1)
       expect(report.orphans.length).toBeGreaterThanOrEqual(1)
       expect(report.redundants.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  describe('MSPDI integration', () => {
+    /**
+     * Parse MSPDI XML tasks into a simple {name, uid} map and extract
+     * dependency edges (predecessorUID → successorUID), then build Task
+     * and Dependency entities for cycle detection. This exercises the
+     * testdata fixtures without requiring the full MspdiCodec round-trip.
+     */
+    function parseTestdataXml(xml: string): {
+      tasks: Task[]
+      deps: Dependency[]
+    } {
+      const tasks: Task[] = []
+      const uidToTaskId = new Map<number, string>()
+      const taskBlocks = xml.split(/<Task>/g).slice(1) // skip content before first <Task>
+      for (const block of taskBlocks) {
+        const endIdx = block.indexOf('</Task>')
+        const inner = endIdx >= 0 ? block.substring(0, endIdx) : block
+        const uidMatch = /<UID>(\d+)<\/UID>/.exec(inner)
+        const nameMatch = /<Name>([^<]+)<\/Name>/.exec(inner)
+        const outlineMatch = /<OutlineLevel>(\d+)<\/OutlineLevel>/.exec(inner)
+        if (!uidMatch || !nameMatch) continue
+        const uid = Number(uidMatch[1])
+        const name = nameMatch[1]!
+        const outlineLevel = outlineMatch ? Number(outlineMatch[1]) : 0
+        if (uid === 0 || outlineLevel === 0) continue // skip root/summary tasks
+        const taskId = name.toLowerCase()
+        uidToTaskId.set(uid, taskId)
+        tasks.push(makeTask(taskId, name))
+      }
+      // Extract predecessor links from each task block
+      const deps: Dependency[] = []
+      let depIdx = 0
+      for (const block of taskBlocks) {
+        const endIdx = block.indexOf('</Task>')
+        const inner = endIdx >= 0 ? block.substring(0, endIdx) : block
+        const uidMatch = /<UID>(\d+)<\/UID>/.exec(inner)
+        if (!uidMatch) continue
+        const succUid = Number(uidMatch[1])
+        const succId = uidToTaskId.get(succUid)
+        if (!succId) continue
+        const linkRegex = /<PredecessorLink>[^]*?<PredecessorUID>(\d+)<\/PredecessorUID>/g
+        let linkMatch: RegExpExecArray | null
+        while ((linkMatch = linkRegex.exec(inner)) !== null) {
+          const predUid = Number(linkMatch[1])
+          const predId = uidToTaskId.get(predUid)
+          if (!predId) continue
+          deps.push(makeDep(`dep${++depIdx}`, predId, succId))
+        }
+      }
+      return { tasks, deps }
+    }
+
+    it('reads circular-deps.xml and detects A→B→C→A cycle', async () => {
+      const xml = await readFile(
+        path.join(TESTDATA_DIR, 'circular-deps.xml'),
+        'utf-8',
+      )
+      const { tasks, deps } = parseTestdataXml(xml)
+      // Verify the fixture was read and parsed
+      expect(tasks.length).toBeGreaterThanOrEqual(3)
+      expect(deps.length).toBeGreaterThanOrEqual(3)
+
+      const report = inspectDependencies(tasks, deps)
+      expect(report.isAcyclic).toBe(false)
+      expect(report.cycles.length).toBeGreaterThanOrEqual(1)
+      // XML encodes: C→A (A depends on C), A→B (B depends on A), B→C (C depends on B)
+      const names = report.cycles.map((c) => c.description)
+      const hasCycle = names.some(
+        (d) => d.includes('A') && d.includes('B') && d.includes('C'),
+      )
+      expect(hasCycle).toBe(true)
+    })
+
+    it('reads complex-circular-deps.xml and detects multiple cycles', async () => {
+      const xml = await readFile(
+        path.join(TESTDATA_DIR, 'complex-circular-deps.xml'),
+        'utf-8',
+      )
+      const { tasks, deps } = parseTestdataXml(xml)
+      // Verify the fixture was read and parsed
+      expect(tasks.length).toBeGreaterThanOrEqual(4)
+      expect(deps.length).toBeGreaterThanOrEqual(5)
+
+      const report = inspectDependencies(tasks, deps)
+      expect(report.isAcyclic).toBe(false)
+      expect(report.cycles.length).toBeGreaterThanOrEqual(2)
+      // XML encodes: Y→X (X depends on Y), X→Y (Y depends on X) = 2-cycle X↔Y,
+      // plus Z→Y, W→Z, X→W → the 4-cycle X→W→Z→Y→X
+      const names = report.cycles.map((c) => c.description)
+      const hasSmallCycle = names.some(
+        (d) => d.includes('X') && d.includes('Y'),
+      )
+      const hasLargeCycle = names.some(
+        (d) =>
+          d.includes('X') &&
+          d.includes('Y') &&
+          d.includes('Z') &&
+          d.includes('W'),
+      )
+      expect(hasSmallCycle).toBe(true)
+      expect(hasLargeCycle).toBe(true)
     })
   })
 
