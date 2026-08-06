@@ -104,7 +104,8 @@ jobs:
             9) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed."
 
           set +e
-          MAX_ATTEMPTS=8
+          # Short in-job retries; long waits happen via workflow re-dispatch instead.
+          MAX_ATTEMPTS=3
           CLAUDE_EXIT=1
           RATE_LIMITED=false
           for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
@@ -123,10 +124,14 @@ jobs:
                 break
               fi
               RATE_LIMITED=true
-              WAIT=$(( attempt * 180 ))
-              echo "::warning::Rate-limit on implement attempt ${attempt}; sleeping ${WAIT}s"
-              sleep "$WAIT"
-              continue
+              if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+                WAIT=$(( 60 * attempt ))
+                echo "::warning::Rate-limit on implement attempt ${attempt}; sleeping ${WAIT}s"
+                sleep "$WAIT"
+                continue
+              fi
+              echo "::warning::Rate-limit after ${MAX_ATTEMPTS} attempts — will re-dispatch"
+              break
             fi
             RATE_LIMITED=false
             break

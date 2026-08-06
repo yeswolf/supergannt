@@ -207,7 +207,7 @@ jobs:
             - [DONE|SKIPPED] <item>: <one-line proof> \
             FIX_SUMMARY: <one human sentence of what you changed>"
 
-          MAX_ATTEMPTS=8
+          MAX_ATTEMPTS=3
           CLAUDE_EXIT=1
           RATE_LIMITED=false
           for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
@@ -220,10 +220,14 @@ jobs:
             if grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected' fix-output.md \
               && ! grep -qE 'FIX_CHECKLIST:|FIX_SUMMARY:' fix-output.md; then
               RATE_LIMITED=true
-              WAIT=$(( attempt * 180 ))
-              echo "::warning::Rate-limit on fix attempt ${attempt}; sleeping ${WAIT}s"
-              sleep "$WAIT"
-              continue
+              if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+                WAIT=$(( 60 * attempt ))
+                echo "::warning::Rate-limit on fix attempt ${attempt}; sleeping ${WAIT}s"
+                sleep "$WAIT"
+                continue
+              fi
+              echo "::warning::Rate-limit after ${MAX_ATTEMPTS} attempts — will re-dispatch"
+              break
             fi
             RATE_LIMITED=false
             break
