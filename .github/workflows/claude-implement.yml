@@ -231,6 +231,6 @@ jobs:
             implement-output.md
             /tmp/magic-proxy.log
             /tmp/magic-magic.log
-            /tmp/magic-data/traffic-log.jsonl
+            /tmp/magic-data/traffic-log.jsonl*
             /tmp/issue.md
           if-no-files-found: warn

@@ -138,6 +138,6 @@ jobs:
           path: |
             review.md
             /tmp/magic-proxy.log
-            /tmp/magic-data/traffic-log.jsonl
+            /tmp/magic-data/traffic-log.jsonl*
             /tmp/pr-stat.txt
             /tmp/pr.diff

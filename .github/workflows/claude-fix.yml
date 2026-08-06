@@ -186,5 +186,5 @@ jobs:
           path: |
             fix-output.md
             /tmp/magic-proxy.log
-            /tmp/magic-data/traffic-log.jsonl
+            /tmp/magic-data/traffic-log.jsonl*
             /tmp/pr-comments.json
