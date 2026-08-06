@@ -208,8 +208,12 @@ jobs:
             - [DONE|SKIPPED] <item>: <one-line proof> \
             FIX_SUMMARY: <one human sentence of what you changed>"
 
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+
           set +e
           claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --disallowed-tools "$DISALLOW_TOOLS" \
+            --append-system-prompt "CI fix mode: apply every review item with Write/Edit before ending." \
             "$PROMPT" > fix-output.md 2>&1
           CLAUDE_EXIT=$?
           BYTES=$(wc -c < fix-output.md | tr -d ' ')
@@ -223,6 +227,7 @@ jobs:
             echo "" >> fix-output.md
             echo "==== CHECKLIST FOLLOW-UP ====" >> fix-output.md
             claude -p --dangerously-skip-permissions --max-turns 20 \
+              --disallowed-tools "$DISALLOW_TOOLS" \
               "Do NOT edit files. Read /tmp/latest-review.md and /tmp/fix-diff-stat.txt plus /tmp/fix-diff.txt. \
               Emit ONLY: \
               FIX_CHECKLIST: \

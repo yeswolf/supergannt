@@ -104,11 +104,34 @@ jobs:
             8) Do not summarize the codebase and stop; implement the issue. \
             9) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed."
 
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+          APPEND_SYS="CI implement mode: never end_turn until acceptance criteria exist on disk (source + tests). Do not only explore or plan."
+
+          run_claude() {
+            local out="$1"
+            local prompt="$2"
+            claude -p --dangerously-skip-permissions --max-turns 999999 \
+              --disallowed-tools "$DISALLOW_TOOLS" \
+              --append-system-prompt "$APPEND_SYS" \
+              "$prompt" > "$out" 2>&1
+          }
+
           set +e
-          claude -p --dangerously-skip-permissions --max-turns 999999 \
-            "$PROMPT" > implement-output.md 2>&1
+          run_claude implement-output.md "$PROMPT"
           CLAUDE_EXIT=$?
+
+          # One in-job retry if the model explored and quit without writing files.
+          if git status --porcelain | grep -qvE '^\?\?'; then
+            :
+          elif [ -z "$(git status --porcelain)" ]; then
+            echo "==== No file changes after first Claude pass — retrying once ===="
+            RETRY_PROMPT="${PROMPT} IMPORTANT: previous pass wrote nothing. Start with Write/Edit immediately. No more exploration-only turns."
+            run_claude implement-output-retry.md "$RETRY_PROMPT"
+            CLAUDE_EXIT=$?
+            cat implement-output-retry.md >> implement-output.md 2>/dev/null || true
+          fi
           set -e
+
           echo "claude_exit=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
           BYTES=$(wc -c < implement-output.md | tr -d ' ')
           echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"

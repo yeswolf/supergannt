@@ -139,8 +139,12 @@ jobs:
             Never print both. Prefer STATUS_CLEAN when remaining notes are pure nitpicks you would not block on. \
             After that token, write only the human review prose."
 
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+
           set +e
           claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --disallowed-tools "$DISALLOW_TOOLS" \
+            --append-system-prompt "CI review mode: produce STATUS_NEEDS_FIXES or STATUS_CLEAN then the human review. No Task tools." \
             "$PROMPT" > review.md 2>&1
           CLAUDE_EXIT=$?
           BYTES=$(wc -c < review.md | tr -d ' ')
