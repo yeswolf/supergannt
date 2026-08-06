@@ -94,7 +94,12 @@ function withInspectionsAndProject(
   project: Project,
   extra: Omit<Partial<WorkspaceState>, 'project' | 'inspectionIssues'>,
 ): WorkspaceState {
-  return { ...state, ...extra, project, inspectionIssues: inspectProject(project) }
+  // Defensive: strip project / inspectionIssues so callers that circumvent
+  // the Omit type don't get a silent overwrite.
+  const safe: Partial<WorkspaceState> = { ...extra }
+  delete safe.project
+  delete safe.inspectionIssues
+  return { ...state, ...safe, project, inspectionIssues: inspectProject(project) }
 }
 
 export type WorkspaceAction =

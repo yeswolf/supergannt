@@ -20,7 +20,20 @@ export interface InspectionIssue {
  * - Duplicate dependencies (same predecessor → successor pair)
  * - Self-referencing dependencies
  */
+let _memoProject: Project | undefined
+let _memoResult: readonly InspectionIssue[] | undefined
+
+/**
+ * Inspect a project for data integrity issues.
+ * Result is memoized: repeated calls with the same Project instance return
+ * the cached result.  Calls from the reducer benefit when error handlers
+ * re-inspect the unchanged state.project.
+ */
 export function inspectProject(project: Project): readonly InspectionIssue[] {
+  if (project === _memoProject && _memoResult) {
+    return _memoResult
+  }
+
   const issues: InspectionIssue[] = []
   const taskIds = new Set(project.tasks.map((t) => t.id))
   const taskMap = new Map(project.tasks.map((t) => [t.id, t.name]))
@@ -91,5 +104,7 @@ export function inspectProject(project: Project): readonly InspectionIssue[] {
     }
   }
 
+  _memoProject = project
+  _memoResult = issues
   return issues
 }

@@ -61,7 +61,8 @@ describe('detectCircularDependencies', () => {
 
   it('detects a self-loop (self-referencing not possible in Dependency but test edge case)', () => {
     // Self-loops are prevented by Dependency.create, but test the algo
-    const deps = [dep('1', 'A', 'A')]
+    // using a plain object cast to bypass the entity constructor guard.
+    const deps = [{ id: '1', predecessorId: 'A', successorId: 'A' } as Dependency]
     const result = detectCircularDependencies(deps)
     expect(result.hasCycle).toBe(true)
     expect(result.cyclePath).toHaveLength(2)
@@ -167,6 +168,23 @@ describe('wouldCreateCycle', () => {
     expect(result.hasCycle).toBe(true)
     // DFS from A finds B→C as the correct path: C→A→B→C
     expect(result.cyclePath).toEqual(['C', 'A', 'B', 'C'])
+  })
+
+  it('detects a cycle with multi-parent diamond A→B, A→C, C→B when adding B→A', () => {
+    // Diamond where B has two incoming edges: A→B and C→B, plus A→C.
+    // Adding B→A creates cycle B→A→B (shortest path via the direct A→B edge).
+    // The old BFS parent-overwrite would produce an incorrect path because
+    // B's parent gets overwritten by whichever DFS branch visits it first.
+    const deps = [
+      dep('1', 'A', 'B'),
+      dep('2', 'A', 'C'),
+      dep('3', 'C', 'B'),
+    ]
+    const result = wouldCreateCycle(deps, 'B', 'A')
+    expect(result.hasCycle).toBe(true)
+    // DFS from A finds neighbor B which === newPredecessorId, giving the
+    // shortest cycle B→A→B.  The C→B edge is not on the shortest cycle.
+    expect(result.cyclePath).toEqual(['B', 'A', 'B'])
   })
 })
 
