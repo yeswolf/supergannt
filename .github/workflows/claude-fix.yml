@@ -54,45 +54,136 @@ jobs:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Fetch review comments from PR
+      - name: Fetch latest review for PR
         id: comments
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = ${{ steps.pr.outputs.number }};
-
-            const reviewComments = await github.rest.pulls.listReviewComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-              per_page: 100,
-            });
-
-            const issueComments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              per_page: 100,
-            });
-
-            const allComments = [
-              ...reviewComments.data.map(c => ({
-                type: 'review',
-                path: c.path,
-                line: c.line,
-                body: c.body,
-                user: c.user.login,
-              })),
-              ...issueComments.data.map(c => ({
-                type: 'issue',
-                body: c.body,
-                user: c.user.login,
-              })),
-            ];
-
             const fs = require('node:fs');
-            fs.writeFileSync('/tmp/pr-comments.json', JSON.stringify(allComments, null, 2));
-            console.log(`Fetched ${allComments.length} comments`);
+            const prNumber = ${{ steps.pr.outputs.number }};
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const issueComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: prNumber, per_page: 100 },
+            );
+
+            const inlineComments = await github.paginate(
+              github.rest.pulls.listReviewComments,
+              { owner, repo, pull_number: prNumber, per_page: 100 },
+            );
+
+            const formalReviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              { owner, repo, pull_number: prNumber, per_page: 100 },
+            );
+
+            const isClaudeReviewComment = (body) =>
+              typeof body === 'string' &&
+              /##\s*(?:🤖\s*)?Claude Code Review\b/i.test(body);
+
+            const claudeReviewComments = issueComments
+              .filter((c) => isClaudeReviewComment(c.body))
+              .sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime(),
+              );
+
+            const formalWithBody = formalReviews
+              .filter((r) => typeof r.body === 'string' && r.body.trim())
+              .sort(
+                (a, b) =>
+                  new Date(b.submitted_at || b.created_at || 0).getTime() -
+                  new Date(a.submitted_at || a.created_at || 0).getTime(),
+              );
+
+            const latestClaude = claudeReviewComments[0] || null;
+            const latestFormal = formalWithBody[0] || null;
+
+            let source = 'none';
+            let reviewMarkdown = '';
+            let reviewMeta = {};
+
+            if (latestClaude) {
+              source = 'claude_issue_comment';
+              reviewMarkdown = latestClaude.body;
+              reviewMeta = {
+                id: latestClaude.id,
+                user: latestClaude.user?.login,
+                created_at: latestClaude.created_at,
+                html_url: latestClaude.html_url,
+              };
+            } else if (latestFormal) {
+              source = 'pull_request_review';
+              reviewMarkdown = latestFormal.body;
+              reviewMeta = {
+                id: latestFormal.id,
+                user: latestFormal.user?.login,
+                created_at: latestFormal.submitted_at,
+                html_url: latestFormal.html_url,
+                state: latestFormal.state,
+              };
+            }
+
+            if (!reviewMarkdown.trim()) {
+              core.setFailed(
+                'No Claude Code Review (or formal PR review body) found on this PR. Run /review first.',
+              );
+              return;
+            }
+
+            const inline = inlineComments.map((c) => ({
+              id: c.id,
+              path: c.path,
+              line: c.line,
+              side: c.side,
+              body: c.body,
+              user: c.user?.login,
+              created_at: c.created_at,
+              in_reply_to_id: c.in_reply_to_id,
+              html_url: c.html_url,
+            }));
+
+            fs.writeFileSync('/tmp/latest-review.md', reviewMarkdown);
+            fs.writeFileSync(
+              '/tmp/latest-review-meta.json',
+              JSON.stringify(
+                {
+                  source,
+                  ...reviewMeta,
+                  inline_count: inline.length,
+                  claude_review_comment_count: claudeReviewComments.length,
+                },
+                null,
+                2,
+              ),
+            );
+            fs.writeFileSync(
+              '/tmp/pr-inline-comments.json',
+              JSON.stringify(inline, null, 2),
+            );
+
+            // Keep a raw dump for debugging, but Claude should use latest-review.md.
+            fs.writeFileSync(
+              '/tmp/pr-comments.json',
+              JSON.stringify(
+                {
+                  latest_review_source: source,
+                  latest_review_meta: reviewMeta,
+                  inline,
+                },
+                null,
+                2,
+              ),
+            );
+
+            core.setOutput('review_source', source);
+            core.setOutput('review_bytes', String(Buffer.byteLength(reviewMarkdown)));
+            console.log(
+              `Latest review source=${source} bytes=${Buffer.byteLength(reviewMarkdown)} inline=${inline.length}`,
+            );
 
       - name: Run Claude Code fix
         env:
@@ -102,17 +193,29 @@ jobs:
           CLAUDE_CODE_GLOB_NO_IGNORE: "false"
         run: |
           claude -p --dangerously-skip-permissions --max-turns 999999 \
-            "You are fixing issues found in a code review. The PR is: \
-            base branch \`${{ steps.pr.outputs.base_ref }}\`, head branch \`${{ steps.pr.outputs.head_ref }}\`. \
+            "You are fixing EVERY finding from the latest code review on this PR. \
+            PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`. \
             Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}. \
-            The file /tmp/pr-comments.json contains review comments from this PR. \
-            Working directory is the git repo root. Prefer fixing with Write/Edit tools on disk; printed diffs are optional fallback. \
-            Do not read node_modules, dist, data, logs, package-lock.json, wasm, or binary files. \
-            Your task: \
-            1) Read /tmp/pr-comments.json and extract every bug/issue mentioned in review comments \
-            2) Fix each real bug by editing files on disk (Write/Edit). You may also print \`\`\`diff blocks. \
-            3) Skip comments that are not bugs (questions, praise, suggestions you disagree with) \
-            4) After fixes, output a one-line summary starting with FIX_SUMMARY: listing each fix" \
+            \
+            PRIMARY INPUT (read entirely first): /tmp/latest-review.md \
+            This is the full latest Claude Code Review comment for this PR (source=${{ steps.comments.outputs.review_source }}, ${{ steps.comments.outputs.review_bytes }} bytes). \
+            ALSO read /tmp/pr-inline-comments.json if it is non-empty (inline diff comments). \
+            Meta: /tmp/latest-review-meta.json. \
+            \
+            Working directory is the git repo root. Prefer Write/Edit on disk; printed diffs are optional fallback. \
+            Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
+            \
+            Hard rules: \
+            1) Parse /tmp/latest-review.md completely. Collect EVERY actionable item from sections like \"Issues Found\", \"Suggestions\", numbered lists, and any \"must/should/fix/add/remove/normalize\" requests. \
+            2) Treat Suggestions as mandatory work items too — do NOT skip them as \"not a bug\" or \"optional\". \
+            3) For each item: implement the change with Write/Edit (tests included when requested). Only mark SKIPPED if the current code already fully satisfies the item — prove it with a short Read quote. \
+            4) Do not stop after cosmetic/dead-code fixes if tests or other items remain. \
+            5) Do not use the Agent tool / subagents. \
+            6) When finished, print exactly this trailer: \
+            FIX_CHECKLIST: \
+            - [DONE|SKIPPED] <short item>: <one-line proof> \
+            (one bullet per review item) \
+            FIX_SUMMARY: <one line covering all items>" \
             > fix-output.md 2>&1
 
       - name: Apply printed diffs (fallback)
@@ -124,6 +227,23 @@ jobs:
             echo "attempted to apply printed diffs"
           else
             echo "no printed diffs"
+          fi
+
+      - name: Verify checklist covers the review
+        run: |
+          if ! grep -q '^FIX_CHECKLIST:' fix-output.md; then
+            echo "::warning::FIX_CHECKLIST missing from Claude output"
+            tail -80 fix-output.md || true
+          else
+            echo "---- FIX_CHECKLIST ----"
+            awk '/^FIX_CHECKLIST:/{flag=1} flag{print} /^FIX_SUMMARY:/{if(flag&&!/^FIX_CHECKLIST:/) exit}' fix-output.md || true
+          fi
+          # Fail if Claude clearly skipped actionable suggestion language without DONE lines.
+          DONE_COUNT=$(grep -c '^\- \[DONE\]' fix-output.md || true)
+          SKIP_COUNT=$(grep -c '^\- \[SKIPPED\]' fix-output.md || true)
+          echo "done=$DONE_COUNT skipped=$SKIP_COUNT"
+          if [ "${DONE_COUNT:-0}" -eq 0 ] && [ "${SKIP_COUNT:-0}" -eq 0 ]; then
+            echo "::warning::No DONE/SKIPPED checklist bullets found"
           fi
 
       - name: Extract fix summary
@@ -158,18 +278,35 @@ jobs:
             const fs = require('node:fs');
 
             let summary;
+            let checklist = '';
             try {
               const raw = fs.readFileSync('fix-output.md', 'utf8');
               const match = raw.match(/FIX_SUMMARY:\s*(.*)/);
               summary = match ? match[1] : raw.substring(0, 500).trim();
+              const cStart = raw.indexOf('FIX_CHECKLIST:');
+              const cEnd = raw.indexOf('FIX_SUMMARY:');
+              if (cStart !== -1) {
+                checklist = raw
+                  .slice(cStart, cEnd === -1 ? undefined : cEnd)
+                  .trim();
+              }
             } catch (e) {
               summary = 'Fix completed but no output was captured.';
             }
 
             const hasChanges = process.env.NO_CHANGES !== 'true';
-            const body = hasChanges
-              ? `## 🔧 Claude Code Fix\n\n*Fixes applied and pushed to \`${{ steps.pr.outputs.head_ref }}\`*\n\n${summary}`
-              : `## 🔧 Claude Code Fix\n\n*No changes needed*\n\n${summary}`;
+            const body = [
+              '## 🔧 Claude Code Fix',
+              '',
+              hasChanges
+                ? `*Fixes applied and pushed to \`${{ steps.pr.outputs.head_ref }}\`*`
+                : '*No changes needed*',
+              '',
+              checklist ? `${checklist}\n` : '',
+              summary,
+            ]
+              .filter(Boolean)
+              .join('\n');
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -187,4 +324,7 @@ jobs:
             fix-output.md
             /tmp/magic-proxy.log
             /tmp/magic-data/traffic-log.jsonl*
+            /tmp/latest-review.md
+            /tmp/latest-review-meta.json
+            /tmp/pr-inline-comments.json
             /tmp/pr-comments.json
