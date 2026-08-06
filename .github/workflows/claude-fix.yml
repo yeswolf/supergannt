@@ -197,6 +197,7 @@ jobs:
             ALSO read /tmp/pr-inline-comments.json if non-empty. \
             Working directory is the git repo root. Prefer Write/Edit on disk. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
+            Do not modify anything under .github/. \
             Hard rules: \
             1) Collect EVERY actionable item from the review (issues and suggestions). \
             2) Implement each with Write/Edit. SKIPPED only if code already satisfies it (prove with a short quote). \
@@ -244,15 +245,20 @@ jobs:
       - name: Commit and push fixes
         if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
         id: commit
+        env:
+          # PAT: same as implement — GITHUB_TOKEN cannot push workflow file changes.
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
           git config user.name "Claude Code"
           git config user.email "claude@anthropic.com"
           git add -A
+          git reset -q -- .github 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "NO_CHANGES=true" >> "$GITHUB_ENV"
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "Apply review feedback"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git push origin ${{ steps.pr.outputs.head_ref }}
             echo "NO_CHANGES=false" >> "$GITHUB_ENV"
             echo "has_changes=true" >> "$GITHUB_OUTPUT"

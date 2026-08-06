@@ -92,6 +92,7 @@ jobs:
             Issue title: ${ISSUE_TITLE}. \
             Working directory is the git repo root. You may create/edit files anywhere except node_modules, dist, data, logs, magic/, and build outputs. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
+            Do not modify anything under .github/. \
             Critical rules: \
             1) Read /tmp/issue.md first and follow its acceptance criteria exactly. Do not invent a different task. \
             2) Within the first 8 tool turns, start writing code with Write/Edit. Exploration is capped: at most 8 Read/Glob/Grep calls before the first Write/Edit. \
@@ -134,6 +135,10 @@ jobs:
 
       - name: Commit and push branch
         id: commit
+        env:
+          # PAT: GITHUB_TOKEN cannot push commits that touch .github/workflows
+          # ("refusing to allow a GitHub App to create or update workflow").
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
           git config user.name "Claude Code"
           git config user.email "claude@anthropic.com"
@@ -142,6 +147,8 @@ jobs:
           git status --short || true
 
           git add -A
+          # Agent must not commit CI/workflow changes in implement runs.
+          git reset -q -- .github 2>/dev/null || true
 
           echo "---- staged ----"
           git diff --cached --stat || true
@@ -155,6 +162,7 @@ jobs:
           fi
 
           git commit -m "${{ steps.meta.outputs.title }}"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push -u origin "${{ steps.meta.outputs.branch }}"
           echo "NO_CHANGES=false" >> "$GITHUB_ENV"
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
