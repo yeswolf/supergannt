@@ -92,7 +92,7 @@ function withInspections(state: WorkspaceState, project: Project): WorkspaceStat
 function withInspectionsAndProject(
   state: WorkspaceState,
   project: Project,
-  extra: Partial<WorkspaceState>,
+  extra: Omit<Partial<WorkspaceState>, 'project' | 'inspectionIssues'>,
 ): WorkspaceState {
   return { ...state, ...extra, project, inspectionIssues: inspectProject(project) }
 }

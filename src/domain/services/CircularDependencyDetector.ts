@@ -115,33 +115,49 @@ export function wouldCreateCycle(
   }
 
   // Check if there's a path from newSuccessorId back to newPredecessorId
-  // (which would complete a cycle with the new edge)
-  const visited = new Set<string>()
-  const stack = [newSuccessorId]
+  // using targeted DFS with 3-color marking for correct parent-path reconstruction.
+  const WHITE = 0
+  const GRAY = 1
+  const BLACK = 2
+  const color = new Map<string, number>()
   const parent = new Map<string, string>()
+
+  for (const node of allNodes) {
+    color.set(node, WHITE)
+  }
+
+  // Parent of newSuccessorId is the new edge's predecessor so the reconstructed
+  // cycle correctly starts from newPredecessorId.
   parent.set(newSuccessorId, newPredecessorId)
 
-  while (stack.length > 0) {
-    const current = stack.pop()!
-    if (current === newPredecessorId) {
-      // Reconstruct cycle: newPredecessorId -> ... -> newSuccessorId -> newPredecessorId
-      const cycle: string[] = [newPredecessorId]
-      let cur = newSuccessorId
-      while (cur !== newPredecessorId) {
-        cycle.push(cur)
-        cur = parent.get(cur)!
+  function dfsFind(node: string): string[] | null {
+    color.set(node, GRAY)
+    for (const neighbor of adj.get(node) ?? []) {
+      if (neighbor === newPredecessorId) {
+        // Found a path back — reconstruct from neighbor via parent
+        const cycle: string[] = [newPredecessorId]
+        let cur = node
+        while (cur !== newPredecessorId) {
+          cycle.push(cur)
+          cur = parent.get(cur)!
+        }
+        cycle.push(newPredecessorId)
+        cycle.reverse()
+        return cycle
       }
-      cycle.push(newPredecessorId)
-      return { hasCycle: true, cyclePath: cycle }
-    }
-    if (visited.has(current)) continue
-    visited.add(current)
-    for (const neighbor of adj.get(current) ?? []) {
-      if (!visited.has(neighbor)) {
-        parent.set(neighbor, current)
-        stack.push(neighbor)
+      if (color.get(neighbor) === WHITE) {
+        parent.set(neighbor, node)
+        const result = dfsFind(neighbor)
+        if (result) return result
       }
     }
+    color.set(node, BLACK)
+    return null
+  }
+
+  const cycle = dfsFind(newSuccessorId)
+  if (cycle) {
+    return { hasCycle: true, cyclePath: cycle }
   }
 
   return { hasCycle: false, cyclePath: [] }

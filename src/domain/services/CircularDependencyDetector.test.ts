@@ -152,6 +152,22 @@ describe('wouldCreateCycle', () => {
     const result = wouldCreateCycle(deps, 'C', 'D')
     expect(result.hasCycle).toBe(false)
   })
+
+  it('detects a cycle in a diamond graph A→B, B→C, A→D, D→C when adding C→A', () => {
+    // Diamond: A→B→C and A→D→C (two paths to C).
+    // Adding C→A creates cycle C→A→B→C.
+    // The old BFS parent-overwrite bug would produce incorrect C→A→C.
+    const deps = [
+      dep('1', 'A', 'B'),
+      dep('2', 'B', 'C'),
+      dep('3', 'A', 'D'),
+      dep('4', 'D', 'C'),
+    ]
+    const result = wouldCreateCycle(deps, 'C', 'A')
+    expect(result.hasCycle).toBe(true)
+    // DFS from A finds B→C as the correct path: C→A→B→C
+    expect(result.cyclePath).toEqual(['C', 'A', 'B', 'C'])
+  })
 })
 
 describe('formatCyclePath', () => {

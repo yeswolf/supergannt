@@ -25,18 +25,27 @@ export function inspectProject(project: Project): readonly InspectionIssue[] {
   const taskIds = new Set(project.tasks.map((t) => t.id))
   const taskMap = new Map(project.tasks.map((t) => [t.id, t.name]))
 
-  // 1. Detect circular dependencies
+  // 1. Detect circular dependencies (excluding self-loops, which are
+  //    reported separately as self_dependency to avoid double-reporting).
   const cycleResult = detectCircularDependencies(project.dependencies)
   if (cycleResult.hasCycle && cycleResult.cyclePath.length > 0) {
-    issues.push({
-      type: 'circular_dependency',
-      message: formatCyclePath(cycleResult.cyclePath, taskMap),
-      cyclePath: cycleResult.cyclePath,
-    })
+    // A self-loop produces a cycle path like ["A", "A"] — skip those here.
+    const isSelfLoop =
+      cycleResult.cyclePath.length === 2 &&
+      cycleResult.cyclePath[0] === cycleResult.cyclePath[1]
+    if (!isSelfLoop) {
+      issues.push({
+        type: 'circular_dependency',
+        message: formatCyclePath(cycleResult.cyclePath, taskMap),
+        cyclePath: cycleResult.cyclePath,
+      })
+    }
   }
 
-  // 2. Check for orphan dependencies (task no longer exists)
+  // 2–4. Single pass over dependencies: orphans, self-refs, and bucket duplicates.
+  const seen = new Map<string, string[]>() // "pred→succ" key -> dependency IDs
   for (const dep of project.dependencies) {
+    // Orphan check
     const predMissing = !taskIds.has(dep.predecessorId)
     const succMissing = !taskIds.has(dep.successorId)
     if (predMissing || succMissing) {
@@ -48,10 +57,8 @@ export function inspectProject(project: Project): readonly InspectionIssue[] {
         dependencyIds: [dep.id],
       })
     }
-  }
 
-  // 3. Check for self-referencing dependencies
-  for (const dep of project.dependencies) {
+    // Self-reference check
     if (dep.predecessorId === dep.successorId) {
       issues.push({
         type: 'self_dependency',
@@ -59,11 +66,8 @@ export function inspectProject(project: Project): readonly InspectionIssue[] {
         dependencyIds: [dep.id],
       })
     }
-  }
 
-  // 4. Check for duplicate dependencies (same predecessor → successor pair)
-  const seen = new Map<string, string[]>() // key -> dependency IDs
-  for (const dep of project.dependencies) {
+    // Duplicate bucket
     const key = `${dep.predecessorId}→${dep.successorId}`
     const existing = seen.get(key)
     if (existing) {
@@ -72,6 +76,8 @@ export function inspectProject(project: Project): readonly InspectionIssue[] {
       seen.set(key, [dep.id])
     }
   }
+
+  // Flush duplicate buckets
   for (const [key, depIds] of seen) {
     if (depIds.length > 1) {
       const [pred, succ] = key.split('→')
