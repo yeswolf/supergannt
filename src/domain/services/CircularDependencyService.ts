@@ -183,8 +183,9 @@ export function findRedundantDependencies(
     for (const { successorId } of directSuccs) {
       queue.push({ current: successorId, path: [successorId] })
     }
-    while (queue.length > 0) {
-      const item = queue.shift()!
+    let readIdx = 0
+    while (readIdx < queue.length) {
+      const item = queue[readIdx++]!
       if (reachable.has(item.current)) continue
       if (item.path.length >= 2) {
         reachable.set(item.current, item.path)
@@ -233,6 +234,9 @@ export function findSelfReferencingDependencies(
 
 /**
  * Run all dependency inspections and return a consolidated report.
+ *
+ * Scaffolding for a future validation panel / import step (issue #8).
+ * Not yet wired into production code; tests exercise it directly.
  */
 export function inspectDependencies(
   tasks: readonly Task[],
@@ -258,11 +262,12 @@ export function wouldCreateCycle(
   predecessorId: TaskId,
   successorId: TaskId,
 ): CircularPath | null {
+  const taskNames = new Map<TaskId, string>()
+  for (const t of tasks) {
+    taskNames.set(t.id, t.name)
+  }
+
   if (predecessorId === successorId) {
-    const taskNames = new Map<TaskId, string>()
-    for (const t of tasks) {
-      taskNames.set(t.id, t.name)
-    }
     const name = taskNames.get(predecessorId) ?? predecessorId
     return {
       path: [predecessorId, successorId],
@@ -287,10 +292,6 @@ export function wouldCreateCycle(
     const neighbors = adj.get(current) ?? []
     for (const neighbor of neighbors) {
       if (neighbor === predecessorId) {
-        const taskNames = new Map<TaskId, string>()
-        for (const t of tasks) {
-          taskNames.set(t.id, t.name)
-        }
         const path: TaskId[] = [neighbor]
         let cursor: TaskId | undefined = current
         while (cursor !== undefined && cursor !== successorId) {
