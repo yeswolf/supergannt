@@ -186,14 +186,15 @@ jobs:
             );
 
       - name: Run Claude Code fix
+        id: claude
         env:
           ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
           ANTHROPIC_API_KEY: unused
           ANTHROPIC_AUTH_TOKEN: unused
           CLAUDE_CODE_GLOB_NO_IGNORE: "false"
         run: |
-          claude -p --dangerously-skip-permissions --max-turns 999999 \
-            "You are fixing EVERY finding from the latest code review on this PR. \
+          set +e
+          PROMPT="You are fixing EVERY finding from the latest code review on this PR. \
             PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`. \
             Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}. \
             \
@@ -215,8 +216,36 @@ jobs:
             FIX_CHECKLIST: \
             - [DONE|SKIPPED] <short item>: <one-line proof> \
             (one bullet per review item) \
-            FIX_SUMMARY: <one line covering all items>" \
-            > fix-output.md 2>&1
+            FIX_SUMMARY: <one line covering all items>"
+
+          MAX_ATTEMPTS=8
+          CLAUDE_EXIT=1
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            echo "==== Claude fix attempt ${attempt}/${MAX_ATTEMPTS} ===="
+            claude -p --dangerously-skip-permissions --max-turns 999999 \
+              "$PROMPT" > fix-output.md 2>&1
+            CLAUDE_EXIT=$?
+            BYTES=$(wc -c < fix-output.md | tr -d ' ')
+            echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
+            # Transient upstream / bearer lock — wait and retry in the same job.
+            if grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected' fix-output.md \
+              && ! grep -qE 'FIX_CHECKLIST:|FIX_SUMMARY:' fix-output.md; then
+              WAIT=$(( attempt * 180 ))
+              echo "::warning::Rate-limit/API error on attempt ${attempt}; sleeping ${WAIT}s"
+              sleep "$WAIT"
+              continue
+            fi
+            break
+          done
+
+          echo "claude_exit=${CLAUDE_EXIT}" >> "$GITHUB_OUTPUT"
+          if [ "$CLAUDE_EXIT" -ne 0 ]; then
+            echo "::warning::Claude exited with code ${CLAUDE_EXIT}"
+            tail -80 fix-output.md || true
+          fi
+          # Keep the job going so we can still commit partial disk edits / post logs.
+          true
+          set -e
 
       - name: Apply printed diffs (fallback)
         run: |
@@ -229,23 +258,6 @@ jobs:
             echo "no printed diffs"
           fi
 
-      - name: Verify checklist covers the review
-        run: |
-          if ! grep -q '^FIX_CHECKLIST:' fix-output.md; then
-            echo "::warning::FIX_CHECKLIST missing from Claude output"
-            tail -80 fix-output.md || true
-          else
-            echo "---- FIX_CHECKLIST ----"
-            awk '/^FIX_CHECKLIST:/{flag=1} flag{print} /^FIX_SUMMARY:/{if(flag&&!/^FIX_CHECKLIST:/) exit}' fix-output.md || true
-          fi
-          # Fail if Claude clearly skipped actionable suggestion language without DONE lines.
-          DONE_COUNT=$(grep -c '^\- \[DONE\]' fix-output.md || true)
-          SKIP_COUNT=$(grep -c '^\- \[SKIPPED\]' fix-output.md || true)
-          echo "done=$DONE_COUNT skipped=$SKIP_COUNT"
-          if [ "${DONE_COUNT:-0}" -eq 0 ] && [ "${SKIP_COUNT:-0}" -eq 0 ]; then
-            echo "::warning::No DONE/SKIPPED checklist bullets found"
-          fi
-
       - name: Extract fix summary
         id: fix
         run: |
@@ -253,7 +265,11 @@ jobs:
           if [ -z "$SUMMARY" ]; then
             SUMMARY=$(head -5 fix-output.md | tr '\n' ' ')
           fi
-          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+          {
+            echo "summary<<EOF"
+            echo "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Commit and push fixes
         run: |
@@ -268,6 +284,33 @@ jobs:
             git commit -m "Apply Claude Code fixes from review"
             git push origin ${{ steps.pr.outputs.head_ref }}
             echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Fail if review was not addressed
+        run: |
+          if [ ! -f fix-output.md ]; then
+            echo "::error::missing fix-output.md"
+            exit 1
+          fi
+          echo "---- FIX_CHECKLIST (if any) ----"
+          awk 'BEGIN{p=0} /^FIX_CHECKLIST:/{p=1} p{print} /^FIX_SUMMARY:/{if(p) exit}' fix-output.md || true
+          if grep -qiE 'rate-limited|all bearers are' fix-output.md \
+            && ! grep -qE 'FIX_CHECKLIST:|FIX_SUMMARY:' fix-output.md; then
+            echo "::error::Claude never got past rate-limit; no FIX_CHECKLIST produced"
+            tail -40 fix-output.md || true
+            exit 1
+          fi
+          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md; then
+            echo "::error::FIX_CHECKLIST missing — latest review may not have been fully processed"
+            tail -80 fix-output.md || true
+            exit 1
+          fi
+          DONE_COUNT=$(grep -cE '^\- \[DONE\]' fix-output.md || true)
+          SKIP_COUNT=$(grep -cE '^\- \[SKIPPED\]' fix-output.md || true)
+          echo "done=${DONE_COUNT} skipped=${SKIP_COUNT} no_changes=${NO_CHANGES:-}"
+          if [ "${DONE_COUNT:-0}" -lt 1 ] && [ "${SKIP_COUNT:-0}" -lt 1 ]; then
+            echo "::error::FIX_CHECKLIST has no DONE/SKIPPED bullets"
+            exit 1
           fi
 
       - name: Post fix comment to PR
