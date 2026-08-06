@@ -209,7 +209,7 @@ jobs:
             Hard rules: \
             1) Parse /tmp/latest-review.md completely. Collect EVERY actionable item from sections like \"Issues Found\", \"Suggestions\", numbered lists, and any \"must/should/fix/add/remove/normalize\" requests. \
             2) Treat Suggestions as mandatory work items too — do NOT skip them as \"not a bug\" or \"optional\". \
-            3) For each item: implement the change with Write/Edit (tests included when requested). Only mark SKIPPED if the current code already fully satisfies the item — prove it with a short Read quote. \
+            3) For each item: implement the change with Write/Edit (tests included when requested). SKIPPED is allowed ONLY when the current code already fully satisfies the item — prove it with a short Read quote. Never SKIPPED an unimplemented suggestion. \
             4) Do not stop after cosmetic/dead-code fixes if tests or other items remain. \
             5) Do not use the Agent tool / subagents. \
             6) When finished, print exactly this trailer: \
@@ -260,7 +260,7 @@ jobs:
               FIX_CHECKLIST: \
               - [DONE|SKIPPED] <item>: <one-line proof from the diff or current code> \
               FIX_SUMMARY: <one line> \
-              Mark DONE only if the diff/code clearly addresses the item; otherwise SKIPPED with why." \
+              DONE only if clearly addressed. SKIPPED only if already satisfied before this PR — never SKIPPED unimplemented work." \
               >> fix-output.md 2>&1 \
               || echo "::warning::checklist follow-up Claude exited non-zero"
           fi
@@ -332,6 +332,11 @@ jobs:
           echo "done=${DONE_COUNT} skipped=${SKIP_COUNT} no_changes=${NO_CHANGES:-}"
           if [ "${DONE_COUNT:-0}" -lt 1 ] && [ "${SKIP_COUNT:-0}" -lt 1 ]; then
             echo "::error::FIX_CHECKLIST has no DONE/SKIPPED bullets"
+            exit 1
+          fi
+          # Any SKIPPED that admits the work was not done should fail the job.
+          if grep -E '^\- \[SKIPPED\].*(no |not |still |missing|unimplemented|absent)' fix-output.md; then
+            echo "::error::Checklist still has unimplemented SKIPPED items — re-run /fix after addressing them"
             exit 1
           fi
 
