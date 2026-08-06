@@ -38,14 +38,15 @@ runs:
       env:
         DATA_DIR: ${{ inputs.data-dir }}
         MAGIC_BEARER_TOKEN: ${{ inputs.bearer-token }}
-        DEEPSEEK_COMPLETION_MIN_GAP_MS: "1000"
+        # Pace from completion *end* (min-gap alone is a no-op when turns take >1s).
+        DEEPSEEK_COMPLETION_END_GAP_MS: "300"
       run: |
         mkdir -p "$DATA_DIR"
         cd magic
         nohup node dist/main.js > /tmp/magic-proxy.log 2>&1 &
         for i in $(seq 1 30); do
           if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
-            echo "magic ready"
+            echo "magic ready (end-gap=${DEEPSEEK_COMPLETION_END_GAP_MS}ms)"
             cp /tmp/magic-proxy.log /tmp/magic-magic.log 2>/dev/null || true
             exit 0
           fi
