@@ -38,6 +38,7 @@ runs:
       env:
         DATA_DIR: ${{ inputs.data-dir }}
         MAGIC_BEARER_TOKEN: ${{ inputs.bearer-token }}
+        DEEPSEEK_COMPLETION_MIN_GAP_MS: "1000"
       run: |
         mkdir -p "$DATA_DIR"
         cd magic
