@@ -1,68 +1,108 @@
 name: Claude Code Fix
 
+# Loop protocol (GitHub comment reactions — not body markers):
+#   Review 👀 (eyes)  → needs fixes → this workflow (via dispatch or /fix)
+#   Review 👍 (+1)    → clean → do not fix
+#   Fix 🚀 (rocket)   → changes pushed → dispatch Review
+#   Fix 👀 (eyes)     → no commits; re-check → dispatch Review
+#   Fix 😕 (confused) → capacity; self-retry
+# Slash command /fix still works.
+
 on:
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to fix from latest review'
+        required: true
+        type: string
+
+concurrency:
+  group: claude-loop-pr-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: false
 
 jobs:
   claude-fix:
     if: |
-      contains(github.event.comment.body, '/fix') &&
-      github.event.issue.pull_request != null
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        contains(github.event.comment.body, '/fix'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
       contents: write
       pull-requests: write
       issues: write
+      actions: write
     steps:
-      - name: Checkout supergannt
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup magic
-        uses: ./.github/actions/setup-magic
-        with:
-          magic-token: ${{ secrets.MAGIC_TOKEN }}
-          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
-
       - name: Resolve PR details
         id: pr
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = context.payload.issue.number;
+            let prNumber;
+            if (context.eventName === 'issue_comment') {
+              prNumber = context.payload.issue.number;
+            } else {
+              prNumber = Number(core.getInput('pr_number') || process.env.PR_NUMBER);
+            }
+            if (!prNumber) {
+              core.setFailed('Missing PR number');
+              return;
+            }
 
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
             });
-
-            core.setOutput('number', prNumber);
+            core.setOutput('skip', 'false');
+            core.setOutput('number', String(prNumber));
             core.setOutput('base_sha', pr.base.sha);
             core.setOutput('head_sha', pr.head.sha);
             core.setOutput('base_ref', pr.base.ref);
             core.setOutput('head_ref', pr.head.ref);
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+
+      - name: Checkout supergannt
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup magic
+        if: steps.pr.outputs.skip != 'true'
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
 
       - name: Checkout PR branch
+        if: steps.pr.outputs.skip != 'true'
         run: |
           git fetch origin ${{ steps.pr.outputs.head_ref }}
           git checkout ${{ steps.pr.outputs.head_ref }}
 
       - name: Install Claude Code CLI
+        if: steps.pr.outputs.skip != 'true'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Fetch latest review for PR
+        if: steps.pr.outputs.skip != 'true'
         id: comments
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('node:fs');
-            const prNumber = ${{ steps.pr.outputs.number }};
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const isSlashFix =
+              context.eventName === 'issue_comment' &&
+              /(?:^|\s)\/fix(?:\s|$)/.test(context.payload.comment?.body || '');
 
             const issueComments = await github.paginate(
               github.rest.issues.listComments,
@@ -74,63 +114,40 @@ jobs:
               { owner, repo, pull_number: prNumber, per_page: 100 },
             );
 
-            const formalReviews = await github.paginate(
-              github.rest.pulls.listReviews,
-              { owner, repo, pull_number: prNumber, per_page: 100 },
-            );
-
-            const isClaudeReviewComment = (body) =>
+            const isReviewComment = (body) =>
               typeof body === 'string' &&
-              /##\s*(?:🤖\s*)?Claude Code Review\b/i.test(body);
+              (/^##\s*Review\b/m.test(body) ||
+                /##\s*(?:🤖\s*)?Claude Code Review\b/i.test(body));
 
-            const claudeReviewComments = issueComments
-              .filter((c) => isClaudeReviewComment(c.body))
+            const reviewComments = issueComments
+              .filter((c) => isReviewComment(c.body))
               .sort(
                 (a, b) =>
                   new Date(b.created_at).getTime() -
                   new Date(a.created_at).getTime(),
               );
 
-            const formalWithBody = formalReviews
-              .filter((r) => typeof r.body === 'string' && r.body.trim())
-              .sort(
-                (a, b) =>
-                  new Date(b.submitted_at || b.created_at || 0).getTime() -
-                  new Date(a.submitted_at || a.created_at || 0).getTime(),
-              );
-
-            const latestClaude = claudeReviewComments[0] || null;
-            const latestFormal = formalWithBody[0] || null;
-
-            let source = 'none';
-            let reviewMarkdown = '';
-            let reviewMeta = {};
-
-            if (latestClaude) {
-              source = 'claude_issue_comment';
-              reviewMarkdown = latestClaude.body;
-              reviewMeta = {
-                id: latestClaude.id,
-                user: latestClaude.user?.login,
-                created_at: latestClaude.created_at,
-                html_url: latestClaude.html_url,
-              };
-            } else if (latestFormal) {
-              source = 'pull_request_review';
-              reviewMarkdown = latestFormal.body;
-              reviewMeta = {
-                id: latestFormal.id,
-                user: latestFormal.user?.login,
-                created_at: latestFormal.submitted_at,
-                html_url: latestFormal.html_url,
-                state: latestFormal.state,
-              };
+            const latest = reviewComments[0];
+            if (!latest?.body?.trim()) {
+              core.setFailed('No review comment found on this PR. Wait for review or run /review.');
+              return;
             }
 
-            if (!reviewMarkdown.trim()) {
-              core.setFailed(
-                'No Claude Code Review (or formal PR review body) found on this PR. Run /review first.',
-              );
+            // Decide by reaction on the review comment (👍 = clean, 👀 = needs fix).
+            const { data: reactions } = await github.rest.reactions.listForIssueComment({
+              owner,
+              repo,
+              comment_id: latest.id,
+              per_page: 100,
+            });
+            const contents = new Set(reactions.map((r) => r.content));
+            const isClean = contents.has('+1') && !contents.has('eyes');
+            const isNeeds = contents.has('eyes');
+
+            if (!isSlashFix && isClean && !isNeeds) {
+              core.setOutput('skip_clean', 'true');
+              console.log(`Latest review ${latest.id} has 👍 — nothing to fix`);
+              fs.writeFileSync('/tmp/latest-review.md', latest.body);
               return;
             }
 
@@ -138,54 +155,33 @@ jobs:
               id: c.id,
               path: c.path,
               line: c.line,
-              side: c.side,
               body: c.body,
               user: c.user?.login,
-              created_at: c.created_at,
-              in_reply_to_id: c.in_reply_to_id,
-              html_url: c.html_url,
             }));
 
-            fs.writeFileSync('/tmp/latest-review.md', reviewMarkdown);
+            fs.writeFileSync('/tmp/latest-review.md', latest.body);
             fs.writeFileSync(
               '/tmp/latest-review-meta.json',
               JSON.stringify(
                 {
-                  source,
-                  ...reviewMeta,
+                  id: latest.id,
+                  user: latest.user?.login,
+                  created_at: latest.created_at,
+                  html_url: latest.html_url,
+                  reactions: [...contents],
                   inline_count: inline.length,
-                  claude_review_comment_count: claudeReviewComments.length,
                 },
                 null,
                 2,
               ),
             );
-            fs.writeFileSync(
-              '/tmp/pr-inline-comments.json',
-              JSON.stringify(inline, null, 2),
-            );
-
-            // Keep a raw dump for debugging, but Claude should use latest-review.md.
-            fs.writeFileSync(
-              '/tmp/pr-comments.json',
-              JSON.stringify(
-                {
-                  latest_review_source: source,
-                  latest_review_meta: reviewMeta,
-                  inline,
-                },
-                null,
-                2,
-              ),
-            );
-
-            core.setOutput('review_source', source);
-            core.setOutput('review_bytes', String(Buffer.byteLength(reviewMarkdown)));
-            console.log(
-              `Latest review source=${source} bytes=${Buffer.byteLength(reviewMarkdown)} inline=${inline.length}`,
-            );
+            fs.writeFileSync('/tmp/pr-inline-comments.json', JSON.stringify(inline, null, 2));
+            core.setOutput('skip_clean', 'false');
+            core.setOutput('review_bytes', String(Buffer.byteLength(latest.body)));
+            console.log(`Using review comment ${latest.id} reactions=[${[...contents]}]`);
 
       - name: Run Claude Code fix
+        if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
         id: claude
         env:
           ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
@@ -197,29 +193,23 @@ jobs:
           PROMPT="You are fixing EVERY finding from the latest code review on this PR. \
             PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`. \
             Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}. \
-            \
             PRIMARY INPUT (read entirely first): /tmp/latest-review.md \
-            This is the full latest Claude Code Review comment for this PR (source=${{ steps.comments.outputs.review_source }}, ${{ steps.comments.outputs.review_bytes }} bytes). \
-            ALSO read /tmp/pr-inline-comments.json if it is non-empty (inline diff comments). \
-            Meta: /tmp/latest-review-meta.json. \
-            \
-            Working directory is the git repo root. Prefer Write/Edit on disk; printed diffs are optional fallback. \
+            ALSO read /tmp/pr-inline-comments.json if non-empty. \
+            Working directory is the git repo root. Prefer Write/Edit on disk. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
-            \
             Hard rules: \
-            1) Parse /tmp/latest-review.md completely. Collect EVERY actionable item from sections like \"Issues Found\", \"Suggestions\", numbered lists, and any \"must/should/fix/add/remove/normalize\" requests. \
-            2) Treat Suggestions as mandatory work items too — do NOT skip them as \"not a bug\" or \"optional\". \
-            3) For each item: implement the change with Write/Edit (tests included when requested). SKIPPED is allowed ONLY when the current code already fully satisfies the item — prove it with a short Read quote. Never SKIPPED an unimplemented suggestion. \
-            4) Do not stop after cosmetic/dead-code fixes if tests or other items remain. \
-            5) Do not use the Agent tool / subagents. \
-            6) When finished, print exactly this trailer: \
+            1) Collect EVERY actionable item from the review (issues and suggestions). \
+            2) Implement each with Write/Edit. SKIPPED only if code already satisfies it (prove with a short quote). \
+            3) Never skip unimplemented suggestions. \
+            4) Do not use Agent/subagents. \
+            5) End with (automation only, not for the PR comment): \
             FIX_CHECKLIST: \
-            - [DONE|SKIPPED] <short item>: <one-line proof> \
-            (one bullet per review item) \
-            FIX_SUMMARY: <one line covering all items>"
+            - [DONE|SKIPPED] <item>: <one-line proof> \
+            FIX_SUMMARY: <one human sentence of what you changed>"
 
           MAX_ATTEMPTS=8
           CLAUDE_EXIT=1
+          RATE_LIMITED=false
           for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
             echo "==== Claude fix attempt ${attempt}/${MAX_ATTEMPTS} ===="
             claude -p --dangerously-skip-permissions --max-turns 999999 \
@@ -227,168 +217,191 @@ jobs:
             CLAUDE_EXIT=$?
             BYTES=$(wc -c < fix-output.md | tr -d ' ')
             echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
-            # Transient upstream / bearer lock — wait and retry in the same job.
             if grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected' fix-output.md \
               && ! grep -qE 'FIX_CHECKLIST:|FIX_SUMMARY:' fix-output.md; then
+              RATE_LIMITED=true
               WAIT=$(( attempt * 180 ))
-              echo "::warning::Rate-limit/API error on attempt ${attempt}; sleeping ${WAIT}s"
+              echo "::warning::Rate-limit on fix attempt ${attempt}; sleeping ${WAIT}s"
               sleep "$WAIT"
               continue
             fi
+            RATE_LIMITED=false
             break
           done
 
           echo "claude_exit=${CLAUDE_EXIT}" >> "$GITHUB_OUTPUT"
-          if [ "$CLAUDE_EXIT" -ne 0 ]; then
-            echo "::warning::Claude exited with code ${CLAUDE_EXIT}"
-            tail -80 fix-output.md || true
-          fi
+          echo "rate_limited=${RATE_LIMITED}" >> "$GITHUB_OUTPUT"
 
-          # Print-mode often edits files then ends without the required trailer.
-          # Second turn: force a checklist against the latest review + current diff.
-          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md; then
-            echo "==== Checklist follow-up (no FIX_CHECKLIST in first turn) ===="
+          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md && [ "$RATE_LIMITED" != "true" ]; then
+            echo "==== Checklist follow-up ===="
             git diff --stat "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff-stat.txt || true
             git diff "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff.txt || true
-            {
-              echo ""
-              echo "==== CHECKLIST FOLLOW-UP ===="
-            } >> fix-output.md
+            echo "" >> fix-output.md
+            echo "==== CHECKLIST FOLLOW-UP ====" >> fix-output.md
             claude -p --dangerously-skip-permissions --max-turns 20 \
-              "Do NOT edit files. Read /tmp/latest-review.md (full latest review) and /tmp/fix-diff-stat.txt plus /tmp/fix-diff.txt (what changed on the PR branch vs base). \
-              Emit ONLY this trailer covering EVERY Issues Found + Suggestions item from the review: \
+              "Do NOT edit files. Read /tmp/latest-review.md and /tmp/fix-diff-stat.txt plus /tmp/fix-diff.txt. \
+              Emit ONLY: \
               FIX_CHECKLIST: \
-              - [DONE|SKIPPED] <item>: <one-line proof from the diff or current code> \
-              FIX_SUMMARY: <one line> \
-              DONE only if clearly addressed. SKIPPED only if already satisfied before this PR — never SKIPPED unimplemented work." \
-              >> fix-output.md 2>&1 \
-              || echo "::warning::checklist follow-up Claude exited non-zero"
+              - [DONE|SKIPPED] <item>: <proof> \
+              FIX_SUMMARY: <one sentence> \
+              SKIPPED only if already satisfied (say already)." \
+              >> fix-output.md 2>&1 || true
           fi
-
-          # Keep the job going so we can still commit partial disk edits / post logs.
           true
           set -e
 
       - name: Apply printed diffs (fallback)
+        if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
         run: |
-          # Accept both ```diff and ```diff path fences; never fail on empty output under bash -e.
           awk '/^```diff($| )/{flag=1; next} /^```$/{flag=0} flag' fix-output.md > fixes.patch || true
           if [ -s fixes.patch ]; then
             git apply fixes.patch || git apply --3way fixes.patch || true
-            echo "attempted to apply printed diffs"
-          else
-            echo "no printed diffs"
           fi
-
-      - name: Extract fix summary
-        id: fix
-        run: |
-          SUMMARY=$(grep -o 'FIX_SUMMARY:.*' fix-output.md | sed 's/FIX_SUMMARY://' | head -1 || true)
-          if [ -z "$SUMMARY" ]; then
-            SUMMARY=$(head -5 fix-output.md | tr '\n' ' ')
-          fi
-          {
-            echo "summary<<EOF"
-            echo "$SUMMARY"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Commit and push fixes
+        if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
+        id: commit
         run: |
           git config user.name "Claude Code"
           git config user.email "claude@anthropic.com"
-          # Plain git add -A; CI artifacts are in .gitignore.
           git add -A
           if git diff --cached --quiet; then
-            echo "no changes to commit"
             echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "Apply Claude Code fixes from review"
+            git commit -m "Apply review feedback"
             git push origin ${{ steps.pr.outputs.head_ref }}
             echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fail if review was not addressed
-        run: |
-          if [ ! -f fix-output.md ]; then
-            echo "::error::missing fix-output.md"
-            exit 1
-          fi
-          echo "---- FIX_CHECKLIST (if any) ----"
-          awk 'BEGIN{p=0} /^FIX_CHECKLIST:/{p=1} p{print} /^FIX_SUMMARY:/{if(p) exit}' fix-output.md || true
-          if grep -qiE 'rate-limited|all bearers are' fix-output.md \
-            && ! grep -qE 'FIX_CHECKLIST:|FIX_SUMMARY:' fix-output.md; then
-            echo "::error::Claude never got past rate-limit; no FIX_CHECKLIST produced"
-            tail -40 fix-output.md || true
-            exit 1
-          fi
-          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md; then
-            echo "::error::FIX_CHECKLIST missing — latest review may not have been fully processed"
-            tail -80 fix-output.md || true
-            exit 1
-          fi
-          DONE_COUNT=$(grep -cE '^\- \[DONE\]' fix-output.md || true)
-          SKIP_COUNT=$(grep -cE '^\- \[SKIPPED\]' fix-output.md || true)
-          echo "done=${DONE_COUNT} skipped=${SKIP_COUNT} no_changes=${NO_CHANGES:-}"
-          if [ "${DONE_COUNT:-0}" -lt 1 ] && [ "${SKIP_COUNT:-0}" -lt 1 ]; then
-            echo "::error::FIX_CHECKLIST has no DONE/SKIPPED bullets"
-            exit 1
-          fi
-          # SKIPPED must prove the item was already satisfied ("already ...").
-          BAD_SKIPS=$(grep -E '^\- \[SKIPPED\]' fix-output.md | grep -vi 'already' || true)
-          if [ -n "$BAD_SKIPS" ]; then
-            echo "::error::SKIPPED items must cite that the code already satisfies them:"
-            echo "$BAD_SKIPS"
-            exit 1
-          fi
-
-      - name: Post fix comment to PR
-        if: always()
+      - name: Post fix comment + reaction
+        if: always() && steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
+        id: post
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('node:fs');
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
+            const hasChanges = '${{ steps.commit.outputs.has_changes }}' === 'true';
+            const rateLimited = '${{ steps.claude.outputs.rate_limited }}' === 'true';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
 
-            let summary;
-            let checklist = '';
+            // Reaction protocol:
+            //   rocket   🚀 → pushed changes → kick Review
+            //   eyes     👀 → no commits; re-check → kick Review
+            //   confused 😕 → capacity → self-retry
+            const REACT_APPLIED = 'rocket';
+            const REACT_CHECKED = 'eyes';
+            const REACT_WAIT = 'confused';
+
+            let raw = '';
             try {
-              const raw = fs.readFileSync('fix-output.md', 'utf8');
-              const match = raw.match(/FIX_SUMMARY:\s*(.*)/);
-              summary = match ? match[1] : raw.substring(0, 500).trim();
-              const cStart = raw.indexOf('FIX_CHECKLIST:');
-              const cEnd = raw.indexOf('FIX_SUMMARY:');
-              if (cStart !== -1) {
-                checklist = raw
-                  .slice(cStart, cEnd === -1 ? undefined : cEnd)
-                  .trim();
-              }
-            } catch (e) {
-              summary = 'Fix completed but no output was captured.';
+              raw = fs.readFileSync('fix-output.md', 'utf8');
+            } catch {
+              raw = '';
             }
 
-            const hasChanges = process.env.NO_CHANGES !== 'true';
-            const body = [
-              '## 🔧 Claude Code Fix',
-              '',
-              hasChanges
-                ? `*Fixes applied and pushed to \`${{ steps.pr.outputs.head_ref }}\`*`
-                : '*No changes needed*',
-              '',
-              checklist ? `${checklist}\n` : '',
-              summary,
-            ]
-              .filter(Boolean)
-              .join('\n');
+            const summaryMatch = raw.match(/FIX_SUMMARY:\s*(.*)/);
+            let summary = summaryMatch ? summaryMatch[1].trim() : '';
 
-            await github.rest.issues.createComment({
+            const looksLikeNoise =
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded/i.test(raw) &&
+              !/FIX_SUMMARY:|FIX_CHECKLIST:/.test(raw);
+
+            async function postWithReaction(body, reaction) {
+              const { data: comment } = await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body,
+              });
+              await github.rest.reactions.createForIssueComment({
+                owner,
+                repo,
+                comment_id: comment.id,
+                content: reaction,
+              });
+              return comment;
+            }
+
+            if (rateLimited || looksLikeNoise) {
+              await postWithReaction(
+                [
+                  '## Fixes',
+                  '',
+                  'Hit a temporary capacity limit while applying the review. I will retry shortly.',
+                ].join('\n'),
+                REACT_WAIT,
+              );
+              core.setOutput('status', 'retry');
+              return;
+            }
+
+            const bullets = [];
+            for (const line of raw.split(/\r?\n/)) {
+              const m = line.match(/^\- \[(DONE|SKIPPED)\]\s*(.+)$/i);
+              if (m) {
+                const kind = m[1].toUpperCase();
+                const text = m[2].replace(/:\s*/, ' — ').trim();
+                bullets.push(
+                  kind === 'DONE' ? `- Done: ${text}` : `- Already covered: ${text}`,
+                );
+              }
+            }
+
+            if (!summary) {
+              summary = hasChanges
+                ? 'Pushed fixes for the latest review.'
+                : 'Checked the latest review — no further code changes were needed.';
+            }
+
+            const parts = ['## Fixes', '', summary];
+            if (bullets.length) {
+              parts.push('', ...bullets);
+            }
+            if (hasChanges) {
+              parts.push('', 'Pushed to the PR branch.');
+            } else {
+              parts.push('', 'No new commits.');
+            }
+
+            const reaction = hasChanges ? REACT_APPLIED : REACT_CHECKED;
+            await postWithReaction(parts.join('\n'), reaction);
+            core.setOutput('status', hasChanges ? 'applied' : 'noop');
+
+      - name: Re-dispatch fix after rate limit
+        if: steps.post.outputs.status == 'retry'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await new Promise((r) => setTimeout(r, 120000));
+            await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ steps.pr.outputs.number }},
-              body: body
+              workflow_id: 'claude-fix.yml',
+              ref: 'master',
+              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
             });
+            console.log('Re-dispatched claude-fix for PR ${{ steps.pr.outputs.number }}');
+
+      - name: Dispatch review after fix
+        if: steps.post.outputs.status == 'applied' || steps.post.outputs.status == 'noop'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'claude-review.yml',
+              ref: 'master',
+              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
+            });
+            console.log('Dispatched claude-review after fix (${{ steps.post.outputs.status }}) for PR ${{ steps.pr.outputs.number }}');
 
       - name: Upload logs
-        if: always()
+        if: always() && steps.pr.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: claude-fix-logs
@@ -399,4 +412,4 @@ jobs:
             /tmp/latest-review.md
             /tmp/latest-review-meta.json
             /tmp/pr-inline-comments.json
-            /tmp/pr-comments.json
+          if-no-files-found: warn
