@@ -10,7 +10,7 @@ jobs:
       contains(github.event.comment.body, '/fix') &&
       github.event.issue.pull_request != null
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 180
     permissions:
       contents: write
       pull-requests: write
@@ -101,7 +101,7 @@ jobs:
           ANTHROPIC_AUTH_TOKEN: unused
           CLAUDE_CODE_GLOB_NO_IGNORE: "false"
         run: |
-          claude -p --dangerously-skip-permissions --max-turns 30 \
+          claude -p --dangerously-skip-permissions --max-turns 999999 \
             "You are fixing issues found in a code review. The PR is: \
             base branch \`${{ steps.pr.outputs.base_ref }}\`, head branch \`${{ steps.pr.outputs.head_ref }}\`. \
             Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}. \
