@@ -93,9 +93,9 @@ jobs:
             Working directory is the git repo root. You may create/edit files anywhere except node_modules, dist, data, logs, magic/, and build outputs. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
             Critical rules: \
-            1) Read /tmp/issue.md first and follow its acceptance criteria exactly. \
+            1) Read /tmp/issue.md first and follow its acceptance criteria exactly. Do not invent a different task. \
             2) Within the first 8 tool turns, start writing code with Write/Edit. Exploration is capped: at most 8 Read/Glob/Grep calls before the first Write/Edit. \
-            3) Do NOT use the Agent tool. Do NOT spawn subagents. Do NOT burn turns on TaskCreate/TaskUpdate loops. \
+            3) Do NOT use the Agent tool. Do NOT spawn subagents. Do NOT use TaskCreate/TaskUpdate at all. \
             4) Prefer Read/Glob/Grep over Bash for file discovery. Do not run long find/ls -R loops. \
             5) Creating a new file requires the Write tool (or an equivalent shell write). Printed diffs alone are not enough. \
             6) Keep going until acceptance criteria are met on disk (source + unit tests), then verify with a short test command if available. \
@@ -108,24 +108,50 @@ jobs:
           MAX_ATTEMPTS=3
           CLAUDE_EXIT=1
           RATE_LIMITED=false
+          traffic_hit_rl() {
+            local from_line="${1:-0}"
+            if [ ! -f /tmp/magic-data/traffic-log.jsonl ]; then
+              return 1
+            fi
+            tail -n +"$((from_line + 1))" /tmp/magic-data/traffic-log.jsonl 2>/dev/null | \
+              grep -qiE 'too frequent|rate_limit_reached|all bearers are rate-limited'
+          }
+          stdout_hit_rl() {
+            grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected|too frequent' \
+              implement-output.md
+          }
+          has_file_changes() {
+            ! git diff --quiet || ! git diff --cached --quiet || \
+              [ -n "$(git ls-files --others --exclude-standard)" ]
+          }
+
           for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
             echo "==== Claude implement attempt ${attempt}/${MAX_ATTEMPTS} ===="
+            TL_BEFORE=0
+            if [ -f /tmp/magic-data/traffic-log.jsonl ]; then
+              TL_BEFORE=$(wc -l < /tmp/magic-data/traffic-log.jsonl | tr -d ' ')
+            fi
             claude -p --dangerously-skip-permissions --max-turns 999999 \
               "$PROMPT" > implement-output.md 2>&1
             CLAUDE_EXIT=$?
             BYTES=$(wc -c < implement-output.md | tr -d ' ')
             echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
-            if grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected' implement-output.md \
-              && ! grep -qE 'IMPLEMENT_SUMMARY:' implement-output.md; then
-              # If files already changed, keep going rather than retrying forever.
-              if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+
+            HIT_RL=false
+            if stdout_hit_rl || traffic_hit_rl "$TL_BEFORE"; then
+              HIT_RL=true
+              echo "rate-limit detected (stdout and/or traffic-log since line ${TL_BEFORE})"
+            fi
+
+            if [ "$HIT_RL" = true ] && ! grep -qE 'IMPLEMENT_SUMMARY:' implement-output.md; then
+              if has_file_changes; then
                 echo "Rate-limit noise after file changes — continuing with disk state"
                 RATE_LIMITED=false
                 break
               fi
               RATE_LIMITED=true
               if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-                WAIT=$(( 60 * attempt ))
+                WAIT=$(( 90 * attempt ))
                 echo "::warning::Rate-limit on implement attempt ${attempt}; sleeping ${WAIT}s"
                 sleep "$WAIT"
                 continue
@@ -133,6 +159,20 @@ jobs:
               echo "::warning::Rate-limit after ${MAX_ATTEMPTS} attempts — will re-dispatch"
               break
             fi
+
+            # Exit 0 with only prose and no files is not success — retry.
+            if ! has_file_changes && ! grep -qE 'IMPLEMENT_SUMMARY:' implement-output.md; then
+              echo "::warning::Claude produced no file changes (exit=${CLAUDE_EXIT} bytes=${BYTES})"
+              if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+                WAIT=$(( 30 * attempt ))
+                sleep "$WAIT"
+                continue
+              fi
+              # Last attempt empty: treat as soft failure so we re-dispatch rather than silent give-up.
+              RATE_LIMITED=true
+              break
+            fi
+
             RATE_LIMITED=false
             break
           done

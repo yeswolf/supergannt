@@ -38,8 +38,9 @@ runs:
       env:
         DATA_DIR: ${{ inputs.data-dir }}
         MAGIC_BEARER_TOKEN: ${{ inputs.bearer-token }}
-        # Pace from completion *end* (min-gap alone is a no-op when turns take >1s).
-        DEEPSEEK_COMPLETION_END_GAP_MS: "300"
+        # Always sleep this many ms after each DeepSeek completion (forced, not residual).
+        # 300ms was eaten by Claude tool time and still hit "Messages too frequent".
+        DEEPSEEK_COMPLETION_END_GAP_MS: "3000"
       run: |
         mkdir -p "$DATA_DIR"
         cd magic
