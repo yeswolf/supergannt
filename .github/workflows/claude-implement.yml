@@ -24,6 +24,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      actions: write
     steps:
       - name: Resolve issue number
         id: issue
@@ -87,9 +88,7 @@ jobs:
           BRANCH="${{ steps.meta.outputs.branch }}"
           git checkout -b "$BRANCH"
 
-          set +e
-          claude -p --dangerously-skip-permissions --max-turns 999999 \
-            "Implement the GitHub issue described in /tmp/issue.md. \
+          PROMPT="Implement the GitHub issue described in /tmp/issue.md. \
             Issue title: ${ISSUE_TITLE}. \
             Working directory is the git repo root. You may create/edit files anywhere except node_modules, dist, data, logs, magic/, and build outputs. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
@@ -102,11 +101,39 @@ jobs:
             6) Keep going until acceptance criteria are met on disk (source + unit tests), then verify with a short test command if available. \
             7) Never end_turn with only prose or a \"how can I help\" menu — if work remains, call Write/Edit. \
             8) Do not summarize the codebase and stop; implement the issue. \
-            9) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed." \
-            > implement-output.md 2>&1
-          CLAUDE_EXIT=$?
+            9) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed."
+
+          set +e
+          MAX_ATTEMPTS=8
+          CLAUDE_EXIT=1
+          RATE_LIMITED=false
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            echo "==== Claude implement attempt ${attempt}/${MAX_ATTEMPTS} ===="
+            claude -p --dangerously-skip-permissions --max-turns 999999 \
+              "$PROMPT" > implement-output.md 2>&1
+            CLAUDE_EXIT=$?
+            BYTES=$(wc -c < implement-output.md | tr -d ' ')
+            echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
+            if grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected' implement-output.md \
+              && ! grep -qE 'IMPLEMENT_SUMMARY:' implement-output.md; then
+              # If files already changed, keep going rather than retrying forever.
+              if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+                echo "Rate-limit noise after file changes — continuing with disk state"
+                RATE_LIMITED=false
+                break
+              fi
+              RATE_LIMITED=true
+              WAIT=$(( attempt * 180 ))
+              echo "::warning::Rate-limit on implement attempt ${attempt}; sleeping ${WAIT}s"
+              sleep "$WAIT"
+              continue
+            fi
+            RATE_LIMITED=false
+            break
+          done
           set -e
           echo "claude_exit=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$RATE_LIMITED" >> "$GITHUB_OUTPUT"
           if [ "$CLAUDE_EXIT" -ne 0 ]; then
             echo "::warning::Claude exited with code $CLAUDE_EXIT (see implement-output.md)"
             tail -50 implement-output.md || true
@@ -171,31 +198,29 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Created PR: $URL"
 
-      - name: Extract summary
-        if: always()
-        id: summary
-        run: |
-          SUMMARY=$(grep -o 'IMPLEMENT_SUMMARY:.*' implement-output.md | sed 's/IMPLEMENT_SUMMARY://' | head -1 || true)
-          if [ -z "$SUMMARY" ]; then
-            SUMMARY=$(head -20 implement-output.md | tr '\n' ' ' | cut -c1-400)
-          fi
-          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
-
       - name: Post comment to issue
         if: always()
+        id: post
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('node:fs');
 
-            let summary;
+            let raw = '';
             try {
-              const raw = fs.readFileSync('implement-output.md', 'utf8');
-              const match = raw.match(/IMPLEMENT_SUMMARY:\s*(.*)/);
-              summary = match ? match[1] : raw.substring(0, 500).trim();
-            } catch (e) {
-              summary = 'Implementation completed but no output was captured.';
+              raw = fs.readFileSync('implement-output.md', 'utf8');
+            } catch {
+              raw = '';
             }
+
+            const match = raw.match(/IMPLEMENT_SUMMARY:\s*(.*)/);
+            let summary = match ? match[1].trim() : '';
+
+            const looksLikeNoise =
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|429/i.test(raw) &&
+              !/IMPLEMENT_SUMMARY:/.test(raw);
+            const rateLimited =
+              '${{ steps.implement.outputs.rate_limited }}' === 'true' || looksLikeNoise;
 
             const hasChanges = '${{ steps.commit.outputs.has_changes }}' === 'true';
             const branch = '${{ steps.meta.outputs.branch }}';
@@ -203,24 +228,73 @@ jobs:
             const prUrl = '${{ steps.pr.outputs.url }}';
             const repoUrl = 'https://github.com/' + context.repo.owner + '/' + context.repo.repo;
             const branchUrl = repoUrl + '/tree/' + branch;
+
+            // Never paste raw Claude/API/tool logs into the issue thread.
+            if (!hasChanges && rateLimited) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: [
+                  '## Implementation',
+                  '',
+                  'Hit a temporary capacity limit while implementing this issue. I will retry shortly.',
+                ].join('\n'),
+              });
+              core.setOutput('status', 'retry');
+              return;
+            }
+
+            if (!summary) {
+              summary = hasChanges
+                ? 'Opened a branch with the first pass on this issue.'
+                : 'Could not produce file changes on this pass.';
+            }
+
             let body;
             if (hasChanges) {
-              body = '## 🛠️ Claude Code Implementation\n\n' +
-                '**Branch:** [' + branch + '](' + branchUrl + ')\n\n' +
-                (prUrl ? '**PR:** ' + prUrl + '\n\n' : '') +
-                summary;
+              body = [
+                '## Implementation',
+                '',
+                summary,
+                '',
+                `Branch: [${branch}](${branchUrl})`,
+                prUrl ? `PR: ${prUrl}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n');
             } else {
-              body = '## 🛠️ Claude Code Implementation\n\n' +
-                '**Failed:** no file changes were produced.\n\n' +
-                summary;
+              body = [
+                '## Implementation',
+                '',
+                summary,
+                '',
+                'No file changes landed this pass — please poke `/implement` again if needed.',
+              ].join('\n');
             }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: body
+              body,
             });
+            core.setOutput('status', hasChanges ? 'ok' : 'failed');
+
+      - name: Re-dispatch implement after rate limit
+        if: steps.post.outputs.status == 'retry'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await new Promise((r) => setTimeout(r, 120000));
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'claude-implement.yml',
+              ref: 'master',
+              inputs: { issue_number: '${{ steps.issue.outputs.number }}' },
+            });
+            console.log('Re-dispatched claude-implement for issue #${{ steps.issue.outputs.number }}');
 
       - name: Upload logs
         if: always()
