@@ -6,6 +6,7 @@ import type { Project } from '../../domain/entities/Project'
 import type { IdGenerator } from '../ports/IdGenerator'
 import { refreshProject } from '../services/ProjectRefresh'
 import { parsePredecessorsField } from '../services/PredecessorNotation'
+import { wouldCreateCycle } from '../../domain/services/CircularDependencyService'
 
 /**
  * After a predecessor is added/changed, let the link drive the successor bar
@@ -80,6 +81,15 @@ export function linkTasks(
   const withoutDup = project.dependencies.filter(
     (d) => !(d.predecessorId === predecessorId && d.successorId === successorId),
   )
+  const cycleCheck = wouldCreateCycle(
+    project.tasks,
+    withoutDup,
+    asTaskId(predecessorId),
+    asTaskId(successorId),
+  )
+  if (cycleCheck) {
+    throw new Error(`Circular dependency detected: ${cycleCheck.description}`)
+  }
   const dependency = Dependency.create({
     id: asDependencyId(ids.dependencyId()),
     predecessorId: asTaskId(predecessorId),
@@ -177,6 +187,20 @@ export function setPredecessorsFromNotation(
   }))
   const driveSuccessor = predecessorLinksChanged(project, successorId, nextLinks)
   const kept = project.dependencies.filter((d) => d.successorId !== successorId)
+  // Check each new predecessor link for cycles.
+  for (const p of parsed) {
+    const cycleCheck = wouldCreateCycle(
+      project.tasks,
+      kept,
+      asTaskId(p.taskId),
+      asTaskId(successorId),
+    )
+    if (cycleCheck) {
+      throw new Error(
+        `Circular dependency detected: ${cycleCheck.description}`,
+      )
+    }
+  }
   const created = parsed.map((p) =>
     Dependency.create({
       id: asDependencyId(ids.dependencyId()),
@@ -202,10 +226,24 @@ export function setPredecessorLinks(
   const cleaned = links.filter((p) => p.predecessorId)
   const driveSuccessor = predecessorLinksChanged(project, successorId, cleaned)
   const kept = project.dependencies.filter((d) => d.successorId !== successorId)
-  const created = cleaned.map((p) => {
+  // Check each new predecessor link for cycles.
+  for (const p of cleaned) {
     if (p.predecessorId === successorId) {
       throw new Error('A task cannot depend on itself')
     }
+    const cycleCheck = wouldCreateCycle(
+      project.tasks,
+      kept,
+      asTaskId(p.predecessorId),
+      asTaskId(successorId),
+    )
+    if (cycleCheck) {
+      throw new Error(
+        `Circular dependency detected: ${cycleCheck.description}`,
+      )
+    }
+  }
+  const created = cleaned.map((p) => {
     return Dependency.create({
       id: asDependencyId(ids.dependencyId()),
       predecessorId: asTaskId(p.predecessorId),
