@@ -36,12 +36,10 @@ export function inspectProject(project: Project): readonly InspectionIssue[] {
   }
 
   // 2. Check for orphan dependencies (task no longer exists)
-  const orphanIds: string[] = []
   for (const dep of project.dependencies) {
     const predMissing = !taskIds.has(dep.predecessorId)
     const succMissing = !taskIds.has(dep.successorId)
     if (predMissing || succMissing) {
-      orphanIds.push(dep.id)
       const predName = predMissing ? `missing-task:${dep.predecessorId}` : taskMap.get(dep.predecessorId) ?? dep.predecessorId
       const succName = succMissing ? `missing-task:${dep.successorId}` : taskMap.get(dep.successorId) ?? dep.successorId
       issues.push({
