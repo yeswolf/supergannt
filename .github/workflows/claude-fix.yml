@@ -334,9 +334,11 @@ jobs:
             echo "::error::FIX_CHECKLIST has no DONE/SKIPPED bullets"
             exit 1
           fi
-          # Any SKIPPED that admits the work was not done should fail the job.
-          if grep -E '^\- \[SKIPPED\].*(no |not |still |missing|unimplemented|absent)' fix-output.md; then
-            echo "::error::Checklist still has unimplemented SKIPPED items — re-run /fix after addressing them"
+          # SKIPPED must prove the item was already satisfied ("already ...").
+          BAD_SKIPS=$(grep -E '^\- \[SKIPPED\]' fix-output.md | grep -vi 'already' || true)
+          if [ -n "$BAD_SKIPS" ]; then
+            echo "::error::SKIPPED items must cite that the code already satisfies them:"
+            echo "$BAD_SKIPS"
             exit 1
           fi
 
