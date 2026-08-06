@@ -104,81 +104,13 @@ jobs:
             9) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed."
 
           set +e
-          # Short in-job retries; long waits happen via workflow re-dispatch instead.
-          MAX_ATTEMPTS=3
-          CLAUDE_EXIT=1
-          RATE_LIMITED=false
-          traffic_hit_rl() {
-            local from_line="${1:-0}"
-            if [ ! -f /tmp/magic-data/traffic-log.jsonl ]; then
-              return 1
-            fi
-            tail -n +"$((from_line + 1))" /tmp/magic-data/traffic-log.jsonl 2>/dev/null | \
-              grep -qiE 'too frequent|rate_limit_reached|all bearers are rate-limited'
-          }
-          stdout_hit_rl() {
-            grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected|too frequent' \
-              implement-output.md
-          }
-          has_file_changes() {
-            ! git diff --quiet || ! git diff --cached --quiet || \
-              [ -n "$(git ls-files --others --exclude-standard)" ]
-          }
-
-          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-            echo "==== Claude implement attempt ${attempt}/${MAX_ATTEMPTS} ===="
-            TL_BEFORE=0
-            if [ -f /tmp/magic-data/traffic-log.jsonl ]; then
-              TL_BEFORE=$(wc -l < /tmp/magic-data/traffic-log.jsonl | tr -d ' ')
-            fi
-            claude -p --dangerously-skip-permissions --max-turns 999999 \
-              "$PROMPT" > implement-output.md 2>&1
-            CLAUDE_EXIT=$?
-            BYTES=$(wc -c < implement-output.md | tr -d ' ')
-            echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
-
-            HIT_RL=false
-            if stdout_hit_rl || traffic_hit_rl "$TL_BEFORE"; then
-              HIT_RL=true
-              echo "rate-limit detected (stdout and/or traffic-log since line ${TL_BEFORE})"
-            fi
-
-            if [ "$HIT_RL" = true ] && ! grep -qE 'IMPLEMENT_SUMMARY:' implement-output.md; then
-              if has_file_changes; then
-                echo "Rate-limit noise after file changes — continuing with disk state"
-                RATE_LIMITED=false
-                break
-              fi
-              RATE_LIMITED=true
-              if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-                WAIT=$(( 90 * attempt ))
-                echo "::warning::Rate-limit on implement attempt ${attempt}; sleeping ${WAIT}s"
-                sleep "$WAIT"
-                continue
-              fi
-              echo "::warning::Rate-limit after ${MAX_ATTEMPTS} attempts — will re-dispatch"
-              break
-            fi
-
-            # Exit 0 with only prose and no files is not success — retry.
-            if ! has_file_changes && ! grep -qE 'IMPLEMENT_SUMMARY:' implement-output.md; then
-              echo "::warning::Claude produced no file changes (exit=${CLAUDE_EXIT} bytes=${BYTES})"
-              if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-                WAIT=$(( 30 * attempt ))
-                sleep "$WAIT"
-                continue
-              fi
-              # Last attempt empty: treat as soft failure so we re-dispatch rather than silent give-up.
-              RATE_LIMITED=true
-              break
-            fi
-
-            RATE_LIMITED=false
-            break
-          done
+          claude -p --dangerously-skip-permissions --max-turns 999999 \
+            "$PROMPT" > implement-output.md 2>&1
+          CLAUDE_EXIT=$?
           set -e
           echo "claude_exit=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
-          echo "rate_limited=$RATE_LIMITED" >> "$GITHUB_OUTPUT"
+          BYTES=$(wc -c < implement-output.md | tr -d ' ')
+          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
           if [ "$CLAUDE_EXIT" -ne 0 ]; then
             echo "::warning::Claude exited with code $CLAUDE_EXIT (see implement-output.md)"
             tail -50 implement-output.md || true
@@ -262,10 +194,9 @@ jobs:
             let summary = match ? match[1].trim() : '';
 
             const looksLikeNoise =
-              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|429/i.test(raw) &&
-              !/IMPLEMENT_SUMMARY:/.test(raw);
-            const rateLimited =
-              '${{ steps.implement.outputs.rate_limited }}' === 'true' || looksLikeNoise;
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|429|too frequent/i.test(
+                raw,
+              ) && !/IMPLEMENT_SUMMARY:/.test(raw);
 
             const hasChanges = '${{ steps.commit.outputs.has_changes }}' === 'true';
             const branch = '${{ steps.meta.outputs.branch }}';
@@ -274,26 +205,15 @@ jobs:
             const repoUrl = 'https://github.com/' + context.repo.owner + '/' + context.repo.repo;
             const branchUrl = repoUrl + '/tree/' + branch;
 
-            // Never paste raw Claude/API/tool logs into the issue thread.
-            if (!hasChanges && rateLimited) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: [
-                  '## Implementation',
-                  '',
-                  'Hit a temporary capacity limit while implementing this issue. I will retry shortly.',
-                ].join('\n'),
-              });
-              core.setOutput('status', 'retry');
-              return;
-            }
-
             if (!summary) {
-              summary = hasChanges
-                ? 'Opened a branch with the first pass on this issue.'
-                : 'Could not produce file changes on this pass.';
+              if (looksLikeNoise) {
+                summary =
+                  'Could not finish this pass — the model hit a temporary capacity limit.';
+              } else {
+                summary = hasChanges
+                  ? 'Opened a branch with the first pass on this issue.'
+                  : 'Could not produce file changes on this pass.';
+              }
             }
 
             let body;
@@ -324,22 +244,6 @@ jobs:
               issue_number: issueNumber,
               body,
             });
-            core.setOutput('status', hasChanges ? 'ok' : 'failed');
-
-      - name: Re-dispatch implement after rate limit
-        if: steps.post.outputs.status == 'retry'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await new Promise((r) => setTimeout(r, 120000));
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'claude-implement.yml',
-              ref: 'master',
-              inputs: { issue_number: '${{ steps.issue.outputs.number }}' },
-            });
-            console.log('Re-dispatched claude-implement for issue #${{ steps.issue.outputs.number }}');
 
       - name: Upload logs
         if: always()

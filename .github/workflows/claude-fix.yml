@@ -207,36 +207,15 @@ jobs:
             - [DONE|SKIPPED] <item>: <one-line proof> \
             FIX_SUMMARY: <one human sentence of what you changed>"
 
-          MAX_ATTEMPTS=3
-          CLAUDE_EXIT=1
-          RATE_LIMITED=false
-          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-            echo "==== Claude fix attempt ${attempt}/${MAX_ATTEMPTS} ===="
-            claude -p --dangerously-skip-permissions --max-turns 999999 \
-              "$PROMPT" > fix-output.md 2>&1
-            CLAUDE_EXIT=$?
-            BYTES=$(wc -c < fix-output.md | tr -d ' ')
-            echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
-            if grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected' fix-output.md \
-              && ! grep -qE 'FIX_CHECKLIST:|FIX_SUMMARY:' fix-output.md; then
-              RATE_LIMITED=true
-              if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-                WAIT=$(( 60 * attempt ))
-                echo "::warning::Rate-limit on fix attempt ${attempt}; sleeping ${WAIT}s"
-                sleep "$WAIT"
-                continue
-              fi
-              echo "::warning::Rate-limit after ${MAX_ATTEMPTS} attempts — will re-dispatch"
-              break
-            fi
-            RATE_LIMITED=false
-            break
-          done
-
+          set +e
+          claude -p --dangerously-skip-permissions --max-turns 999999 \
+            "$PROMPT" > fix-output.md 2>&1
+          CLAUDE_EXIT=$?
+          BYTES=$(wc -c < fix-output.md | tr -d ' ')
+          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
           echo "claude_exit=${CLAUDE_EXIT}" >> "$GITHUB_OUTPUT"
-          echo "rate_limited=${RATE_LIMITED}" >> "$GITHUB_OUTPUT"
 
-          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md && [ "$RATE_LIMITED" != "true" ]; then
+          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md; then
             echo "==== Checklist follow-up ===="
             git diff --stat "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff-stat.txt || true
             git diff "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff.txt || true
@@ -288,17 +267,14 @@ jobs:
             const fs = require('node:fs');
             const prNumber = Number('${{ steps.pr.outputs.number }}');
             const hasChanges = '${{ steps.commit.outputs.has_changes }}' === 'true';
-            const rateLimited = '${{ steps.claude.outputs.rate_limited }}' === 'true';
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
             // Reaction protocol:
             //   rocket   🚀 → pushed changes → kick Review
             //   eyes     👀 → no commits; re-check → kick Review
-            //   confused 😕 → capacity → self-retry
             const REACT_APPLIED = 'rocket';
             const REACT_CHECKED = 'eyes';
-            const REACT_WAIT = 'confused';
 
             let raw = '';
             try {
@@ -311,8 +287,9 @@ jobs:
             let summary = summaryMatch ? summaryMatch[1].trim() : '';
 
             const looksLikeNoise =
-              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded/i.test(raw) &&
-              !/FIX_SUMMARY:|FIX_CHECKLIST:/.test(raw);
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|too frequent/i.test(
+                raw,
+              ) && !/FIX_SUMMARY:|FIX_CHECKLIST:/.test(raw);
 
             async function postWithReaction(body, reaction) {
               const { data: comment } = await github.rest.issues.createComment({
@@ -330,16 +307,16 @@ jobs:
               return comment;
             }
 
-            if (rateLimited || looksLikeNoise) {
+            if (looksLikeNoise) {
               await postWithReaction(
                 [
                   '## Fixes',
                   '',
-                  'Hit a temporary capacity limit while applying the review. I will retry shortly.',
+                  'Could not finish applying the review on this pass.',
                 ].join('\n'),
-                REACT_WAIT,
+                REACT_CHECKED,
               );
-              core.setOutput('status', 'retry');
+              core.setOutput('status', 'failed');
               return;
             }
 
@@ -375,20 +352,6 @@ jobs:
             await postWithReaction(parts.join('\n'), reaction);
             core.setOutput('status', hasChanges ? 'applied' : 'noop');
 
-      - name: Re-dispatch fix after rate limit
-        if: steps.post.outputs.status == 'retry'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await new Promise((r) => setTimeout(r, 120000));
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'claude-fix.yml',
-              ref: 'master',
-              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
-            });
-            console.log('Re-dispatched claude-fix for PR ${{ steps.pr.outputs.number }}');
 
       - name: Dispatch review after fix
         if: steps.post.outputs.status == 'applied' || steps.post.outputs.status == 'noop'

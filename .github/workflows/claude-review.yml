@@ -139,33 +139,13 @@ jobs:
             Never print both. Prefer STATUS_CLEAN when remaining notes are pure nitpicks you would not block on. \
             After that token, write only the human review prose."
 
-          MAX_ATTEMPTS=3
-          CLAUDE_EXIT=1
-          RATE_LIMITED=false
-          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-            echo "==== Claude review attempt ${attempt}/${MAX_ATTEMPTS} ===="
-            claude -p --dangerously-skip-permissions --max-turns 999999 \
-              "$PROMPT" > review.md 2>&1
-            CLAUDE_EXIT=$?
-            BYTES=$(wc -c < review.md | tr -d ' ')
-            echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
-            if grep -qiE 'rate-limited|429|Overloaded|all bearers are|API Error: Request rejected' review.md \
-              && ! grep -qE 'STATUS_CLEAN|STATUS_NEEDS_FIXES' review.md; then
-              RATE_LIMITED=true
-              if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-                WAIT=$(( 60 * attempt ))
-                echo "::warning::Rate-limit on review attempt ${attempt}; sleeping ${WAIT}s"
-                sleep "$WAIT"
-                continue
-              fi
-              echo "::warning::Rate-limit after ${MAX_ATTEMPTS} attempts — will re-dispatch"
-              break
-            fi
-            RATE_LIMITED=false
-            break
-          done
+          set +e
+          claude -p --dangerously-skip-permissions --max-turns 999999 \
+            "$PROMPT" > review.md 2>&1
+          CLAUDE_EXIT=$?
+          BYTES=$(wc -c < review.md | tr -d ' ')
+          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
           echo "claude_exit=${CLAUDE_EXIT}" >> "$GITHUB_OUTPUT"
-          echo "rate_limited=${RATE_LIMITED}" >> "$GITHUB_OUTPUT"
           true
           set -e
 
@@ -177,7 +157,6 @@ jobs:
           script: |
             const fs = require('node:fs');
             const prNumber = Number('${{ steps.pr.outputs.number }}');
-            const rateLimited = '${{ steps.claude.outputs.rate_limited }}' === 'true';
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
@@ -187,7 +166,6 @@ jobs:
             //   confused 😕 → capacity → self-retry
             const REACT_NEEDS = 'eyes';
             const REACT_CLEAN = '+1';
-            const REACT_WAIT = 'confused';
 
             let raw = '';
             try {
@@ -197,7 +175,7 @@ jobs:
             }
 
             const looksLikeApiNoise = (text) =>
-              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded/i.test(text) &&
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|too frequent/i.test(text) &&
               !/STATUS_CLEAN|STATUS_NEEDS_FIXES/.test(text);
 
             async function postWithReaction(body, reaction) {
@@ -216,16 +194,16 @@ jobs:
               return comment;
             }
 
-            if (rateLimited || looksLikeApiNoise(raw) || !raw.trim()) {
+            if (looksLikeApiNoise(raw) || !raw.trim()) {
               await postWithReaction(
                 [
                   '## Review',
                   '',
-                  'Hit a temporary capacity limit while reviewing this PR. I will retry shortly.',
+                  'Could not finish the review on this pass.',
                 ].join('\n'),
-                REACT_WAIT,
+                REACT_NEEDS,
               );
-              core.setOutput('status', 'retry');
+              core.setOutput('status', 'failed');
               return;
             }
 
@@ -264,20 +242,6 @@ jobs:
             await postWithReaction(['## Review', '', prose].join('\n'), reaction);
             core.setOutput('status', reaction === REACT_CLEAN ? 'clean' : 'needs');
 
-      - name: Re-dispatch review after rate limit
-        if: steps.post.outputs.status == 'retry'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await new Promise((r) => setTimeout(r, 120000));
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'claude-review.yml',
-              ref: 'master',
-              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
-            });
-            console.log('Re-dispatched claude-review for PR ${{ steps.pr.outputs.number }}');
 
       - name: Dispatch fix after review needs changes
         if: steps.post.outputs.status == 'needs'
