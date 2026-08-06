@@ -9,8 +9,10 @@ name: Claude Code Review
 # Slash commands /review and /claude-review still work.
 
 on:
+  # No synchronize: Actions pushes from Fix often land as action_required, and Fix
+  # already dispatches review after 🚀/👀. Use /review for manual re-checks.
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -30,7 +32,6 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && (
         github.event.action == 'opened' ||
-        github.event.action == 'synchronize' ||
         github.event.action == 'reopened' ||
         github.event.action == 'ready_for_review'
       )) ||
@@ -63,27 +64,6 @@ jobs:
             if (!prNumber) {
               core.setFailed('Missing PR number');
               return;
-            }
-
-            // Fix pushes "Apply review feedback" (synchronize) then reacts 🚀 and
-            // dispatches review — skip the synchronize twin to avoid double runs.
-            if (
-              context.eventName === 'pull_request' &&
-              context.payload.action === 'synchronize'
-            ) {
-              const { data: commits } = await github.rest.pulls.listCommits({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prNumber,
-                per_page: 100,
-              });
-              const last = commits[commits.length - 1];
-              const msg = last?.commit?.message || '';
-              if (/^Apply review feedback\b/m.test(msg)) {
-                core.setOutput('skip', 'true');
-                console.log('Skipping synchronize review; fix will dispatch after 🚀');
-                return;
-              }
             }
 
             const { data: pr } = await github.rest.pulls.get({
@@ -152,6 +132,7 @@ jobs:
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
             Write a natural, readable review (not a robot dump). Cover: brief summary, concrete issues, concrete suggestions. \
             Do not paste stack traces, API errors, or tool logs. \
+            Do not narrate your process (no \"let me review\", \"now I understand\", \"composing\"). Start with the review itself. \
             On the FIRST line of your reply print exactly one of these status tokens (automation only — never shown to humans): \
             STATUS_NEEDS_FIXES — if anything should still be fixed (issues or actionable suggestions). \
             STATUS_CLEAN — if you would approve/merge with no further code changes. \
@@ -257,6 +238,16 @@ jobs:
               .replace(/\bREVIEW_CLEAN\b/g, '')
               .replace(/\bREVIEW_NEEDS_CHANGES\b/g, '')
               .replace(/\bREVIEW_START\b/g, '')
+              .trim();
+
+            // Drop common Claude "thinking aloud" preambles before the real review.
+            prose = prose
+              .replace(/^[\s\S]*?\n---\s*\n+/m, '')
+              .replace(
+                /^(?:Now I have[^\n]*\n|Let me (?:compose|write|start)[^\n]*\n)+/i,
+                '',
+              )
+              .replace(/^(?:Okay[,.]?|Alright[,.]?|Sure[,.]?)\s*/i, '')
               .trim();
 
             if (!prose) {
