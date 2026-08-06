@@ -80,7 +80,7 @@ describe('MSPDI circular dependency inspection (real fixtures)', () => {
     expect(dups[0]!.severity).toBe('warning')
   })
 
-  it('detects a dangling predecessor reference from XML', async () => {
+  it('drops unknown predecessor references during parsing so no findings result', async () => {
     // The MSPDI codec silently drops predecessor references to unknown UIDs
     // during parsing (line 244: if (!predId) continue).
     // When the raw testdata has a predecessor UID=99 that doesn't match any
