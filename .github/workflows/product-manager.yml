@@ -1,24 +1,10 @@
 name: Product Manager
 
 on:
-  issue_comment:
-    types: [created]
   workflow_dispatch:
 
 jobs:
   product-manager:
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'issue_comment' &&
-        contains(github.event.comment.body, '/product-manager') &&
-        github.event.issue.pull_request == null &&
-        (
-          github.event.comment.author_association == 'OWNER' ||
-          github.event.comment.user.login == 'github-actions[bot]'
-        )
-      )
-    # Job-level so skipped comment triggers do not stampede-cancel pending agents.
     concurrency:
       group: magic-agent
       cancel-in-progress: false

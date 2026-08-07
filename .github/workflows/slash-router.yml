@@ -1,0 +1,81 @@
+name: Slash Router
+
+# Only this workflow listens to issue comments. It dispatches the one matching
+# slash command so Implement/Fix/Review/Merge/PM do not all wake and skip.
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  route:
+    if: |
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.user.login == 'github-actions[bot]'
+      ) && (
+        contains(github.event.comment.body, '/implement') ||
+        contains(github.event.comment.body, '/fix') ||
+        contains(github.event.comment.body, '/review') ||
+        contains(github.event.comment.body, '/merge') ||
+        contains(github.event.comment.body, '/product-manager')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch matching workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ github.event.comment.body }}
+          NUM: ${{ github.event.issue.number }}
+          # "true" when comment is on a PR thread
+          IS_PR: ${{ github.event.issue.pull_request != null }}
+        run: |
+          set -euo pipefail
+          REF="${{ github.event.repository.default_branch }}"
+
+          dispatch() {
+            local wf="$1"
+            shift
+            echo "Dispatching ${wf} $*"
+            gh workflow run "$wf" --ref "$REF" "$@"
+          }
+
+          # First matching command wins.
+          if [[ "$BODY" == *"/implement"* ]]; then
+            if [[ "$IS_PR" == "true" ]]; then
+              echo "Ignoring /implement on a PR comment (issues only)"
+              exit 0
+            fi
+            dispatch implement.yml -f "issue_number=${NUM}"
+          elif [[ "$BODY" == *"/fix"* ]]; then
+            if [[ "$IS_PR" != "true" ]]; then
+              echo "Ignoring /fix on a non-PR issue"
+              exit 0
+            fi
+            dispatch fix.yml -f "pr_number=${NUM}"
+          elif [[ "$BODY" == *"/review"* ]]; then
+            if [[ "$IS_PR" != "true" ]]; then
+              echo "Ignoring /review on a non-PR issue"
+              exit 0
+            fi
+            dispatch review.yml -f "pr_number=${NUM}"
+          elif [[ "$BODY" == *"/merge"* ]]; then
+            if [[ "$IS_PR" != "true" ]]; then
+              echo "Ignoring /merge on a non-PR issue"
+              exit 0
+            fi
+            dispatch merge.yml -f "pr_number=${NUM}"
+          elif [[ "$BODY" == *"/product-manager"* ]]; then
+            if [[ "$IS_PR" == "true" ]]; then
+              echo "Ignoring /product-manager on a PR comment"
+              exit 0
+            fi
+            dispatch product-manager.yml
+          else
+            echo "No slash command matched"
+            exit 0
+          fi

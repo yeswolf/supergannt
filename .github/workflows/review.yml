@@ -13,8 +13,6 @@ on:
   # already dispatches review after 🚀/👀. Use /review for manual re-checks.
   pull_request:
     types: [opened, reopened, ready_for_review]
-  issue_comment:
-    types: [created]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -34,16 +32,7 @@ jobs:
         github.event.pull_request.user.login == github.repository_owner ||
         github.event.pull_request.user.login == 'github-actions[bot]' ||
         github.event.pull_request.user.login == 'claude'
-      )) ||
-      (github.event_name == 'issue_comment' &&
-        github.event.issue.pull_request != null &&
-        (
-          github.event.comment.author_association == 'OWNER' ||
-          github.event.comment.user.login == 'github-actions[bot]'
-        ) && (
-          contains(github.event.comment.body, '/review')
-        ))
-    # Job-level so skipped comment triggers do not stampede-cancel pending agents.
+      ))
     concurrency:
       group: magic-agent
       cancel-in-progress: false

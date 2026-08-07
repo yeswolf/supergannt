@@ -4,8 +4,6 @@ name: Merge
 # when review is marked as complete (👍 / STATUS_CLEAN).
 
 on:
-  issue_comment:
-    types: [created]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -14,20 +12,11 @@ on:
         type: string
 
 concurrency:
-  group: merge-pr-${{ github.event.issue.number || inputs.pr_number }}
+  group: merge-pr-${{ inputs.pr_number }}
   cancel-in-progress: false
 
 jobs:
   merge:
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issue_comment' &&
-        github.event.issue.pull_request != null &&
-        contains(github.event.comment.body, '/merge') &&
-        (
-          github.event.comment.author_association == 'OWNER' ||
-          github.event.comment.user.login == 'github-actions[bot]'
-        ))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
