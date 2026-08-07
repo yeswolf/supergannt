@@ -32,8 +32,7 @@ export class LocalStorageProjectRepository implements ProjectRepository {
     const metaJson = JSON.stringify(metadata)
     try {
       // Write metadata first so a partial failure (quota hit on payload)
-      // leaves a harmless stale metadata entry rather than an orphaned
-      // payload blob that can never be discovered.
+      // doesn't leave an orphaned payload blob that can never be discovered.
       this.storage.setItem(AUTO_SNAPSHOT_META_KEY, metaJson)
       this.storage.setItem(AUTO_SNAPSHOT_KEY, payload)
     } catch (err: unknown) {
@@ -43,6 +42,9 @@ export class LocalStorageProjectRepository implements ProjectRepository {
       // when localStorage is disabled, TypeError, etc.) propagate so the
       // service layer can handle them explicitly.
       if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+        // Metadata was already written — clean it up so a stale entry doesn't
+        // produce a phantom recovery banner on next app open.
+        this.storage.removeItem(AUTO_SNAPSHOT_META_KEY)
         return
       }
       throw err

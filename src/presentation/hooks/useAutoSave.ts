@@ -30,15 +30,14 @@ export function useAutoSave() {
   projectRef.current = project
 
   // Update the mutation timestamp on every project change while dirty.
-  // Tracking `project` (serialised) instead of just `autoSave.dirty` so the
-  // effect fires on every edit — `dirty` only changes on the false→true
-  // transition, so we'd otherwise hold a stale timestamp from the first
-  // keystroke.
+  // Tracking `autoSave.mutationCounter` (incremented by the reducer on every
+  // project mutation) instead of `project` so the effect fires even if a
+  // code path returns the same object reference (e.g. a no-op update).
   useEffect(() => {
     if (autoSave.dirty) {
       lastMutationRef.current = Date.now()
     }
-  }, [autoSave.dirty, project])
+  }, [autoSave.dirty, autoSave.mutationCounter])
 
   // Reset the status indicator to idle when the user starts editing again
   // so the toolbar doesn't show "Auto-saved" while the dirty dot is lit.

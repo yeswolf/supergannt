@@ -71,6 +71,9 @@ export interface AutoSaveState {
     savedAt: string
     fileName: string | null
   } | null
+  /** Incremented on every project mutation — a robust trigger for the auto-save
+   *  hook that doesn't depend on object-reference identity. */
+  mutationCounter: number
 }
 
 export interface WorkspaceState {
@@ -103,6 +106,7 @@ const INITIAL_AUTO_SAVE: AutoSaveState = {
   dirty: false,
   quotaWarning: false,
   recoverySnapshot: null,
+  mutationCounter: 0,
 }
 
 export function createInitialState(services = createAppServices()): WorkspaceState {
@@ -308,7 +312,7 @@ export function undoableReducer(
       }),
       project: prev,
       statusMessage: `Undo: ${entry.label}`,
-      autoSave: { ...state.autoSave, dirty: true },
+      autoSave: { ...state.autoSave, dirty: true, mutationCounter: state.autoSave.mutationCounter + 1 },
       inspections: inspectProject(prev),
     }
   }
@@ -326,7 +330,7 @@ export function undoableReducer(
       }),
       project: next,
       statusMessage: `Redo: ${entry.label}`,
-      autoSave: { ...state.autoSave, dirty: true },
+      autoSave: { ...state.autoSave, dirty: true, mutationCounter: state.autoSave.mutationCounter + 1 },
       inspections: inspectProject(next),
     }
   }
@@ -355,7 +359,7 @@ export function undoableReducer(
           label: ACTION_LABELS[action.type] ?? action.type,
         }),
         redoStack: [],
-        autoSave: { ...result.autoSave, dirty: true },
+        autoSave: { ...result.autoSave, dirty: true, mutationCounter: state.autoSave.mutationCounter + 1 },
         inspections: inspectProject(result.project),
       }
     }
