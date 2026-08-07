@@ -98,12 +98,10 @@ export function TaskSheetView() {
                   }
                 >
                   {TASK_SHEET_LABELS[id]}
-                  {filterState.sorts.some((s) => s.field === id)
-                    ? filterState.sorts.find((s) => s.field === id)!
-                        .direction === 'asc'
-                      ? ' ↑'
-                      : ' ↓'
-                    : ''}
+                  {(() => {
+                    const spec = filterState.sorts.find((s) => s.field === id)
+                    return spec ? (spec.direction === 'asc' ? ' ↑' : ' ↓') : ''
+                  })()}
                 </ColumnHeader>
               ))}
             </tr>

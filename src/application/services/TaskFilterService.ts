@@ -111,6 +111,10 @@ function getFieldValue(
       return task.summary
     case 'outlineLevel':
       return task.outlineLevel
+    case 'totalSlack':
+      return task.totalSlackHours ?? 0
+    case 'freeSlack':
+      return task.freeSlackHours ?? 0
     // No default case is intentional: FilterField is a union that is kept
     // wider than TaskColumnId so we can add filter-only fields like
     // 'milestone'/'critical'/'summary'.  When a new TaskColumnId is added

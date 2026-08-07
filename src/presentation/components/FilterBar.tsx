@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   ColumnFilter,
   FilterField,
@@ -164,6 +164,18 @@ function sortFieldLabel(field: FilterField): string {
 
 function SortControls({ state, onChange }: FilterBarProps) {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('click', onDocClick, true)
+    return () => document.removeEventListener('click', onDocClick, true)
+  }, [open])
 
   const addSort = (field: FilterField, additive: boolean) => {
     const next = toggleSort(state.sorts, field, additive)
@@ -175,7 +187,7 @@ function SortControls({ state, onChange }: FilterBarProps) {
     `${sortFieldLabel(spec.field)} ${spec.direction === 'asc' ? '↑' : '↓'}`
 
   return (
-    <div className={styles.group} style={{ position: 'relative' }}>
+    <div ref={containerRef} className={styles.group} style={{ position: 'relative' }}>
       <span className={styles.label}>Sort</span>
       <button
         type="button"
