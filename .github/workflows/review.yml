@@ -397,9 +397,10 @@ jobs:
               .replace(/\bREVIEW_START\b/g, '')
               .trim();
 
-            // Drop common "thinking aloud" preambles before the real review.
+            // Drop short "thinking aloud" openers only — never strip on markdown `---`
+            // (agents often put an HR before the closing summary; that used to delete
+            // the whole review and leave only the epilogue on the PR comment).
             prose = prose
-              .replace(/^[\s\S]*?\n---\s*\n+/m, '')
               .replace(
                 /^(?:Now I have[^\n]*\n|Let me (?:compose|write|start)[^\n]*\n)+/i,
                 '',
