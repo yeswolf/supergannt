@@ -4,14 +4,16 @@
  */
 export function formatSlackHours(hours: number | null): string {
   if (hours == null) return ''
-  if (hours === 0) return '0h'
   if (Math.abs(hours) < 0.005) return '0h'
-  const h = Math.floor(hours)
-  const m = Math.round((hours - h) * 60)
-  if (h === 0 && m === 0) return '0h'
-  if (m === 0) return `${h}h`
-  if (h === 0) return `${m}m`
+  const abs = Math.abs(hours)
+  let h = Math.floor(abs)
+  let m = Math.round((abs - h) * 60)
+  if (m === 60) {
+    h += 1
+    m = 0
+  }
   const sign = hours < 0 ? '-' : ''
-  const absH = Math.abs(h)
-  return `${sign}${absH}h ${m}m`
+  if (m === 0) return `${sign}${h}h`
+  if (h === 0) return `${sign}${m}m`
+  return `${sign}${h}h ${m}m`
 }

@@ -562,6 +562,75 @@ describe('SchedulingService', () => {
       expect(flagged.find((t) => t.id === '1')!.freeSlackHours).toBeNull()
       expect(flagged.find((t) => t.id === '2')!.totalSlackHours).toBe(0)
     })
+
+    it('handles calendar gaps where a non-working day creates float on one branch', () => {
+      // Standard Mon-Fri calendar with Tuesday Jan 6 as a non-working holiday.
+      // The gap pushes both parallel branches by one day, but the shorter branch
+      // picks up slack because the longer branch still drives the project end.
+      const calendar = WorkCalendar.standard(asCalendarId('c')).with({
+        exceptions: [
+          {
+            date: new Date(2026, 0, 6), // Tuesday
+            working: false,
+            name: 'Holiday',
+          },
+        ],
+      })
+      const tasks = rebuildHierarchy([
+        task('1', 'Start', 0, 8),  // Mon
+        task('2', 'Upper', 0, 8),  // 1 working day — non-critical
+        task('3', 'Lower', 0, 16), // 2 working days — critical path
+        task('4', 'End', 0, 8),
+      ])
+      const deps = [
+        Dependency.create({
+          id: asDependencyId('d1'),
+          predecessorId: asTaskId('1'),
+          successorId: asTaskId('2'),
+          type: 'FS',
+          lag: Duration.zero(),
+        }),
+        Dependency.create({
+          id: asDependencyId('d2'),
+          predecessorId: asTaskId('1'),
+          successorId: asTaskId('3'),
+          type: 'FS',
+          lag: Duration.zero(),
+        }),
+        Dependency.create({
+          id: asDependencyId('d3'),
+          predecessorId: asTaskId('2'),
+          successorId: asTaskId('4'),
+          type: 'FS',
+          lag: Duration.zero(),
+        }),
+        Dependency.create({
+          id: asDependencyId('d4'),
+          predecessorId: asTaskId('3'),
+          successorId: asTaskId('4'),
+          type: 'FS',
+          lag: Duration.zero(),
+        }),
+      ]
+      const scheduled = scheduleProject(tasks, deps, calendar, day('2026-01-05'))
+      const floatMap = computeFloat(scheduled, deps, calendar)
+      const flagged = applyFloatToTasks(scheduled, floatMap)
+
+      // Start and End are critical (zero slack)
+      expect(flagged.find((t) => t.id === '1')!.critical).toBe(true)
+      expect(flagged.find((t) => t.id === '1')!.totalSlackHours).toBe(0)
+      expect(flagged.find((t) => t.id === '4')!.critical).toBe(true)
+      expect(flagged.find((t) => t.id === '4')!.totalSlackHours).toBe(0)
+
+      // Lower path is critical (16h across the gap: Wed+Thu)
+      expect(flagged.find((t) => t.id === '3')!.critical).toBe(true)
+      expect(flagged.find((t) => t.id === '3')!.totalSlackHours).toBe(0)
+
+      // Upper path has slack (8h vs 16h lower = 8h slack across the gap)
+      const upper = flagged.find((t) => t.id === '2')!
+      expect(upper.critical).toBe(false)
+      expect(upper.totalSlackHours).toBe(8)
+    })
   })
 })
 
