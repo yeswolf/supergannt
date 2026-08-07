@@ -10,14 +10,39 @@ export function useWorkspaceActions(): ReactNode[] {
     selectedTaskId,
     selectedTaskIds,
     selectedResourceId,
+    undoStack,
+    redoStack,
   } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
 
   const canLink = selectedTaskIds.length >= 2
   const canUnlink = selectedTaskIds.length >= 1
+  const canUndo = undoStack.length > 0
+  const canRedo = redoStack.length > 0
 
   return useMemo(() => {
     const actions: ReactNode[] = []
+
+    // Undo / Redo — always present, disabled when stack is empty.
+    actions.push(
+      <IconAction
+        key="undo"
+        glyph="↶"
+        label="Undo"
+        title={`Undo (${PROJECT_SHORTCUT_HINTS.undo})${canUndo ? ': ' + undoStack[undoStack.length - 1]!.label : ''}`}
+        disabled={!canUndo}
+        onClick={() => dispatch({ type: 'undo' })}
+      />,
+      <IconAction
+        key="redo"
+        glyph="↷"
+        label="Redo"
+        title={`Redo (${PROJECT_SHORTCUT_HINTS.redo})${canRedo ? ': ' + redoStack[redoStack.length - 1]!.label : ''}`}
+        disabled={!canRedo}
+        onClick={() => dispatch({ type: 'redo' })}
+      />,
+    )
+
     const onResources =
       view === 'resources' || view === 'resourceCalendar' || view === 'rbs'
 
@@ -95,7 +120,7 @@ export function useWorkspaceActions(): ReactNode[] {
           icon="link"
           label="Link selected tasks (FS)"
           title={`Link selected tasks (${PROJECT_SHORTCUT_HINTS.link})`}
-          disabled={!canLink}
+          disabled={canLink}
           onClick={() => dispatch({ type: 'linkSelection' })}
         />,
         <IconAction
@@ -103,7 +128,7 @@ export function useWorkspaceActions(): ReactNode[] {
           icon="unlink"
           label="Unlink selection"
           title={`Unlink selection (${PROJECT_SHORTCUT_HINTS.unlink})`}
-          disabled={!canUnlink}
+          disabled={canUnlink}
           onClick={() => dispatch({ type: 'unlinkSelection' })}
         />,
         <IconAction
@@ -143,9 +168,13 @@ export function useWorkspaceActions(): ReactNode[] {
   }, [
     canLink,
     canUnlink,
+    canUndo,
+    canRedo,
     dispatch,
+    redoStack,
     selectedResourceId,
     selectedTaskId,
+    undoStack,
     view,
   ])
 }

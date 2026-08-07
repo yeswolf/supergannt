@@ -47,6 +47,16 @@ export function createAppServices(): AppServices {
   return { ids, files }
 }
 
+/** Maximum undo stack depth. */
+const MAX_UNDO_DEPTH = 50
+
+/** Snapshot of project state saved before each mutation. */
+interface UndoEntry {
+  project: Project
+  /** Human-readable label shown in UI (e.g. "Add task"). */
+  label: string
+}
+
 export interface WorkspaceState {
   project: Project
   view: AppView
@@ -62,6 +72,10 @@ export interface WorkspaceState {
   /** Non-null while a plan file is being opened/imported. */
   busyMessage: string | null
   services: AppServices
+  /** Undo stack — most recent snapshot at the end. */
+  undoStack: UndoEntry[]
+  /** Redo stack — most recently undone at the end. */
+  redoStack: UndoEntry[]
 }
 
 export function createInitialState(services = createAppServices()): WorkspaceState {
@@ -77,6 +91,8 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     statusMessage: 'Blank plan — add a task or open a file.',
     busyMessage: null,
     services,
+    undoStack: [],
+    redoStack: [],
   }
 }
 
@@ -154,7 +170,162 @@ export type WorkspaceAction =
       type: 'updateProjectInfo'
       patch: Parameters<typeof ProjectUseCases.updateProjectInfo>[1]
     }
+  | { type: 'undo' }
+  | { type: 'redo' }
 
+/** Push a snapshot onto the undo stack, capping at MAX_UNDO_DEPTH. */
+function pushUndo(stack: UndoEntry[], entry: UndoEntry): UndoEntry[] {
+  const next = [...stack, entry]
+  if (next.length > MAX_UNDO_DEPTH) {
+    return next.slice(next.length - MAX_UNDO_DEPTH)
+  }
+  return next
+}
+
+/** Project-mutating action types — these capture a snapshot before running. */
+const PROJECT_MUTATIONS = new Set<string>([
+  'addTask',
+  'addMilestone',
+  'updateTask',
+  'deleteTask',
+  'deleteSelection',
+  'indentTask',
+  'outdentTask',
+  'linkTasks',
+  'linkSelection',
+  'unlinkSelection',
+  'unlinkDependency',
+  'setPredecessors',
+  'setPredecessorLinks',
+  'applyTaskInformation',
+  'addResource',
+  'updateResource',
+  'setResourceCalendar',
+  'ensureResourceCalendar',
+  'deleteResource',
+  'assignResource',
+  'unassignResource',
+  'setTaskAssignments',
+  'setBaseline',
+  'clearBaseline',
+  'updateProjectInfo',
+])
+
+/** Human-readable labels for undo/redo entries. */
+const ACTION_LABELS: Record<string, string> = {
+  addTask: 'Add task',
+  addMilestone: 'Add milestone',
+  updateTask: 'Edit task',
+  deleteTask: 'Delete task',
+  deleteSelection: 'Delete selection',
+  indentTask: 'Indent',
+  outdentTask: 'Outdent',
+  linkTasks: 'Link tasks',
+  linkSelection: 'Link selection',
+  unlinkSelection: 'Unlink selection',
+  unlinkDependency: 'Unlink dependency',
+  setPredecessors: 'Set predecessors',
+  setPredecessorLinks: 'Set predecessors',
+  applyTaskInformation: 'Edit task info',
+  addResource: 'Add resource',
+  updateResource: 'Edit resource',
+  setResourceCalendar: 'Set resource calendar',
+  ensureResourceCalendar: 'Create resource calendar',
+  deleteResource: 'Delete resource',
+  assignResource: 'Assign resource',
+  unassignResource: 'Unassign resource',
+  setTaskAssignments: 'Set task assignments',
+  setBaseline: 'Set baseline',
+  clearBaseline: 'Clear baseline',
+  updateProjectInfo: 'Edit project info',
+}
+
+/**
+ * Wrap the base reducer to capture project snapshots before every mutation.
+ *
+ * Strategy (snapshot / memento):
+ * - Before any project-mutating action, the current Project is pushed onto the
+ *   undo stack (up to 50 entries; oldest evicted first).
+ * - Undo pops from the undo stack, pushes the current Project onto the redo
+ *   stack, and restores the popped snapshot.
+ * - Redo pops from the redo stack, pushes the current Project onto the undo
+ *   stack, and restores the popped snapshot.
+ * - Any new mutation after an undo clears the redo stack (standard behaviour).
+ * - setProject, newProject, and loadDemo reset both stacks (file open / new).
+ * - UI-only actions (setView, selectTask, openTaskInfo, etc.) do NOT push
+ *   snapshots and have no effect on the stacks.
+ */
+export function undoableReducer(
+  state: WorkspaceState,
+  action: WorkspaceAction,
+): WorkspaceState {
+  // --- Undo / Redo -------------------------------------------------------
+  if (action.type === 'undo') {
+    if (state.undoStack.length === 0) return state
+    const entry = state.undoStack[state.undoStack.length - 1]
+    const prev = entry.project
+    return {
+      ...state,
+      undoStack: state.undoStack.slice(0, -1),
+      redoStack: pushUndo(state.redoStack, {
+        project: state.project,
+        label: entry.label,
+      }),
+      project: prev,
+      statusMessage: `Undo: ${entry.label}`,
+    }
+  }
+
+  if (action.type === 'redo') {
+    if (state.redoStack.length === 0) return state
+    const entry = state.redoStack[state.redoStack.length - 1]
+    const next = entry.project
+    return {
+      ...state,
+      redoStack: state.redoStack.slice(0, -1),
+      undoStack: pushUndo(state.undoStack, {
+        project: state.project,
+        label: entry.label,
+      }),
+      project: next,
+      statusMessage: `Redo: ${entry.label}`,
+    }
+  }
+
+  // --- Stack-reset actions -----------------------------------------------
+  if (
+    action.type === 'setProject' ||
+    action.type === 'newProject' ||
+    action.type === 'loadDemo'
+  ) {
+    const result = workspaceReducer(state, action)
+    return { ...result, undoStack: [], redoStack: [] }
+  }
+
+  // --- Project-mutating actions: snapshot before, clear redo after -------
+  if (PROJECT_MUTATIONS.has(action.type)) {
+    const prevProject = state.project
+    const result = workspaceReducer(state, action)
+    // Only snapshot if the project actually changed (e.g. linkTasks may
+    // return same project on error).
+    if (result.project !== prevProject) {
+      return {
+        ...result,
+        undoStack: pushUndo(state.undoStack, {
+          project: prevProject,
+          label: ACTION_LABELS[action.type] ?? action.type,
+        }),
+        redoStack: [],
+      }
+    }
+    return result
+  }
+
+  // --- UI-only actions: pass through ------------------------------------
+  return workspaceReducer(state, action)
+}
+
+/** Base reducer — pure domain logic, unchanged from before undo/redo. */
 export function workspaceReducer(
   state: WorkspaceState,
   action: WorkspaceAction,
@@ -426,7 +597,7 @@ export function workspaceReducer(
         )
         if (startMove && start) {
           // Direction (earlier→MSO / later→SNET) is decided inside updateTask.
-          // Forcing SNET here made “move Start back / into the past” a no-op.
+          // Forcing SNET here made "move Start back / into the past" a no-op.
           project = TaskUseCases.updateTask(project, action.taskId, { start })
         } else if (finish !== undefined) {
           project = TaskUseCases.updateTask(project, action.taskId, {

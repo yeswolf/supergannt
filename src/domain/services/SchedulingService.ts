@@ -5,6 +5,11 @@ import type { TaskId } from '../value-objects/Ids'
 import { Duration } from '../value-objects/Duration'
 import { applyMilestoneRules } from './MilestonePolicy'
 
+export interface FloatResult {
+  totalSlackHours: number
+  freeSlackHours: number
+}
+
 /**
  * ProjectLibre / MS Project–style ASAP forward-pass in working hours.
  *
@@ -214,8 +219,280 @@ function applyConstraintStart(
 }
 
 /**
- * Critical path via zero (working-hour) total float: forward ES/EF + backward LS/LF.
+ * Compute total slack and free slack for every leaf task via
+ * forward-pass (early dates from scheduled tasks) + backward-pass relaxation.
+ * Summary tasks get null slack (not applicable — rolled up from children).
+ *
+ * Total slack  = late finish − early finish in working hours.
+ * Free slack   = min delay before delaying any successor's early start.
+ */
+export function computeFloat(
+  tasks: readonly Task[],
+  dependencies: readonly Dependency[],
+  calendar: WorkCalendar,
+): Map<TaskId, FloatResult> {
+  const leafTasks = tasks.filter((t) => !t.summary)
+  const result = new Map<TaskId, FloatResult>()
+  if (leafTasks.length === 0) return result
+
+  const byId = new Map(tasks.map((t) => [t.id, t]))
+
+  // Build successor adjacency
+  const succs = new Map<TaskId, Dependency[]>()
+  for (const dep of dependencies) {
+    const s = succs.get(dep.predecessorId) ?? []
+    s.push(dep)
+    succs.set(dep.predecessorId, s)
+  }
+
+  // Project finish = max early finish of all leaf tasks
+  const projectFinish = new Date(
+    Math.max(...leafTasks.map((t) => t.finish.getTime())),
+  )
+
+  // Initialize late finish: project finish for all leaf tasks, then clamp
+  // by late-date constraints (SNLT, FNLT, MFO) so the backward pass respects
+  // the same constraint infrastructure the forward pass already applies.
+  const lateFinish = new Map<TaskId, Date>()
+  for (const t of leafTasks) {
+    let lf = new Date(projectFinish.getTime())
+    const dur = t.milestone ? 0 : Math.max(0, t.duration.toHours())
+
+    // Constraint-derived late-finish ceiling.
+    // Only constraints that tighten the late date are applied:
+    // - finishNoLaterThan: late finish ≤ constraint date
+    // - startNoLaterThan:  late start  ≤ constraint date  → late finish ≤ constraint date + duration
+    // - mustFinishOn:      late finish == constraint date
+    // - mustStartOn:       late start  == constraint date → late finish == constraint date + duration
+    if (t.constraintDate) {
+      const cd = new Date(t.constraintDate.getTime())
+      switch (t.constraintType) {
+        case 'finishNoLaterThan': {
+          if (cd.getTime() < lf.getTime()) lf = cd
+          break
+        }
+        case 'startNoLaterThan': {
+          const constraintLf = calendar.addWorkingHours(cd, dur)
+          if (constraintLf.getTime() < lf.getTime()) lf = constraintLf
+          break
+        }
+        case 'mustFinishOn': {
+          lf = cd
+          break
+        }
+        case 'mustStartOn': {
+          lf = calendar.addWorkingHours(cd, dur)
+          break
+        }
+        // finishNoEarlierThan / startNoEarlierThan loosen (not tighten) late dates;
+        // asLateAsPossible needs a full backward pass already; skip here.
+      }
+    }
+
+    lateFinish.set(t.id, lf)
+  }
+
+  // Build predecessor adjacency (reverse of successor): which tasks depend
+  // on this one. Used by both the topological sort and the backward pass.
+  const predEdges = new Map<TaskId, Dependency[]>()
+  for (const dep of dependencies) {
+    const list = predEdges.get(dep.successorId) ?? []
+    list.push(dep)
+    predEdges.set(dep.successorId, list)
+  }
+
+  // Topological sort of leaf tasks via DFS post-order.
+  // The precedence graph is a DAG (cycle detection lives in scheduleProject).
+  const visited = new Set<TaskId>()
+  const topo: TaskId[] = []
+
+  const dfs = (id: TaskId) => {
+    if (visited.has(id)) return
+    visited.add(id)
+    const mySuccs = succs.get(id)
+    if (mySuccs) {
+      for (const dep of mySuccs) {
+        const succ = byId.get(dep.successorId)
+        if (succ && !succ.summary) dfs(succ.id)
+      }
+    }
+    topo.push(id)
+  }
+
+  for (const t of leafTasks) {
+    dfs(t.id)
+  }
+
+  // Process in reverse-topological order (post-order = children before parents,
+  // so sinks come first). For each task, push its late date backward to its
+  // predecessors through the incoming dependency edges.
+  for (const id of topo) {
+    const t = byId.get(id)
+    if (!t) continue
+
+    const myLf = lateFinish.get(id)
+    if (!myLf) continue
+    const myDur = t.milestone ? 0 : Math.max(0, t.duration.toHours())
+    const myLs = calendar.snapToWorkStart(
+      calendar.addWorkingHours(myLf, -myDur),
+    )
+
+    const myPreds = predEdges.get(id)
+    if (!myPreds) continue
+
+    for (const dep of myPreds) {
+      const pred = byId.get(dep.predecessorId)
+      if (!pred || pred.summary) continue
+
+      const predDur = pred.milestone ? 0 : Math.max(0, pred.duration.toHours())
+      const lagHours = dep.lag.toHours()
+
+      let impliedPredLf: Date
+      switch (dep.type) {
+        case 'FS':
+          impliedPredLf = calendar.addWorkingHours(myLs, -lagHours)
+          break
+        case 'FF':
+          impliedPredLf = calendar.addWorkingHours(myLf, -lagHours)
+          break
+        case 'SS': {
+          const predLs = calendar.addWorkingHours(myLs, -lagHours)
+          impliedPredLf = calendar.addWorkingHours(predLs, predDur)
+          break
+        }
+        case 'SF':
+        default: {
+          const predLs = calendar.addWorkingHours(myLf, -lagHours)
+          impliedPredLf = calendar.addWorkingHours(predLs, predDur)
+          break
+        }
+      }
+
+      const cur = lateFinish.get(pred.id)
+      if (!cur || impliedPredLf.getTime() < cur.getTime()) {
+        lateFinish.set(pred.id, impliedPredLf)
+      }
+    }
+  }
+
+  // Compute slack values
+  for (const t of leafTasks) {
+    const ef = t.finish
+    const es = t.start
+    const lf = lateFinish.get(t.id) ?? new Date(projectFinish.getTime())
+    const dur = t.milestone ? 0 : Math.max(0, t.duration.toHours())
+    const ls = calendar.snapToWorkStart(calendar.addWorkingHours(lf, -dur))
+
+    // Total slack = late start − early start (or equivalently late finish − early finish)
+    // Can be negative when a task is behind schedule.
+    const totalSlackHours =
+      es.getTime() <= ls.getTime()
+        ? calendar.workingHoursBetween(es, ls)
+        : -calendar.workingHoursBetween(ls, es)
+
+    // Free slack = min delay before delaying any successor's early start
+    let freeSlackHours = totalSlackHours
+    const mySuccs = succs.get(t.id)
+    if (mySuccs && mySuccs.length > 0) {
+      let minFree = Infinity
+      for (const dep of mySuccs) {
+        const s = byId.get(dep.successorId)
+        if (!s || s.summary) continue
+        const lagHours = dep.lag.toHours()
+
+        let constraintDate: Date
+        let anchor: Date
+        switch (dep.type) {
+          case 'FS':
+            anchor = ef
+            constraintDate = calendar.addWorkingHours(s.start, -lagHours)
+            break
+          case 'SS':
+            anchor = es
+            constraintDate = calendar.addWorkingHours(s.start, -lagHours)
+            break
+          case 'FF':
+            anchor = ef
+            constraintDate = calendar.addWorkingHours(s.finish, -lagHours)
+            break
+          case 'SF':
+          default:
+            anchor = es
+            constraintDate = calendar.addWorkingHours(s.finish, -lagHours)
+            break
+        }
+
+        const free =
+          anchor.getTime() <= constraintDate.getTime()
+            ? calendar.workingHoursBetween(anchor, constraintDate)
+            : -calendar.workingHoursBetween(constraintDate, anchor)
+
+        if (free < minFree) minFree = free
+      }
+      freeSlackHours = Math.min(totalSlackHours, minFree)
+    }
+
+    result.set(t.id, { totalSlackHours, freeSlackHours })
+  }
+
+  return result
+}
+
+/**
+ * Apply computed float values to tasks: sets totalSlackHours, freeSlackHours,
+ * and derives critical = totalSlackHours <= 0.
+ * Summary tasks get null slack; their critical flag is derived from children.
+ */
+export function applyFloatToTasks(
+  tasks: readonly Task[],
+  floatMap: Map<TaskId, FloatResult>,
+): Task[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]))
+  const childrenOf = new Map<TaskId, Task[]>()
+  for (const t of tasks) {
+    if (!t.parentId) continue
+    const list = childrenOf.get(t.parentId) ?? []
+    list.push(t)
+    childrenOf.set(t.parentId, list)
+  }
+
+  const summaryCritical = (taskId: TaskId): boolean => {
+    const children = childrenOf.get(taskId)
+    if (!children || children.length === 0) return false
+    const leafChildren = children.filter((c) => !c.summary)
+    if (leafChildren.length === 0) return false
+    return leafChildren.every((c) => {
+      const f = floatMap.get(c.id)
+      return f ? f.totalSlackHours <= 0 : false
+    })
+  }
+
+  return tasks.map((t) => {
+    if (t.summary) {
+      return t.with({
+        totalSlackHours: null,
+        freeSlackHours: null,
+        critical: summaryCritical(t.id),
+      })
+    }
+    const f = floatMap.get(t.id)
+    if (!f) {
+      return t.with({ totalSlackHours: null, freeSlackHours: null, critical: false })
+    }
+    return t.with({
+      totalSlackHours: f.totalSlackHours,
+      freeSlackHours: f.freeSlackHours,
+      critical: f.totalSlackHours <= 0,
+    })
+  })
+}
+
+/**
+ * Critical path via zero (working-hour) total float.
  * Matches ProjectLibre “critical = no slack” for the scheduled network.
+ *
+ * @deprecated Use `computeFloat` + `applyFloatToTasks` for proper slack-aware
+ * critical path determination. This function remains for backward compatibility.
  */
 export function computeCriticalPath(
   tasks: readonly Task[],
@@ -272,6 +549,18 @@ export function computeCriticalPath(
   return critical
 }
 
+/**
+ * Apply critical flags from a set of critical task IDs.
+ *
+ * @deprecated Use `applyFloatToTasks` for proper slack-aware critical flags.
+ */
+export function applyCriticalFlags(
+  tasks: readonly Task[],
+  criticalIds: ReadonlySet<TaskId>,
+): Task[] {
+  return tasks.map((t) => t.with({ critical: criticalIds.has(t.id) }))
+}
+
 function isDrivingLink(
   pred: Task,
   succ: Task,
@@ -313,11 +602,4 @@ function isDrivingLink(
   }
   impliedStart = calendar.snapToWorkStart(impliedStart)
   return Math.abs(succ.start.getTime() - impliedStart.getTime()) <= tolerance
-}
-
-export function applyCriticalFlags(
-  tasks: readonly Task[],
-  criticalIds: ReadonlySet<TaskId>,
-): Task[] {
-  return tasks.map((t) => t.with({ critical: criticalIds.has(t.id) }))
 }

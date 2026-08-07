@@ -150,8 +150,8 @@ function FilterControls({ state, onChange }: FilterBarProps) {
 
 function formatFilterValue(f: ColumnFilter): string {
   if (typeof f.value === 'boolean') return f.value ? 'Yes' : 'No'
-  if (typeof f.value === 'number' && f.value > 1_000_000_000_000) {
-    // Looks like an epoch timestamp — render as locale date
+  if (fieldValueType(f.field) === 'date' && typeof f.value === 'number' && !isNaN(f.value)) {
+    // Epoch timestamp from date filter — render as locale date
     return new Date(f.value).toLocaleDateString()
   }
   return String(f.value)
@@ -187,8 +187,8 @@ function SortControls({ state, onChange }: FilterBarProps) {
       </button>
       {open ? (
         <div
-          className={styles.dropdown}
           role="menu"
+          title="Click a field to sort. Hold Ctrl/Cmd/Shift to add a secondary sort column."
           style={{
             position: 'absolute',
             top: '100%',
@@ -206,7 +206,6 @@ function SortControls({ state, onChange }: FilterBarProps) {
             <button
               key={f.id}
               type="button"
-              className={styles.dropdownItem}
               role="menuitem"
               onClick={(e) =>
                 addSort(f.id, e.ctrlKey || e.metaKey || e.shiftKey)

@@ -9,6 +9,16 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     css: true,
     testTimeout: 20_000,
+    // Never pick up CI-cloned magic/ (or anything outside this app).
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      'magic/**',
+      '**/magic/**',
+      'coverage/**',
+      'testdata/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
@@ -22,6 +32,7 @@ export default defineConfig({
         'src/**/*.test.tsx',
         'src/application/ports/**',
         'src/types/**',
+        'magic/**',
       ],
       thresholds: {
         lines: 80,

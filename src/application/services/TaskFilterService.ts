@@ -55,7 +55,6 @@ export interface TaskGroup {
 export interface DerivedTaskView {
   orderedTasks: Task[]
   groups: TaskGroup[]
-  groupIndex: Map<string, number>
   activeFilterCount: number
   activeSortCount: number
 }
@@ -328,17 +327,9 @@ export function deriveTaskView(
   const sorted = applySorts(filtered, project, state.sorts)
   const groups = buildGroups(sorted, project, state.groupBy, state.collapsedGroups)
 
-  const groupIndex = new Map<string, number>()
-  for (let i = 0; i < groups.length; i++) {
-    for (const taskId of groups[i]!.taskIds) {
-      groupIndex.set(taskId, i)
-    }
-  }
-
   return {
     orderedTasks: sorted,
     groups,
-    groupIndex,
     activeFilterCount: state.filters.length,
     activeSortCount: state.sorts.length,
   }
@@ -416,8 +407,9 @@ export function defaultOperatorForField(field: FilterField): FilterOperator {
     case 'finish':
     case 'cost':
     case 'outlineLevel':
-    case 'id':
       return 'gte'
+    case 'id':
+      return 'contains'
   }
 }
 

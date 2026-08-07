@@ -177,7 +177,7 @@ describe('TaskFilterService', () => {
       }
       const view = deriveTaskView(project, state)
       expect(view.groups.length).toBeGreaterThan(0)
-      expect(view.groupIndex.size).toBeGreaterThan(0)
+      expect(view.groups[0]!.taskIds.length).toBeGreaterThan(0)
     })
   })
 

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useState,
   type Dispatch,
   type ReactNode,
@@ -19,9 +20,7 @@ import {
 import { TaskColumnsDialog } from '../taskColumns/TaskColumnsDialog'
 import { useTaskColumns } from '../taskColumns/taskColumnStore'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
-import {
-  FilterBar,
-} from './FilterBar'
+import { FilterBar } from './FilterBar'
 import {
   DEFAULT_FILTER_STATE,
   deriveTaskView,
@@ -31,6 +30,7 @@ import {
   type FilterState,
   type TaskSheetRow,
 } from '../../application/services/TaskFilterService'
+import { formatSlackHours } from '../common/formatSlack'
 import styles from './DataTable.module.css'
 import { IconAction } from './IconAction'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
@@ -47,8 +47,8 @@ export function TaskSheetView() {
     `${project.tasks.length}:${columns.join(',')}`,
   )
 
-  const view = deriveTaskView(project, filterState)
-  const rows: TaskSheetRow[] = flattenForRendering(view)
+  const view = useMemo(() => deriveTaskView(project, filterState), [project, filterState])
+  const rows: TaskSheetRow[] = useMemo(() => flattenForRendering(view), [view])
 
   useArrowRowNavigation({
     ids: rows.filter((r) => r.type === 'task').map((r) => r.task.id),
@@ -116,6 +116,9 @@ export function TaskSheetView() {
                   <tr
                     key={`group-${row.group.key}`}
                     className={styles.groupRow}
+                    tabIndex={0}
+                    role="button"
+                    aria-expanded={!isCollapsed}
                     style={{ cursor: 'pointer' }}
                     onClick={() =>
                       setFilterState((prev) => {
@@ -126,6 +129,18 @@ export function TaskSheetView() {
                         return { ...prev, collapsedGroups: next }
                       })
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setFilterState((prev) => {
+                          const collapsed = prev.collapsedGroups
+                          const next = isCollapsed
+                            ? collapsed.filter((k) => k !== row.group.key)
+                            : [...collapsed, row.group.key]
+                          return { ...prev, collapsedGroups: next }
+                        })
+                      }
+                    }}
                   >
                     <td colSpan={columns.length}>
                       {isCollapsed ? '▸' : '▾'} {row.group.label} ({row.group.taskIds.length} tasks)
@@ -294,6 +309,10 @@ function renderTaskSheetCell(opts: {
           }}
         />
       )
+    case 'totalSlack':
+      return formatSlackHours(task.totalSlackHours)
+    case 'freeSlack':
+      return formatSlackHours(task.freeSlackHours)
     case 'cost':
       return task.cost.format()
     case 'resources':

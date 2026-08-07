@@ -52,5 +52,5 @@ implement-output-a*.md
 fix-output.md
 fixes.patch
 review-output.md
-review.md
+/review.md
 
