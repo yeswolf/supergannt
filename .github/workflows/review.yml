@@ -184,6 +184,53 @@ jobs:
             core.setOutput('has_failures', 'true');
             core.warning(`Failed Tests checks:\n${lines.join('\n')}`);
 
+      - name: Detect merge conflicts
+        if: steps.pr.outputs.skip != 'true'
+        id: conflicts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+            // mergeable is null while GitHub computes — poll briefly.
+            let pr = null;
+            for (let i = 0; i < 8; i++) {
+              const { data } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+              pr = data;
+              if (pr.mergeable !== null && pr.mergeable !== undefined) break;
+              core.info(`Waiting for mergeable computation (state=${pr.mergeable_state})`);
+              await sleep(3000);
+            }
+
+            const hardConflict =
+              pr.mergeable === false || pr.mergeable_state === 'dirty';
+
+            if (!hardConflict) {
+              fs.writeFileSync('/tmp/ci-merge-conflicts.md', '');
+              core.setOutput('has_conflicts', 'false');
+              core.info(
+                `No merge conflicts (mergeable=${pr.mergeable}, state=${pr.mergeable_state})`,
+              );
+              return;
+            }
+
+            const lines = [
+              `- PR #${prNumber} **не мержится в \`${pr.base.ref}\`** (\`mergeable=${pr.mergeable}\`, \`mergeable_state=${pr.mergeable_state}\`).`,
+              '- Разрулить конфликты с базовой веткой и запушить в head.',
+            ];
+
+            fs.writeFileSync('/tmp/ci-merge-conflicts.md', lines.join('\n') + '\n');
+            core.setOutput('has_conflicts', 'true');
+            core.warning(lines.join('\n'));
+
       - name: Checkout supergannt
         if: steps.pr.outputs.skip != 'true'
         uses: actions/checkout@v4
@@ -194,7 +241,31 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         run: |
           git fetch origin ${{ steps.pr.outputs.head_ref }}
+          git fetch origin ${{ steps.pr.outputs.base_ref }}
           git checkout ${{ steps.pr.outputs.head_ref }}
+
+      - name: List conflict paths (best effort)
+        if: steps.pr.outputs.skip != 'true' && steps.conflicts.outputs.has_conflicts == 'true'
+        run: |
+          set +e
+          git merge-tree $(git merge-base origin/${{ steps.pr.outputs.base_ref }} HEAD) origin/${{ steps.pr.outputs.base_ref }} HEAD \
+            > /tmp/merge-tree.txt 2>/dev/null
+          # Conflicted files show as "changed in both"
+          {
+            echo ""
+            echo "Конфликтные пути (merge-tree):"
+            grep -E '^(changed in both|CONFLICT)' /tmp/merge-tree.txt | head -40 || true
+            # Also try a throwaway merge for path list
+            git merge --no-commit --no-ff origin/${{ steps.pr.outputs.base_ref }} >/tmp/merge-try.txt 2>&1
+            if [ -f .git/MERGE_HEAD ]; then
+              git diff --name-only --diff-filter=U | while read -r f; do
+                echo "- \`$f\`"
+              done >> /tmp/ci-merge-conflicts.md
+              git merge --abort 2>/dev/null || true
+            fi
+          } >> /tmp/ci-merge-conflicts.md
+          cat /tmp/ci-merge-conflicts.md
+          set -e
 
       - name: Setup magic
         if: steps.pr.outputs.skip != 'true'
@@ -343,7 +414,8 @@ jobs:
                   : 'I found a few things worth fixing before merge.';
             }
 
-            // Hard gate from CI (not the agent): failed Tests/vitest on head SHA.
+            // Hard gates from CI (not the agent): failed tests and/or merge conflicts.
+            const mustFix = [];
             let testFailures = '';
             try {
               testFailures = fs.readFileSync('/tmp/ci-test-failures.md', 'utf8').trim();
@@ -351,13 +423,32 @@ jobs:
               testFailures = '';
             }
             if (testFailures) {
+              mustFix.push(
+                'Упали тесты в CI workflow — починить до мержа:',
+                '',
+                testFailures,
+              );
+            }
+            let mergeConflicts = '';
+            try {
+              mergeConflicts = fs.readFileSync('/tmp/ci-merge-conflicts.md', 'utf8').trim();
+            } catch {
+              mergeConflicts = '';
+            }
+            if (mergeConflicts) {
+              if (mustFix.length) mustFix.push('');
+              mustFix.push(
+                'Есть merge conflicts с базовой веткой — обязательно разрулить:',
+                '',
+                mergeConflicts,
+              );
+            }
+            if (mustFix.length) {
               reaction = REACT_NEEDS;
               prose = [
                 '### Обязательно исправить',
                 '',
-                'Упали тесты в CI workflow — починить до мержа:',
-                '',
-                testFailures,
+                ...mustFix,
                 '',
                 '---',
                 '',
@@ -417,4 +508,5 @@ jobs:
             /tmp/pr-stat.txt
             /tmp/pr.diff
             /tmp/ci-test-failures.md
+            /tmp/ci-merge-conflicts.md
           if-no-files-found: warn
