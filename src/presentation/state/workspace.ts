@@ -205,7 +205,6 @@ export type WorkspaceAction =
   | { type: 'autoSaveSaving' }
   | { type: 'autoSaveSaved'; quotaWarning?: boolean }
   | { type: 'autoSaveIdle' }
-  | { type: 'setDirty'; dirty: boolean }
   | { type: 'setRecoverySnapshot'; snapshot: AutoSaveState['recoverySnapshot'] }
   | { type: 'dismissRecoverySnapshot' }
 
@@ -789,8 +788,6 @@ export function workspaceReducer(
       }
     case 'autoSaveIdle':
       return { ...state, autoSave: { ...state.autoSave, status: 'idle' } }
-    case 'setDirty':
-      return { ...state, autoSave: { ...state.autoSave, dirty: action.dirty } }
     case 'setRecoverySnapshot':
       return { ...state, autoSave: { ...state.autoSave, recoverySnapshot: action.snapshot } }
     case 'dismissRecoverySnapshot':

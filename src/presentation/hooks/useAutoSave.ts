@@ -96,5 +96,4 @@ export function useAutoSave() {
     }
   }, [autoSave.dirty, services.files])
 
-  return { autoSave }
 }

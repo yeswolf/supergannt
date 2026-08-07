@@ -69,10 +69,12 @@ describe('useAutoSave', () => {
     rerender()
 
     // Simulate continuous mutations — bump the mutation ref every 1 s so
-    // the debounce path never fires.
+    // the debounce path never fires.  We must also bump `project` to a new
+    // reference on each tick, otherwise `rerender()` won't re-trigger the
+    // `useEffect([autoSave.dirty, project])` that updates `lastMutationRef`.
     for (let i = 0; i < 31; i++) {
       await act(() => vi.advanceTimersByTimeAsync(1000))
-      // Trigger the effect that updates lastMutationRef.
+      mockState.project = { ...mockState.project }
       rerender()
     }
 
