@@ -48,6 +48,7 @@ magic/
 # Claude Code CI artifacts (workflows run `git add -A`)
 implement-output.md
 implement-output-retry.md
+implement-output-a*.md
 fix-output.md
 fixes.patch
 review-output.md

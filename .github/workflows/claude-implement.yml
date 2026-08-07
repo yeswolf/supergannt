@@ -94,44 +94,61 @@ jobs:
           ALLOW_GITHUB="${{ steps.meta.outputs.allow_github }}"
           git checkout -b "$BRANCH"
 
-          # Long rules live in magic skill ci-implement (--add-dir magic).
-          PROMPT="/ci-implement
-          Implement the GitHub issue in /tmp/issue.md.
-          Issue title: ${ISSUE_TITLE}
-          allow_github=${ALLOW_GITHUB}
-          Working directory is the git repo root.
-          When finished print IMPLEMENT_SUMMARY: <one line>."
-
+          # Skill text is force-injected (slash alone is unreliable with DeepSeek).
+          SKILL_FILE="magic/.claude/skills/ci-implement/SKILL.md"
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+          # Prefer write path; still allow discovery tools.
+          ALLOW_TOOLS="Write,Edit,Read,Glob,Grep,Bash"
 
           run_claude() {
             local out="$1"
             local prompt="$2"
             claude -p --dangerously-skip-permissions --max-turns 999999 \
               --add-dir magic \
+              --append-system-prompt-file "$SKILL_FILE" \
+              --allowed-tools "$ALLOW_TOOLS" \
               --disallowed-tools "$DISALLOW_TOOLS" \
               "$prompt" > "$out" 2>&1
           }
 
-          set +e
-          run_claude implement-output.md "$PROMPT"
-          CLAUDE_EXIT=$?
+          base_prompt() {
+            local extra="$1"
+            cat <<EOF
+/ci-implement
+Implement the GitHub issue in /tmp/issue.md.
+Issue title: ${ISSUE_TITLE}
+allow_github=${ALLOW_GITHUB}
+Working directory is the git repo root.
+Your second tool call (after reading /tmp/issue.md) MUST be Write or Edit.
+When finished print IMPLEMENT_SUMMARY: <one line>.
+${extra}
+EOF
+          }
 
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "==== No file changes after first Claude pass — retrying once ===="
-            RETRY="/ci-implement
-            Previous pass wrote nothing. Start with Write/Edit immediately.
-            Issue: /tmp/issue.md
-            title: ${ISSUE_TITLE}
-            allow_github=${ALLOW_GITHUB}"
-            if [ "$ALLOW_GITHUB" = "true" ]; then
-              RETRY="${RETRY}
-            Write real .github/workflows/*.yml now."
+          set +e
+          : > implement-output.md
+          for attempt in 1 2 3; do
+            EXTRA=""
+            if [ "$attempt" -gt 1 ]; then
+              EXTRA="Attempt ${attempt}: previous pass wrote nothing. Call Write NOW."
+              if [ "$ALLOW_GITHUB" = "true" ]; then
+                EXTRA="${EXTRA}
+Create/overwrite real workflow YAML under .github/workflows/ as required by /tmp/issue.md (product-manager + pr-merge or equivalent names). Also write docs if the issue requires them."
+              fi
+              echo "==== Implement attempt ${attempt} (tree still clean) ===="
             fi
-            run_claude implement-output-retry.md "$RETRY"
+            OUT="implement-output-a${attempt}.md"
+            run_claude "$OUT" "$(base_prompt "$EXTRA")"
             CLAUDE_EXIT=$?
-            cat implement-output-retry.md >> implement-output.md 2>/dev/null || true
-          fi
+            {
+              echo "==== attempt ${attempt} exit=${CLAUDE_EXIT} ===="
+              cat "$OUT"
+            } >> implement-output.md
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "attempt ${attempt}: working tree dirty — stopping retries"
+              break
+            fi
+          done
           set -e
 
           echo "claude_exit=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
@@ -139,7 +156,7 @@ jobs:
           echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES} allow_github=${ALLOW_GITHUB}"
           if [ "$CLAUDE_EXIT" -ne 0 ]; then
             echo "::warning::Claude exited with code $CLAUDE_EXIT (see implement-output.md)"
-            tail -50 implement-output.md || true
+            tail -80 implement-output.md || true
             if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
               echo "magic still healthy after Claude failure"
             else
@@ -176,6 +193,7 @@ jobs:
           # explicitly authorized workflow/action work (allow_github=true).
           ARTIFACTS=(
             implement-output.md implement-output-retry.md
+            implement-output-a1.md implement-output-a2.md implement-output-a3.md
             fix-output.md review.md review-output.md fixes.patch
           )
           if [ "${{ steps.meta.outputs.allow_github }}" = "true" ]; then

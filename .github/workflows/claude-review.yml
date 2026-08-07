@@ -133,6 +133,7 @@ jobs:
 
           claude -p --dangerously-skip-permissions --max-turns 999999 \
             --add-dir magic \
+            --append-system-prompt-file magic/.claude/skills/ci-review/SKILL.md \
             --disallowed-tools "$DISALLOW_TOOLS" \
             "$PROMPT" > review.md 2>&1
           CLAUDE_EXIT=$?
