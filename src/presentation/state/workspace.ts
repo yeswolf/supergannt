@@ -19,6 +19,13 @@ import { PreferTauriMppToXmlConverter } from '../../infrastructure/mpp/PreferTau
 import { PreferTauriXmlToMppConverter } from '../../infrastructure/mpp/PreferTauriXmlToMppConverter'
 import type { InspectionFinding } from '../../application/services/ProjectInspector'
 import { inspectProject } from '../../application/services/ProjectInspector'
+import {
+  createInitialFilterSortState,
+  type TaskFilterSortState,
+  type ColumnFilter,
+  type TaskSort,
+  type TaskGroupField,
+} from '../../application/services/TaskFilterSortService'
 
 export type AppView =
   | 'gantt'
@@ -99,6 +106,8 @@ export interface WorkspaceState {
   autoSave: AutoSaveState
   /** Project inspection findings updated after every mutation. */
   inspections: InspectionFinding[]
+  /** AutoFilter state — filtering, sorting, and grouping for task views. */
+  taskFilterSort: TaskFilterSortState
 }
 
 const INITIAL_AUTO_SAVE: AutoSaveState = {
@@ -127,6 +136,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     redoStack: [],
     autoSave: { ...INITIAL_AUTO_SAVE },
     inspections: inspectProject(project),
+    taskFilterSort: createInitialFilterSortState(),
   }
 }
 
@@ -211,6 +221,11 @@ export type WorkspaceAction =
   | { type: 'autoSaveIdle' }
   | { type: 'setRecoverySnapshot'; snapshot: AutoSaveState['recoverySnapshot'] }
   | { type: 'dismissRecoverySnapshot' }
+  | { type: 'setTaskFilter'; filter: ColumnFilter }
+  | { type: 'removeTaskFilter'; filterId: string }
+  | { type: 'clearTaskFilters' }
+  | { type: 'setTaskSort'; sort: TaskSort | null }
+  | { type: 'setTaskGroup'; groupBy: TaskGroupField }
 
 /** Push a snapshot onto the undo stack, capping at MAX_UNDO_DEPTH. */
 function pushUndo(stack: UndoEntry[], entry: UndoEntry): UndoEntry[] {
@@ -349,7 +364,7 @@ export function undoableReducer(
     action.type === 'loadDemo'
   ) {
     const result = workspaceReducer(state, action)
-    return { ...result, undoStack: [], redoStack: [], autoSave: { ...result.autoSave, dirty: false }, inspections: inspectProject(result.project) }
+    return { ...result, undoStack: [], redoStack: [], autoSave: { ...result.autoSave, dirty: false }, inspections: inspectProject(result.project), taskFilterSort: createInitialFilterSortState() }
   }
 
   // --- Project-mutating actions: snapshot before, clear redo after -------
@@ -803,6 +818,45 @@ export function workspaceReducer(
       return { ...state, autoSave: { ...state.autoSave, recoverySnapshot: action.snapshot } }
     case 'dismissRecoverySnapshot':
       return { ...state, autoSave: { ...state.autoSave, recoverySnapshot: null } }
+    // --- Filter / Sort / Group ----------------------------------------------
+    case 'setTaskFilter':
+      return {
+        ...state,
+        taskFilterSort: {
+          ...state.taskFilterSort,
+          filters: [
+            ...state.taskFilterSort.filters.filter(
+              (f) => f.column !== action.filter.column,
+            ),
+            action.filter,
+          ],
+        },
+      }
+    case 'removeTaskFilter':
+      return {
+        ...state,
+        taskFilterSort: {
+          ...state.taskFilterSort,
+          filters: state.taskFilterSort.filters.filter(
+            (f) => f.id !== action.filterId,
+          ),
+        },
+      }
+    case 'clearTaskFilters':
+      return {
+        ...state,
+        taskFilterSort: { ...state.taskFilterSort, filters: [], sort: null, groupBy: 'none' },
+      }
+    case 'setTaskSort':
+      return {
+        ...state,
+        taskFilterSort: { ...state.taskFilterSort, sort: action.sort },
+      }
+    case 'setTaskGroup':
+      return {
+        ...state,
+        taskFilterSort: { ...state.taskFilterSort, groupBy: action.groupBy },
+      }
     default:
       return state
   }

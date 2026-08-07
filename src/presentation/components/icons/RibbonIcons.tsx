@@ -322,6 +322,30 @@ export const Icons = {
       <path d="M12 7v5l3 2" />
     </Svg>
   ),
+  filter: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3Z" />
+    </Svg>
+  ),
+  sortAsc: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M11 11L8 8l-3 3" />
+      <path d="M8 8v12" />
+      <path d="M16 11h5M16 15h3M16 7h7" />
+    </Svg>
+  ),
+  sortDesc: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M11 16l-3 3-3-3" />
+      <path d="M8 4v12" />
+      <path d="M16 11h5M16 15h3M16 7h7" />
+    </Svg>
+  ),
+  group: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M3 7h6v4H3zM9 13H3v4h6zM15 7h6v4h-6zM9 7h6v10H9z" />
+    </Svg>
+  ),
 } as const
 
 export type RibbonIconName = keyof typeof Icons
