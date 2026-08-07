@@ -365,6 +365,16 @@ jobs:
           HEAD_REF="${{ steps.pr.outputs.head_ref }}"
           START_SHA="${{ steps.pr.outputs.head_sha }}"
 
+          # Agent Write/Edit updates the working tree but often skips `git add`.
+          # During a merge, paths stay unmerged until staged — mark resolved ones.
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            if [ -f "$f" ] && ! grep -qE '^<<<<<<< |^>>>>>>> ' "$f"; then
+              echo "Marking resolved (no markers): $f"
+              git add -- "$f"
+            fi
+          done < <(git diff --name-only --diff-filter=U)
+
           if git diff --name-only --diff-filter=U | grep -q .; then
             echo "::error::Unresolved merge conflicts remain after Fix agent"
             git diff --name-only --diff-filter=U
