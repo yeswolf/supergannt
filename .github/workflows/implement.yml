@@ -26,6 +26,9 @@ jobs:
     concurrency:
       group: magic-agent
       cancel-in-progress: false
+      # Default queue is "single" (only 1 pending — new runs cancel older pending).
+      # PM opens several task issues at once; all must wait behind Review/each other.
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:

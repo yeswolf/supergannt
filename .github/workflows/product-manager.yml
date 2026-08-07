@@ -8,6 +8,7 @@ jobs:
     concurrency:
       group: magic-agent
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
