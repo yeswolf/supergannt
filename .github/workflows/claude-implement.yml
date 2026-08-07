@@ -40,6 +40,9 @@ jobs:
         with:
           ref: master
           fetch-depth: 0
+          # Avoid GITHUB_TOKEN http.extraheader overriding MAGIC_TOKEN on push
+          # (otherwise workflow file pushes fail with "GitHub App ... workflows permission").
+          persist-credentials: false
 
       - name: Load issue details
         id: meta
@@ -240,6 +243,7 @@ jobs:
 
           git commit -m "${{ steps.meta.outputs.title }}"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
           git push -u origin "${{ steps.meta.outputs.branch }}"
           echo "NO_CHANGES=false" >> "$GITHUB_ENV"
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
