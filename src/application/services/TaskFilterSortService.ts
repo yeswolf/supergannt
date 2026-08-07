@@ -90,6 +90,13 @@ export function createInitialFilterSortState(): TaskFilterSortState {
   }
 }
 
+// ── Constants ──────────────────────────────────────────────────────────
+
+/** Sentinel value returned for null/undefined slack hours so the value
+ *  is always a number for sort/filter dispatch. Filter and sort functions
+ *  must explicitly skip this sentinel to avoid false matches. */
+export const NULL_SLACK_SENTINEL = -9999
+
 // ── Filter matching ────────────────────────────────────────────────────
 
 function textContains(task: Task, column: TaskColumnId, value: string): boolean {
@@ -111,6 +118,8 @@ function numericRange(
   const raw = getTaskFieldValue(task, column)
   const val = typeof raw === 'number' ? raw : Number(raw)
   if (isNaN(val)) return false
+  // Skip tasks with no slack data — the sentinel is not a real value
+  if (val === NULL_SLACK_SENTINEL) return false
   if (min !== undefined && val < min) return false
   if (max !== undefined && val > max) return false
   return true
@@ -137,10 +146,15 @@ function dateRange(
 }
 
 function matchesBoolean(
+  project: Project,
   task: Task,
   column: TaskColumnId,
   value: boolean,
 ): boolean {
+  if (column === 'resources') {
+    const hasResources = formatTaskResourceNames(project, task.id).trim().length > 0
+    return hasResources === value
+  }
   const raw = getTaskFieldValue(task, column)
   return Boolean(raw) === value
 }
@@ -175,15 +189,21 @@ function getTaskFieldValue(
     case 'finish':
       return task.finish
     case 'totalSlack':
-      return task.totalSlackHours ?? -9999
+      return task.totalSlackHours ?? NULL_SLACK_SENTINEL
     case 'freeSlack':
-      return task.freeSlackHours ?? -9999
+      return task.freeSlackHours ?? NULL_SLACK_SENTINEL
     case 'cost':
-      return task.cost.format()
+      return task.cost.amount
     case 'resources':
       return ''
     case 'predecessors':
       return ''
+    case 'milestone':
+      return task.milestone
+    case 'critical':
+      return task.critical
+    case 'summary':
+      return task.summary
   }
 }
 
@@ -203,7 +223,7 @@ function taskMatchesFilter(
     case 'dateRange':
       return dateRange(task, filter.column, f.from, f.to)
     case 'boolean':
-      return matchesBoolean(task, filter.column, f.value)
+      return matchesBoolean(project, task, filter.column, f.value)
     case 'resourceName':
       return matchesResourceName(project, task, f.value)
   }
@@ -261,6 +281,13 @@ function sortTasks(tasks: Task[], sort: TaskSort): Task[] {
     const va = getTaskFieldValue(a, sort.column)
     const vb = getTaskFieldValue(b, sort.column)
 
+    // Push null-slack sentinel values to the bottom regardless of direction
+    const aIsSentinel = va === NULL_SLACK_SENTINEL
+    const bIsSentinel = vb === NULL_SLACK_SENTINEL
+    if (aIsSentinel && !bIsSentinel) return 1
+    if (!aIsSentinel && bIsSentinel) return -1
+    if (aIsSentinel && bIsSentinel) return 0
+
     let cmp: number
     if (va instanceof Date && vb instanceof Date) {
       cmp = va.getTime() - vb.getTime()
@@ -312,7 +339,7 @@ function groupTasks(
   return rows
 }
 
-function getGroupKey(
+export function getGroupKey(
   project: Project,
   task: Task,
   field: TaskGroupField,

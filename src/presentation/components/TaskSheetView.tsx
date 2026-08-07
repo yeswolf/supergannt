@@ -8,6 +8,8 @@ import {
 } from 'react'
 import {
   applyTaskFilterSort,
+  getGroupKey,
+  type TaskGroupField,
   type TaskViewRow,
 } from '../../application/services/TaskFilterSortService'
 import { formatPredecessors } from '../../application/services/PredecessorNotation'
@@ -216,31 +218,8 @@ function isTaskInCollapsedGroup(
   collapsedGroups: Set<string>,
 ): boolean {
   if (groupBy === 'none') return false
-  const key = getTaskGroupKey(task, project, groupBy)
+  const key = getGroupKey(project, task, groupBy as TaskGroupField)
   return collapsedGroups.has(key)
-}
-
-function getTaskGroupKey(
-  task: Task,
-  project: Project,
-  groupBy: string,
-): string {
-  switch (groupBy) {
-    case 'resource': {
-      const names = formatTaskResourceNames(project, task.id)
-      return names.trim() || '(Unassigned)'
-    }
-    case 'status': {
-      if (task.percentComplete === 0) return 'Not Started'
-      if (task.percentComplete === 100) return 'Complete'
-      if (task.finish.getTime() < Date.now()) return 'Late'
-      return 'In Progress'
-    }
-    case 'outlineLevel':
-      return String(task.outlineLevel)
-    default:
-      return ''
-  }
 }
 
 function renderTaskSheetCell(opts: {

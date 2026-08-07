@@ -40,6 +40,9 @@ const DATE_FILTER_COLUMNS: readonly TaskColumnId[] = ['start', 'finish']
 /** Columns that support boolean filtering. */
 const BOOLEAN_FILTER_COLUMNS: readonly TaskColumnId[] = [
   'resources', // treated as "has resource"
+  'milestone',
+  'critical',
+  'summary',
 ]
 
 /** Columns available for sorting. */
@@ -82,6 +85,7 @@ export function FilterBar({
   const [numMax, setNumMax] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [boolValue, setBoolValue] = useState(true)
 
   const hasActiveFilters =
     state.filters.length > 0 || state.sort !== null || state.groupBy !== 'none'
@@ -105,6 +109,8 @@ export function FilterBar({
         from: dateFrom || undefined,
         to: dateTo || undefined,
       }
+    } else if (BOOLEAN_FILTER_COLUMNS.includes(addCol)) {
+      filter = { type: 'boolean', value: boolValue }
     } else {
       return
     }
@@ -122,7 +128,7 @@ export function FilterBar({
       return (
         <input
           type="text"
-          className={styles.filterInput}
+          className={`${styles.controlBase} ${styles.filterInput}`}
           placeholder={`Contains…`}
           value={textValue}
           onChange={(e) => setTextValue(e.target.value)}
@@ -137,7 +143,7 @@ export function FilterBar({
         <>
           <input
             type="number"
-            className={styles.numInput}
+            className={`${styles.controlBase} ${styles.numInput}`}
             placeholder="Min"
             value={numMin}
             onChange={(e) => setNumMin(e.target.value)}
@@ -145,7 +151,7 @@ export function FilterBar({
           <span className={styles.rangeSep}>–</span>
           <input
             type="number"
-            className={styles.numInput}
+            className={`${styles.controlBase} ${styles.numInput}`}
             placeholder="Max"
             value={numMax}
             onChange={(e) => setNumMax(e.target.value)}
@@ -158,18 +164,30 @@ export function FilterBar({
         <>
           <input
             type="date"
-            className={styles.filterInput}
+            className={`${styles.controlBase} ${styles.filterInput}`}
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
           <span className={styles.rangeSep}>–</span>
           <input
             type="date"
-            className={styles.filterInput}
+            className={`${styles.controlBase} ${styles.filterInput}`}
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />
         </>
+      )
+    }
+    if (BOOLEAN_FILTER_COLUMNS.includes(addCol)) {
+      return (
+        <label className={styles.booleanLabel}>
+          <input
+            type="checkbox"
+            checked={boolValue}
+            onChange={(e) => setBoolValue(e.target.checked)}
+          />{' '}
+          {boolValue ? 'Yes' : 'No'}
+        </label>
       )
     }
     return null
@@ -189,7 +207,7 @@ export function FilterBar({
         {adding ? (
           <>
             <select
-              className={styles.select}
+              className={`${styles.controlBase} ${styles.select}`}
               value={addCol}
               onChange={(e) => setAddCol(e.target.value as TaskColumnId)}
             >
@@ -197,7 +215,8 @@ export function FilterBar({
                 (id) =>
                   TEXT_FILTER_COLUMNS.includes(id) ||
                   NUMERIC_FILTER_COLUMNS.includes(id) ||
-                  DATE_FILTER_COLUMNS.includes(id),
+                  DATE_FILTER_COLUMNS.includes(id) ||
+                  BOOLEAN_FILTER_COLUMNS.includes(id),
               ).map((id) => (
                 <option key={id} value={id}>
                   {TASK_SHEET_LABELS[id]}
@@ -226,7 +245,7 @@ export function FilterBar({
 
         {/* Sort indicator */}
         <select
-          className={styles.select}
+          className={`${styles.controlBase} ${styles.select}`}
           value={state.sort?.column ?? ''}
           aria-label="Sort by"
           onChange={(e) => {
@@ -265,7 +284,7 @@ export function FilterBar({
 
         {/* Grouping */}
         <select
-          className={styles.select}
+          className={`${styles.controlBase} ${styles.select}`}
           value={state.groupBy}
           aria-label="Group by"
           onChange={(e) => onSetGroup(e.target.value as TaskGroupField)}

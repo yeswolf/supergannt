@@ -17,7 +17,8 @@
   flex-wrap: wrap;
 }
 
-.select {
+/* Shared base for filter input controls */
+.controlBase {
   font-family: var(--msp-font);
   font-size: var(--msp-text-sm);
   background: var(--msp-input-bg, var(--msp-surface));
@@ -25,32 +26,32 @@
   border: 1px solid var(--msp-border);
   border-radius: 3px;
   padding: 0.2rem 0.35rem;
-  max-width: 130px;
   height: 1.75rem;
+}
+
+.select {
+  max-width: 130px;
 }
 
 .filterInput {
-  font-family: var(--msp-font);
-  font-size: var(--msp-text-sm);
-  background: var(--msp-input-bg, var(--msp-surface));
-  color: var(--msp-text);
-  border: 1px solid var(--msp-border);
-  border-radius: 3px;
   padding: 0.15rem 0.35rem;
   width: 130px;
-  height: 1.75rem;
 }
 
 .numInput {
-  font-family: var(--msp-font);
-  font-size: var(--msp-text-sm);
-  background: var(--msp-input-bg, var(--msp-surface));
-  color: var(--msp-text);
-  border: 1px solid var(--msp-border);
-  border-radius: 3px;
   padding: 0.15rem 0.35rem;
   width: 60px;
-  height: 1.75rem;
+}
+
+.booleanLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  border: none;
+  padding: 0.15rem 0.35rem;
+  height: auto;
+  width: auto;
 }
 
 .rangeSep {
