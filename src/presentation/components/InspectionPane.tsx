@@ -66,7 +66,7 @@ export function InspectionPane() {
         {inspections.map((finding) => (
           <li key={finding.key}>
             <button
-              className={`${styles.item} ${styles[finding.severity]}`}
+              className={styles.item}
               onClick={() => toggle(finding.key)}
               aria-expanded={expanded.has(finding.key)}
               type="button"

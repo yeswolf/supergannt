@@ -7,7 +7,6 @@ import type { IdGenerator } from '../ports/IdGenerator'
 import { refreshProject } from '../services/ProjectRefresh'
 import { parsePredecessorsField } from '../services/PredecessorNotation'
 import { wouldCreateCycle } from '../../domain/services/CycleDetector'
-import { inspectProject } from '../services/ProjectInspector'
 
 /**
  * After a predecessor is added/changed, let the link drive the successor bar

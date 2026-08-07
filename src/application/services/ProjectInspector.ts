@@ -29,7 +29,7 @@ export function inspectProject(project: Project): InspectionFinding[] {
       .map((id) => project.getTask(id)?.name ?? id)
       .join(' → ')
     findings.push({
-      key: `cycle:${cycle.taskPath.sort().join(':')}`,
+      key: `cycle:${[...cycle.taskPath].sort().join(':')}`,
       severity: 'error',
       message: `Circular dependency: ${taskNames}`,
       detail: `Dependency chain: ${cycle.taskPath.join(' → ')}`,
