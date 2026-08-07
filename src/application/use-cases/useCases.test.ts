@@ -232,6 +232,64 @@ describe('use cases', () => {
     expect(project.tasks[0]!.workHours).toBe(40)
   })
 
+  it('prevents circular dependencies via linkTasks', () => {
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, { name: 'A' })
+    project = TaskUseCases.addTask(project, ids, { name: 'B' })
+    const a = project.tasks[0]!
+    const b = project.tasks[1]!
+
+    // A → B is fine
+    project = DependencyUseCases.linkTasks(project, ids, a.id, b.id, 'FS')
+    expect(project.dependencies).toHaveLength(1)
+
+    // B → A would create a cycle
+    expect(() =>
+      DependencyUseCases.linkTasks(project, ids, b.id, a.id, 'FS'),
+    ).toThrow(/circular/i)
+  })
+
+  it('prevents circular dependencies via setPredecessorsFromNotation', () => {
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, { name: 'A' })
+    project = TaskUseCases.addTask(project, ids, { name: 'B' })
+    const a = project.tasks[0]!
+    const b = project.tasks[1]!
+
+    // A → B
+    project = DependencyUseCases.linkTasks(project, ids, a.id, b.id, 'FS')
+
+    // Setting B as predecessor of A would create cycle
+    expect(() =>
+      DependencyUseCases.setPredecessorsFromNotation(
+        project,
+        ids,
+        a.id,
+        `${project.tasks.findIndex((t) => t.id === b.id) + 1}FS`,
+      ),
+    ).toThrow(/circular/i)
+  })
+
+  it('prevents circular dependency chain of three tasks', () => {
+    let project = createEmptyProject(ids)
+    project = TaskUseCases.addTask(project, ids, { name: 'A' })
+    project = TaskUseCases.addTask(project, ids, { name: 'B' })
+    project = TaskUseCases.addTask(project, ids, { name: 'C' })
+    const a = project.tasks[0]!
+    const b = project.tasks[1]!
+    const c = project.tasks[2]!
+
+    // A → B → C is fine
+    project = DependencyUseCases.linkTasks(project, ids, a.id, b.id, 'FS')
+    project = DependencyUseCases.linkTasks(project, ids, b.id, c.id, 'FS')
+    expect(project.dependencies).toHaveLength(2)
+
+    // C → A would create a 3-node cycle
+    expect(() =>
+      DependencyUseCases.linkTasks(project, ids, c.id, a.id, 'FS'),
+    ).toThrow(/circular/i)
+  })
+
   it('builds reports', () => {
     const project = ProjectUseCases.setBaseline(refreshProject(createDemoProject(ids)))
     const network = toNetworkDiagram(project)

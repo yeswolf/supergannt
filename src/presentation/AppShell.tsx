@@ -12,6 +12,7 @@ import { CalendarView } from './components/CalendarView'
 import { ResourceCalendarView } from './components/ResourceCalendarView'
 import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
+import { InspectionPane } from './components/InspectionPane'
 import { openPlanFile } from './openPlanFile'
 import { viewLabel } from './components/nav/views'
 import { useWorkspaceDispatch, useWorkspaceState } from './state/WorkspaceContext'
@@ -75,6 +76,7 @@ export function AppShell() {
       </footer>
       <TaskInformationDialog />
       <AssignResourcesDialog />
+      <InspectionPane />
       {busyMessage ? (
         <div className={styles.busyOverlay} role="alertdialog" aria-live="assertive" aria-busy="true">
           <div className={styles.busyCard}>

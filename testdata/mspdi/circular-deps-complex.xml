@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <SaveVersion>12</SaveVersion>
+  <Name>Circular Dependencies - Complex</Name>
+  <Title>Multiple independent cycles in one project</Title>
+  <Manager>Test User</Manager>
+  <ScheduleFromStart>1</ScheduleFromStart>
+  <StartDate>2026-01-05T08:00:00</StartDate>
+  <FinishDate>2026-02-28T17:00:00</FinishDate>
+  <FYStartDate>1</FYStartDate>
+  <CriticalSlackLimit>0</CriticalSlackLimit>
+  <CurrencySymbol>$</CurrencySymbol>
+  <CurrencyCode>USD</CurrencyCode>
+  <CurrencyDigits>2</CurrencyDigits>
+  <CalendarUID>1</CalendarUID>
+  <DefaultStartTime>08:00:00</DefaultStartTime>
+  <DefaultFinishTime>17:00:00</DefaultFinishTime>
+  <MinutesPerDay>480</MinutesPerDay>
+  <MinutesPerWeek>2400</MinutesPerWeek>
+  <DaysPerMonth>20</DaysPerMonth>
+  <Calendars>
+    <Calendar>
+      <UID>1</UID>
+      <Name>Standard</Name>
+      <IsBaseCalendar>1</IsBaseCalendar>
+      <WeekDays>
+        <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+        <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking>
+          <WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes>
+        </WeekDay>
+        <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking>
+          <WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes>
+        </WeekDay>
+        <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking>
+          <WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes>
+        </WeekDay>
+        <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking>
+          <WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes>
+        </WeekDay>
+        <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking>
+          <WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes>
+        </WeekDay>
+        <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+      </WeekDays>
+    </Calendar>
+  </Calendars>
+  <Tasks>
+    <Task>
+      <UID>0</UID><ID>0</ID><Name>Project Root</Name>
+      <OutlineLevel>0</OutlineLevel><Type>1</Type><Summary>1</Summary>
+      <Start>2026-01-05T08:00:00</Start>
+      <Finish>2026-02-28T17:00:00</Finish>
+      <Duration>PT320H0M0S</Duration>
+      <Manual>0</Manual>
+    </Task>
+    <!-- Cycle 1: A→B, B→C, C→D, D→B (B-C-D cycle) -->
+    <Task><UID>1</UID><ID>1</ID><Name>Alpha</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-01-05T08:00:00</Start><Finish>2026-01-09T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+    <Task><UID>2</UID><ID>2</ID><Name>Bravo</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-01-12T08:00:00</Start><Finish>2026-01-16T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+    <Task><UID>3</UID><ID>3</ID><Name>Charlie</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-01-19T08:00:00</Start><Finish>2026-01-23T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+    <Task><UID>4</UID><ID>4</ID><Name>Delta</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-01-26T08:00:00</Start><Finish>2026-01-30T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+    <!-- Cycle 2 (independent): X→Y, Y→X -->
+    <Task><UID>5</UID><ID>5</ID><Name>X-ray</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-02-02T08:00:00</Start><Finish>2026-02-06T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+    <Task><UID>6</UID><ID>6</ID><Name>Yankee</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-02-09T08:00:00</Start><Finish>2026-02-13T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+    <!-- Clean chain: P→Q→R (no cycle) -->
+    <Task><UID>7</UID><ID>7</ID><Name>Papa</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-02-16T08:00:00</Start><Finish>2026-02-20T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+    <Task><UID>8</UID><ID>8</ID><Name>Quebec</Name><OutlineLevel>1</OutlineLevel>
+      <Start>2026-02-23T08:00:00</Start><Finish>2026-02-27T17:00:00</Finish>
+      <Duration>PT40H0M0S</Duration><Manual>0</Manual></Task>
+  </Tasks>
+  <Dependencies>
+    <!-- Cycle 1: A→B, B→C, C→D, D→B (B-C-D cycle) -->
+    <Dependency><UID>1</UID><PredecessorUID>1</PredecessorUID><SuccessorUID>2</SuccessorUID><Type>1</Type></Dependency>
+    <Dependency><UID>2</UID><PredecessorUID>2</PredecessorUID><SuccessorUID>3</SuccessorUID><Type>1</Type></Dependency>
+    <Dependency><UID>3</UID><PredecessorUID>3</PredecessorUID><SuccessorUID>4</SuccessorUID><Type>1</Type></Dependency>
+    <Dependency><UID>4</UID><PredecessorUID>4</PredecessorUID><SuccessorUID>2</SuccessorUID><Type>1</Type></Dependency>
+    <!-- Cycle 2: X→Y, Y→X -->
+    <Dependency><UID>5</UID><PredecessorUID>5</PredecessorUID><SuccessorUID>6</SuccessorUID><Type>1</Type></Dependency>
+    <Dependency><UID>6</UID><PredecessorUID>6</PredecessorUID><SuccessorUID>5</SuccessorUID><Type>1</Type></Dependency>
+    <!-- Clean chain: P→Q -->
+    <Dependency><UID>7</UID><PredecessorUID>7</PredecessorUID><SuccessorUID>8</SuccessorUID><Type>1</Type></Dependency>
+  </Dependencies>
+</Project>
