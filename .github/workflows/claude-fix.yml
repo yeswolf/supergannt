@@ -92,7 +92,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          chmod +x .github/scripts/allow-github-ci.sh
           ALLOW=false
           # Already touching .github on the PR → keep allowing CI edits in fix.
           if git diff --name-only "${{ steps.pr.outputs.base_sha }}...HEAD" | grep -qE '^\.github/'; then

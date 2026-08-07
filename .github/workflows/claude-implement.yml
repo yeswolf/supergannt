@@ -58,7 +58,8 @@ jobs:
           fi
           BRANCH="feature/issue-${ISSUE_NUMBER}-$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
           printf '%s' "$TITLE" > /tmp/issue-title.txt
-          chmod +x .github/scripts/allow-github-ci.sh
+          # Do NOT chmod the script — that dirties a mode-only git change and can
+          # produce empty PRs when Claude writes nothing.
           ALLOW_GITHUB=$(bash .github/scripts/allow-github-ci.sh /tmp/issue-title.txt /tmp/issue.md)
           {
             echo "title<<EOF"
@@ -94,8 +95,8 @@ jobs:
           git checkout -b "$BRANCH"
 
           if [ "$ALLOW_GITHUB" = "true" ]; then
-            GITHUB_RULE="This issue EXPLICITLY asks to create/fix/finish GitHub Actions. You MUST create or edit the required files under .github/ (workflows, actions, scripts) and any docs it asks for. Do not skip .github work."
-            APPEND_EXTRA=" When the issue is about workflows, writing .github/*.yml is the main deliverable — start there quickly."
+            GITHUB_RULE="This issue EXPLICITLY asks to create/fix/finish GitHub Actions. You MUST create real workflow YAML under .github/workflows/ (and actions/scripts/docs if required). Match triggering style of existing claude-*.yml workflows. A chmod-only or comment-only change is a failure."
+            APPEND_EXTRA=" When the issue is about workflows, writing .github/workflows/*.yml is the main deliverable — start writing YAML within the first few turns. Do not only explore."
           else
             GITHUB_RULE="Do NOT modify anything under .github/ (workflows, actions, or scripts). Leave CI alone unless the issue text explicitly says to create/fix/finish workflows."
             APPEND_EXTRA=""
@@ -201,6 +202,27 @@ jobs:
           echo "---- staged ----"
           git diff --cached --stat || true
           git status --short || true
+
+          # Mode-only / empty content must not become a PR (chmod noise).
+          CONTENT_LINES=$(git diff --cached --numstat | awk '{ a+=$1; d+=$2 } END { print a+d+0 }')
+          if [ "${CONTENT_LINES:-0}" -eq 0 ]; then
+            echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Claude produced no content changes for issue #${{ steps.issue.outputs.number }} (mode-only or empty)"
+            git reset -q HEAD 2>/dev/null || true
+            exit 1
+          fi
+
+          if [ "${{ steps.meta.outputs.allow_github }}" = "true" ]; then
+            if ! git diff --cached --name-only | grep -qE '^\.github/workflows/[^/]+\.ya?ml$'; then
+              echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+              echo "::error::Issue authorizes workflows but no .github/workflows/*.yml content was staged"
+              git diff --cached --name-only || true
+              git reset -q HEAD 2>/dev/null || true
+              exit 1
+            fi
+          fi
 
           if git diff --cached --quiet; then
             echo "NO_CHANGES=true" >> "$GITHUB_ENV"
