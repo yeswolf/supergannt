@@ -124,27 +124,16 @@ jobs:
           CLAUDE_CODE_GLOB_NO_IGNORE: "false"
         run: |
           set +e
-          PROMPT="Review this pull request like a careful teammate writing a short PR comment. \
-            Base branch \`${{ steps.pr.outputs.base_ref }}\`, head \`${{ steps.pr.outputs.head_ref }}\`. \
-            Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}. \
-            Diff summary: /tmp/pr-stat.txt. Full diff: /tmp/pr.diff. \
-            Start from those files; only open more source when needed. \
-            Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
-            Write a natural, readable review (not a robot dump). Cover: brief summary, concrete issues, concrete suggestions. \
-            Do not paste stack traces, API errors, or tool logs. \
-            Do not narrate your process (no \"let me review\", \"now I understand\", \"composing\"). Start with the review itself. \
-            On the FIRST line of your reply print exactly one of these status tokens (automation only — never shown to humans): \
-            STATUS_NEEDS_FIXES — if anything should still be fixed (issues or actionable suggestions). \
-            STATUS_CLEAN — if you would approve/merge with no further code changes. \
-            Never print both. Prefer STATUS_CLEAN when remaining notes are pure nitpicks you would not block on. \
-            After that token, write only the human review prose."
+          PROMPT="/ci-review
+          Review PR base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`.
+          Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}.
+          Diff summary: /tmp/pr-stat.txt. Full diff: /tmp/pr.diff."
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
 
-          set +e
           claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --add-dir magic \
             --disallowed-tools "$DISALLOW_TOOLS" \
-            --append-system-prompt "CI review mode: produce STATUS_NEEDS_FIXES or STATUS_CLEAN then the human review. No Task tools." \
             "$PROMPT" > review.md 2>&1
           CLAUDE_EXIT=$?
           BYTES=$(wc -c < review.md | tr -d ' ')

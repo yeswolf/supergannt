@@ -223,35 +223,19 @@ jobs:
         run: |
           set +e
           ALLOW_GITHUB="${{ steps.scope.outputs.allow_github }}"
-          if [ "$ALLOW_GITHUB" = "true" ]; then
-            GITHUB_RULE="This PR/issue authorizes .github work — you MAY edit workflows/actions under .github/ when the review asks for it."
-          else
-            GITHUB_RULE="Do NOT modify anything under .github/ unless the review is specifically about CI and the original task authorized it (it did not)."
-          fi
-          PROMPT="You are fixing EVERY finding from the latest code review on this PR. \
-            PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`. \
-            Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}. \
-            PRIMARY INPUT (read entirely first): /tmp/latest-review.md \
-            ALSO read /tmp/pr-inline-comments.json if non-empty. \
-            Working directory is the git repo root. Prefer Write/Edit on disk. \
-            Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
-            ${GITHUB_RULE} \
-            Hard rules: \
-            1) Collect EVERY actionable item from the review (issues and suggestions). \
-            2) Implement each with Write/Edit. SKIPPED only if code already satisfies it (prove with a short quote). \
-            3) Never skip unimplemented suggestions. \
-            4) Do not use Agent/subagents. \
-            5) End with (automation only, not for the PR comment): \
-            FIX_CHECKLIST: \
-            - [DONE|SKIPPED] <item>: <one-line proof> \
-            FIX_SUMMARY: <one human sentence of what you changed>"
+          PROMPT="/ci-fix
+          Fix every finding from /tmp/latest-review.md.
+          Also read /tmp/pr-inline-comments.json if non-empty.
+          PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`.
+          Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}.
+          allow_github=${ALLOW_GITHUB}
+          Working directory is the git repo root."
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
 
-          set +e
           claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --add-dir magic \
             --disallowed-tools "$DISALLOW_TOOLS" \
-            --append-system-prompt "CI fix mode: apply every review item with Write/Edit before ending." \
             "$PROMPT" > fix-output.md 2>&1
           CLAUDE_EXIT=$?
           BYTES=$(wc -c < fix-output.md | tr -d ' ')
@@ -265,6 +249,7 @@ jobs:
             echo "" >> fix-output.md
             echo "==== CHECKLIST FOLLOW-UP ====" >> fix-output.md
             claude -p --dangerously-skip-permissions --max-turns 20 \
+              --add-dir magic \
               --disallowed-tools "$DISALLOW_TOOLS" \
               "Do NOT edit files. Read /tmp/latest-review.md and /tmp/fix-diff-stat.txt plus /tmp/fix-diff.txt. \
               Emit ONLY: \
