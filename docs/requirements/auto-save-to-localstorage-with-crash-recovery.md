@@ -10,7 +10,7 @@ As a PM who just spent 45 minutes tweaking a schedule, I want the app to save my
 
 ## Acceptance criteria
 
-1. **Auto-save trigger:** The workspace auto-saves to localStorage 2 seconds after the last mutation (debounced), with a maximum interval of 30 seconds if mutations are continuous.
+1. **Auto-save trigger:** The workspace auto-saves to localStorage 2 seconds after the last mutation (debounced), with a maximum interval of 30 seconds if mutations are continuous. **First edit:** The very first mutation after clean-load triggers an immediate auto-save on the next poll tick (~500 ms) rather than waiting for the full debounce cycle. This ensures the first unsaved change is snapshotted quickly without holding up subsequent debounced saves.
 2. **Dirty flag:** The toolbar/app chrome shows a Saving / Saved indicator. A visual dot or asterisk appears in the title bar when there are unsaved changes.
 3. **Manual save preserved:** Ctrl+S / Save command still works and saves immediately, clearing the dirty flag.
 4. **Recovery dialog:** On app open, if an auto-saved state exists that is newer than the last explicit save, show a non-blocking recovery banner with the unsaved timestamp and Restore / Discard buttons. Restoring loads the auto-saved state; discarding loads the last explicit save.

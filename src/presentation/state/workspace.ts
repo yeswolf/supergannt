@@ -279,6 +279,13 @@ const ACTION_LABELS: Record<string, string> = {
   updateProjectInfo: 'Edit project info',
 }
 
+/** Increments the mutation counter and sets dirty — used by every
+ *  project-mutating action so the auto-save hook can detect changes
+ *  without relying on object-reference identity. */
+function markDirty(autoSave: AutoSaveState): AutoSaveState {
+  return { ...autoSave, dirty: true, mutationCounter: autoSave.mutationCounter + 1 }
+}
+
 /**
  * Wrap the base reducer to capture project snapshots before every mutation.
  *
@@ -312,7 +319,7 @@ export function undoableReducer(
       }),
       project: prev,
       statusMessage: `Undo: ${entry.label}`,
-      autoSave: { ...state.autoSave, dirty: true, mutationCounter: state.autoSave.mutationCounter + 1 },
+      autoSave: markDirty(state.autoSave),
       inspections: inspectProject(prev),
     }
   }
@@ -330,7 +337,7 @@ export function undoableReducer(
       }),
       project: next,
       statusMessage: `Redo: ${entry.label}`,
-      autoSave: { ...state.autoSave, dirty: true, mutationCounter: state.autoSave.mutationCounter + 1 },
+      autoSave: markDirty(state.autoSave),
       inspections: inspectProject(next),
     }
   }
@@ -359,7 +366,7 @@ export function undoableReducer(
           label: ACTION_LABELS[action.type] ?? action.type,
         }),
         redoStack: [],
-        autoSave: { ...result.autoSave, dirty: true, mutationCounter: state.autoSave.mutationCounter + 1 },
+        autoSave: markDirty(result.autoSave),
         inspections: inspectProject(result.project),
       }
     }

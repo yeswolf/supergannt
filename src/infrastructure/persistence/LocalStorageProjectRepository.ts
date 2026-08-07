@@ -36,18 +36,17 @@ export class LocalStorageProjectRepository implements ProjectRepository {
       this.storage.setItem(AUTO_SNAPSHOT_META_KEY, metaJson)
       this.storage.setItem(AUTO_SNAPSHOT_KEY, payload)
     } catch (err: unknown) {
-      // Only silence QuotaExceededError — the caller (FileUseCases) verifies
-      // both metadata and payload were persisted and returns false if not,
-      // which maps to a quotaWarning in the UI.  Other errors (SecurityError
-      // when localStorage is disabled, TypeError, etc.) propagate so the
-      // service layer can handle them explicitly.
-      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-        // Metadata was already written — clean it up so a stale entry doesn't
-        // produce a phantom recovery banner on next app open.
-        this.storage.removeItem(AUTO_SNAPSHOT_META_KEY)
-        return
+      // Clean up metadata on every error.  The write order is metadata-first,
+      // so if the payload write fails metadata is already on disk — without
+      // cleanup it becomes a ghost recovery prompt (banner renders, Restore
+      // finds no snapshot).  QuotaExceededError is expected under heavy use;
+      // SecurityError / TypeError mean storage is disabled or unavailable.
+      // The caller (FileUseCases) verifies both keys were persisted and
+      // returns false on any mismatch, which maps to a quotaWarning in the UI.
+      this.storage.removeItem(AUTO_SNAPSHOT_META_KEY)
+      if (!(err instanceof DOMException && err.name === 'QuotaExceededError')) {
+        console.warn('Auto-snapshot failed (non-quota error):', err)
       }
-      throw err
     }
   }
 

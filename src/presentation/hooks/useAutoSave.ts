@@ -20,9 +20,11 @@ export function useAutoSave() {
   const dispatch = useWorkspaceDispatch()
 
   const lastMutationRef = useRef<number>(0)
-  // Initialized to 0 (epoch) so Date.now() - 0 instantly exceeds
-  // MAX_INTERVAL_MS on the first poll tick — this gives a fast first
-  // auto-save instead of waiting a full debounce cycle.
+  // Flag so the first edit triggers an immediate save on the next poll tick
+  // instead of waiting a full debounce cycle.  This is separate from
+  // lastSaveRef so the intent is explicit — it's not relying on epoch-0
+  // arithmetic that looks like a bug to a future reader.
+  const needsInitialSaveRef = useRef(true)
   const lastSaveRef = useRef<number>(0)
   const savingRef = useRef(false)
   // Keep a stable ref to the latest project so the interval closure stays fresh.
@@ -74,6 +76,9 @@ export function useAutoSave() {
       const sinceSave = Date.now() - lastSaveRef.current
 
       if (sinceMutation >= DEBOUNCE_MS) {
+        void doSave()
+      } else if (needsInitialSaveRef.current) {
+        needsInitialSaveRef.current = false
         void doSave()
       } else if (sinceSave >= MAX_INTERVAL_MS) {
         void doSave()

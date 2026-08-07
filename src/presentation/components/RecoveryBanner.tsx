@@ -32,9 +32,10 @@ export function RecoveryBanner() {
   const handleDiscard = async () => {
     try {
       await services.files.clearAutoSnapshot()
-    } catch {
+    } catch (err) {
       // If storage is inaccessible the snapshot stays on disk, but the
       // banner is gone — the user already made their choice.
+      console.warn('Failed to clear auto-snapshot on discard:', (err as DOMException)?.name ?? err)
     }
     dispatch({ type: 'dismissRecoverySnapshot' })
   }
