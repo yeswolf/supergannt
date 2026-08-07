@@ -31,8 +31,11 @@ export class LocalStorageProjectRepository implements ProjectRepository {
     const payload = serializeProject(project)
     const metaJson = JSON.stringify(metadata)
     try {
-      this.storage.setItem(AUTO_SNAPSHOT_KEY, payload)
+      // Write metadata first so a partial failure (quota hit on payload)
+      // leaves a harmless stale metadata entry rather than an orphaned
+      // payload blob that can never be discovered.
       this.storage.setItem(AUTO_SNAPSHOT_META_KEY, metaJson)
+      this.storage.setItem(AUTO_SNAPSHOT_KEY, payload)
     } catch {
       // QuotaExceededError or similar — let the caller decide what to do.
     }

@@ -17,6 +17,9 @@ export function useAutoSave() {
   const dispatch = useWorkspaceDispatch()
 
   const lastMutationRef = useRef<number>(0)
+  // Initialized to 0 (epoch) so Date.now() - 0 instantly exceeds
+  // MAX_INTERVAL_MS on the first poll tick — this gives a fast first
+  // auto-save instead of waiting a full debounce cycle.
   const lastSaveRef = useRef<number>(0)
   const savingRef = useRef(false)
   // Keep a stable ref to the latest project so the interval closure stays fresh.
@@ -28,7 +31,7 @@ export function useAutoSave() {
     if (autoSave.dirty) {
       lastMutationRef.current = Date.now()
     }
-  })
+  }, [autoSave.dirty])
 
   const doSave = useCallback(async () => {
     if (savingRef.current) return
