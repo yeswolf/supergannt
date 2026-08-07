@@ -47,7 +47,7 @@ jobs:
 
       - name: Ensure labels
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
           gh label create task --color 1d76db --description "Ready for Implement workflow" 2>/dev/null || true
           gh label create feature --color 0e8a16 --description "New feature" 2>/dev/null || true
@@ -60,7 +60,9 @@ jobs:
           ANTHROPIC_API_KEY: unused
           ANTHROPIC_AUTH_TOKEN: unused
           CLAUDE_CODE_GLOB_NO_IGNORE: "false"
-          GH_TOKEN: ${{ github.token }}
+          # PAT required: GITHUB_TOKEN-created issues/labels do not trigger other workflows
+          # (no issues.labeled → Implement never starts).
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
           set +e
 
