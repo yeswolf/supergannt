@@ -35,6 +35,8 @@ export interface TaskProps {
   milestone: boolean
   summary: boolean
   critical: boolean
+  totalSlackHours: number | null
+  freeSlackHours: number | null
   notes: string
   priority: number
   constraintType: TaskConstraintType
@@ -72,6 +74,8 @@ export class Task {
       ...props,
       schedulingType,
       effortDriven,
+      totalSlackHours: props.totalSlackHours ?? null,
+      freeSlackHours: props.freeSlackHours ?? null,
     }
     const normalized: TaskProps = {
       ...withType,
@@ -129,6 +133,14 @@ export class Task {
 
   get critical(): boolean {
     return this.props.critical
+  }
+
+  get totalSlackHours(): number | null {
+    return this.props.totalSlackHours ?? null
+  }
+
+  get freeSlackHours(): number | null {
+    return this.props.freeSlackHours ?? null
   }
 
   get notes(): string {

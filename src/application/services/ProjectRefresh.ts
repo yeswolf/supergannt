@@ -1,28 +1,25 @@
 import type { Project } from '../../domain/entities/Project'
 import { rebuildHierarchy } from '../../domain/services/HierarchyService'
 import {
-  applyCriticalFlags,
-  computeCriticalPath,
+  computeFloat,
+  applyFloatToTasks,
   scheduleProject,
 } from '../../domain/services/SchedulingService'
 import { recalculateTaskCosts } from '../../domain/services/CostService'
 
-/** Single pipeline: hierarchy → schedule → critical path → costs. */
+/** Single pipeline: hierarchy → schedule → float → critical → costs. */
 export function refreshProject(project: Project): Project {
   const hierarchical = rebuildHierarchy(project.tasks)
   const withParents = project.with({ tasks: hierarchical })
+  const calendar = withParents.getCalendar()
   const scheduled = scheduleProject(
     withParents.tasks,
     withParents.dependencies,
-    withParents.getCalendar(),
+    calendar,
     withParents.startDate,
   )
-  const critical = computeCriticalPath(
-    scheduled,
-    withParents.dependencies,
-    withParents.getCalendar(),
-  )
-  const flagged = applyCriticalFlags(scheduled, critical)
+  const floatMap = computeFloat(scheduled, withParents.dependencies, calendar)
+  const flagged = applyFloatToTasks(scheduled, floatMap)
   const priced = recalculateTaskCosts(
     flagged,
     withParents.assignments,

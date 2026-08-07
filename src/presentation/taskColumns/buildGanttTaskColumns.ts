@@ -23,6 +23,8 @@ const GANTT_NAME: Record<TaskColumnId, string> = {
   percent: 'percent',
   start: 'start_date',
   finish: 'end_date',
+  totalSlack: 'totalSlack',
+  freeSlack: 'freeSlack',
   cost: 'cost',
   resources: 'resources',
   predecessors: 'predecessors',
@@ -66,6 +68,10 @@ export function buildGanttTaskColumns(
     } else if (id === 'predecessors') {
       col.template = (task) => String(task.predecessors ?? '')
       col.editor = { type: 'text', map_to: 'predecessors' }
+    } else if (id === 'totalSlack') {
+      col.template = (task) => String(task.totalSlack ?? '')
+    } else if (id === 'freeSlack') {
+      col.template = (task) => String(task.freeSlack ?? '')
     } else if (id === 'finish') {
       // Built-in end_date column formats via dhtmlx; keep name mapping.
     }

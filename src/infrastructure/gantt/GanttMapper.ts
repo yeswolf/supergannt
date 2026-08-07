@@ -21,6 +21,8 @@ export interface GanttTaskDto {
   percent: number
   cost: string
   predecessors: string
+  totalSlack: string
+  freeSlack: string
 }
 
 export interface GanttLinkDto {
@@ -95,6 +97,8 @@ export function toGanttData(project: Project): {
       percent: task.percentComplete,
       cost: task.cost.format(),
       predecessors: formatPredecessors(project, task.id),
+      totalSlack: formatSlackDisplay(task.totalSlackHours),
+      freeSlack: formatSlackDisplay(task.freeSlackHours),
     }
   })
 
@@ -144,4 +148,18 @@ export function filterGanttData(
       (l) => keep.has(String(l.source)) && keep.has(String(l.target)),
     ),
   }
+}
+
+function formatSlackDisplay(hours: number | null): string {
+  if (hours == null) return ''
+  if (hours === 0) return '0h'
+  if (Math.abs(hours) < 0.005) return '0h'
+  const h = Math.floor(hours)
+  const m = Math.round((hours - h) * 60)
+  if (h === 0 && m === 0) return '0h'
+  if (m === 0) return `${h}h`
+  if (h === 0) return `${m}m`
+  const sign = hours < 0 ? '-' : ''
+  const absH = Math.abs(h)
+  return `${sign}${absH}h ${m}m`
 }
