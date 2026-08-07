@@ -7,9 +7,13 @@ import type {
 } from '../../application/services/TaskFilterService'
 import {
   defaultOperatorForField,
+  fieldValueType,
   FILTERABLE_FIELDS,
   GROUP_BY_OPTIONS,
+  parseFilterValue,
+  toggleSort,
 } from '../../application/services/TaskFilterService'
+import type { SortSpec } from '../../application/services/TaskFilterService'
 import styles from './FilterBar.module.css'
 
 export interface FilterBarProps {
@@ -49,9 +53,20 @@ function FilterControls({ state, onChange }: FilterBarProps) {
   const [value, setValue] = useState('')
 
   const addFilter = () => {
-    if (value.trim() === '' && typeof value === 'string') return
+    const trimmed = value.trim()
+    if (trimmed === '' && fieldValueType(field) !== 'boolean') return
+    // Boolean fields require an explicit selection (no default on empty)
+    if (fieldValueType(field) === 'boolean' && trimmed === '') return
     const op = defaultOperatorForField(field)
-    const newFilter: ColumnFilter = { field, operator: op, value }
+    const parsed = parseFilterValue(field, trimmed)
+    // Skip NaN for numeric/date fields with bogus input
+    if (
+      typeof parsed === 'number' &&
+      isNaN(parsed) &&
+      trimmed !== ''
+    )
+      return
+    const newFilter: ColumnFilter = { field, operator: op, value: parsed }
     onChange({ ...state, filters: [...state.filters, newFilter] })
     setValue('')
   }
@@ -61,12 +76,17 @@ function FilterControls({ state, onChange }: FilterBarProps) {
     onChange({ ...state, filters })
   }
 
+  const ftype = fieldValueType(field)
+
   return (
     <div className={styles.group}>
       <span className={styles.label}>Filter:</span>
       <select
         value={field}
-        onChange={(e) => setField(e.target.value as FilterField)}
+        onChange={(e) => {
+          setField(e.target.value as FilterField)
+          setValue('')
+        }}
         aria-label="Filter field"
       >
         {FILTERABLE_FIELDS.map((f) => (
@@ -75,16 +95,30 @@ function FilterControls({ state, onChange }: FilterBarProps) {
           </option>
         ))}
       </select>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') addFilter()
-        }}
-        placeholder="Value…"
-        aria-label="Filter value"
-      />
+      {ftype === 'boolean' ? (
+        <select
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+          }}
+          aria-label="Filter value"
+        >
+          <option value="">Choose…</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      ) : (
+        <input
+          type={ftype === 'date' ? 'date' : 'text'}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') addFilter()
+          }}
+          placeholder={ftype === 'date' ? '' : 'Value…'}
+          aria-label="Filter value"
+        />
+      )}
       <button type="button" onClick={addFilter} aria-label="Add filter">
         +
       </button>
@@ -97,7 +131,7 @@ function FilterControls({ state, onChange }: FilterBarProps) {
                   f.field}
               </span>
               <span className={styles.chipOp}>{f.operator}</span>
-              <span className={styles.chipVal}>{String(f.value)}</span>
+              <span className={styles.chipVal}>{formatFilterValue(f)}</span>
               <button
                 type="button"
                 onClick={() => removeFilter(i)}
@@ -114,15 +148,106 @@ function FilterControls({ state, onChange }: FilterBarProps) {
   )
 }
 
+function formatFilterValue(f: ColumnFilter): string {
+  if (typeof f.value === 'boolean') return f.value ? 'Yes' : 'No'
+  if (typeof f.value === 'number' && f.value > 1_000_000_000_000) {
+    // Looks like an epoch timestamp — render as locale date
+    return new Date(f.value).toLocaleDateString()
+  }
+  return String(f.value)
+}
+
+/** Human label for a sort field id, e.g. 'percent' → '% Complete'. */
+function sortFieldLabel(field: FilterField): string {
+  return FILTERABLE_FIELDS.find((f) => f.id === field)?.label ?? field
+}
+
 function SortControls({ state, onChange }: FilterBarProps) {
+  const [open, setOpen] = useState(false)
+
+  const addSort = (field: FilterField, additive: boolean) => {
+    const next = toggleSort(state.sorts, field, additive)
+    onChange({ ...state, sorts: next })
+    setOpen(false)
+  }
+
+  const fieldLabel = (spec: SortSpec): string =>
+    `${sortFieldLabel(spec.field)} ${spec.direction === 'asc' ? '↑' : '↓'}`
+
   return (
-    <div className={styles.group}>
-      <span className={styles.label}>
-        Sort
-        {state.sorts.length > 0
-          ? ` (${state.sorts.map((s) => `${s.field} ${s.direction === 'asc' ? '↑' : '↓'}`).join(', ')})`
-          : ''}
-      </span>
+    <div className={styles.group} style={{ position: 'relative' }}>
+      <span className={styles.label}>Sort</span>
+      <button
+        type="button"
+        className={styles.clearBtn}
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Add sort"
+      >
+        + Sort
+      </button>
+      {open ? (
+        <div
+          className={styles.dropdown}
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            zIndex: 50,
+            background: 'var(--panel-bg, #fff)',
+            border: '1px solid var(--border, #ccc)',
+            borderRadius: 4,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+            padding: 4,
+            minWidth: 200,
+          }}
+        >
+          {FILTERABLE_FIELDS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              className={styles.dropdownItem}
+              role="menuitem"
+              onClick={(e) =>
+                addSort(f.id, e.ctrlKey || e.metaKey || e.shiftKey)
+              }
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '4px 8px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {state.sorts.length > 0 ? (
+        <ul className={styles.chipList}>
+          {state.sorts.map((s, i) => (
+            <li key={`${s.field}-${i}`} className={styles.chip}>
+              <span className={styles.chipField}>{fieldLabel(s)}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = state.sorts.filter(
+                    (_, j) => j !== i,
+                  )
+                  onChange({ ...state, sorts: next })
+                }}
+                aria-label={`Remove sort by ${sortFieldLabel(s.field)}`}
+                className={styles.chipRemove}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {state.sorts.length > 0 ? (
         <button
           type="button"

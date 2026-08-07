@@ -125,6 +125,51 @@ function getFieldValue(
   }
 }
 
+// ── Value parsing (field-type-aware coercion) ────────────────────
+
+export type FieldValueType = 'text' | 'number' | 'date' | 'boolean'
+
+export function fieldValueType(field: FilterField): FieldValueType {
+  switch (field) {
+    case 'duration':
+    case 'percent':
+    case 'cost':
+    case 'outlineLevel':
+      return 'number'
+    case 'start':
+    case 'finish':
+      return 'date'
+    case 'milestone':
+    case 'critical':
+    case 'summary':
+      return 'boolean'
+    default:
+      return 'text'
+  }
+}
+
+/**
+ * Coerce a raw user-input string into the correct JS type for the field.
+ * Numeric fields → `parseFloat` (NaN for empty/bogus input).
+ * Date fields → `Date.parse` (epoch ms; NaN for invalid dates).
+ * Boolean fields → strict `=== 'true'`.
+ */
+export function parseFilterValue(
+  field: FilterField,
+  raw: string,
+): string | number | boolean {
+  switch (fieldValueType(field)) {
+    case 'number':
+      return parseFloat(raw)
+    case 'date':
+      return Date.parse(raw)
+    case 'boolean':
+      return raw === 'true'
+    default:
+      return raw
+  }
+}
+
 // ── Filter matching ─────────────────────────────────────────────
 
 function taskMatchesFilter(
@@ -142,11 +187,19 @@ function taskMatchesFilter(
       return haystack.includes(needle)
     }
     case 'equals': {
-      if (typeof raw === 'boolean') return raw === Boolean(fv)
+      if (typeof raw === 'boolean') {
+        if (typeof fv === 'boolean') return raw === fv
+        return raw === (fv === 'true')
+      }
+      if (typeof fv === 'boolean') return String(raw) === String(fv)
       return String(raw).toLowerCase() === String(fv).toLowerCase()
     }
     case 'notEquals': {
-      if (typeof raw === 'boolean') return raw !== Boolean(fv)
+      if (typeof raw === 'boolean') {
+        if (typeof fv === 'boolean') return raw !== fv
+        return raw !== (fv === 'true')
+      }
+      if (typeof fv === 'boolean') return String(raw) !== String(fv)
       return String(raw).toLowerCase() !== String(fv).toLowerCase()
     }
     case 'gt':
@@ -357,7 +410,13 @@ export function defaultOperatorForField(field: FilterField): FilterOperator {
     case 'critical':
     case 'summary':
       return 'equals'
-    default:
+    case 'duration':
+    case 'percent':
+    case 'start':
+    case 'finish':
+    case 'cost':
+    case 'outlineLevel':
+    case 'id':
       return 'gte'
   }
 }

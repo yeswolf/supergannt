@@ -24,7 +24,7 @@ describe('TaskFilterService', () => {
 
     it('filters by text contains', () => {
       const tasks = project.tasks.filter((t) => !t.summary)
-      if (tasks.length === 0) return
+      if (tasks.length === 0) throw new Error('Test precondition failed: no non-summary tasks in demo project')
       const target = tasks[0]!
       const filter: ColumnFilter = {
         field: 'name',
@@ -202,7 +202,7 @@ describe('TaskFilterService', () => {
 
     it('hides tasks in collapsed groups', () => {
       const groups = buildGroups([...project.tasks], project, 'status', [])
-      if (groups.length === 0) return
+      if (groups.length === 0) throw new Error('Test precondition failed: no groups for demo project status')
       const allCollapsed = groups.map((g) => g.key)
       const state: FilterState = {
         ...DEFAULT_FILTER_STATE,

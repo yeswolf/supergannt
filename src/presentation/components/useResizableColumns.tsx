@@ -167,15 +167,23 @@ export function ColumnHeader({
   onResizeStart,
   onResizeAuto,
   resizable = true,
+  sortable = false,
+  onClick,
 }: {
   children?: ReactNode
   index: number
   onResizeStart: (index: number, clientX: number) => void
   onResizeAuto?: (index: number) => void
   resizable?: boolean
+  sortable?: boolean
+  onClick?: () => void
 }) {
   return (
-    <th className={styles.th}>
+    <th
+      className={styles.th}
+      style={sortable && onClick ? { cursor: 'pointer', userSelect: 'none' } : undefined}
+      onClick={onClick}
+    >
       <span className={styles.label}>{children}</span>
       {resizable ? (
         <span

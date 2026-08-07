@@ -26,6 +26,8 @@ import {
   DEFAULT_FILTER_STATE,
   deriveTaskView,
   flattenForRendering,
+  toggleSort,
+  type FilterField,
   type FilterState,
   type TaskSheetRow,
 } from '../../application/services/TaskFilterService'
@@ -87,8 +89,21 @@ export function TaskSheetView() {
                   index={i}
                   onResizeStart={onResizeStart}
                   onResizeAuto={onResizeAuto}
+                  sortable
+                  onClick={() =>
+                    setFilterState((prev) => ({
+                      ...prev,
+                      sorts: toggleSort(prev.sorts, id as FilterField, false),
+                    }))
+                  }
                 >
                   {TASK_SHEET_LABELS[id]}
+                  {filterState.sorts.some((s) => s.field === id)
+                    ? filterState.sorts.find((s) => s.field === id)!
+                        .direction === 'asc'
+                      ? ' ↑'
+                      : ' ↓'
+                    : ''}
                 </ColumnHeader>
               ))}
             </tr>
