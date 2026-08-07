@@ -12,6 +12,14 @@ export interface CycleInfo {
 }
 
 /**
+ * Narrow result from {@link wouldCreateCycle}: only the task path is available
+ * because the quick-reachability DFS does not track dependency IDs.
+ */
+export interface CyclePath {
+  taskPath: string[]
+}
+
+/**
  * Detects all cycles in a directed dependency graph using recursive DFS
  * with three-color marking (white = unvisited, gray = in current path, black = done).
  */
@@ -89,7 +97,7 @@ export function wouldCreateCycle(
   dependencies: readonly Dependency[],
   predecessorId: string,
   successorId: string,
-): CycleInfo | null {
+): CyclePath | null {
   // Build adjacency from existing edges + the candidate.
   const adj = new Map<string, string[]>()
   for (const d of dependencies) {
@@ -131,5 +139,5 @@ export function wouldCreateCycle(
   taskPath.push(successorId)
   taskPath.reverse() // predecessorId → ... → successorId → predecessorId
 
-  return { taskPath, dependencyIds: [] }
+  return { taskPath }
 }
