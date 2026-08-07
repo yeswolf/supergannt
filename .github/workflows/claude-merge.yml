@@ -68,24 +68,9 @@ jobs:
 
             core.setOutput('skip', 'false');
             core.setOutput('number', String(prNumber));
-            core.setOutput('head_sha', pr.head.sha);
-            core.setOutput('head_ref', pr.head.ref);
-            core.setOutput('base_ref', pr.base.ref);
             core.setOutput('title', pr.title);
         env:
           PR_NUMBER: ${{ inputs.pr_number }}
-
-      - name: Checkout supergannt
-        if: steps.pr.outputs.skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Fetch PR branch
-        if: steps.pr.outputs.skip != 'true'
-        run: |
-          git fetch origin ${{ steps.pr.outputs.head_ref }}
 
       - name: Squash and merge PR
         if: steps.pr.outputs.skip != 'true'
@@ -93,13 +78,7 @@ jobs:
           GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
-          HEAD_REF="${{ steps.pr.outputs.head_ref }}"
           PR_TITLE="${{ steps.pr.outputs.title }}"
-
-          # Configure git with magic token for push
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           echo "Squash-merging PR #${PR_NUMBER}: ${PR_TITLE}"
 
