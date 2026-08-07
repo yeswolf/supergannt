@@ -92,7 +92,7 @@ jobs:
             Issue title: ${ISSUE_TITLE}. \
             Working directory is the git repo root. You may create/edit files anywhere except node_modules, dist, data, logs, magic/, and build outputs. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
-            Do not modify anything under .github/. \
+            Do not modify anything under .github unless it specifically set in task like create the workflow". \
             Critical rules: \
             1) Read /tmp/issue.md first and follow its acceptance criteria exactly. Do not invent a different task. \
             2) Within the first 8 tool turns, start writing code with Write/Edit. Exploration is capped: at most 8 Read/Glob/Grep calls before the first Write/Edit. \
