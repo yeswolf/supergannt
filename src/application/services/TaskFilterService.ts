@@ -117,6 +117,11 @@ function getFieldValue(
     // 'milestone'/'critical'/'summary'.  When a new TaskColumnId is added
     // to the TASK_COLUMN_IDS tuple, you must also add a case above —
     // TypeScript won't enforce it here because of the broader union.
+    default:
+      if (process.env.NODE_ENV === 'development') {
+        throw new Error(`getFieldValue: unhandled field "${field}"`)
+      }
+      return ''
   }
 }
 
@@ -302,11 +307,13 @@ export function flattenForRendering(view: DerivedTaskView): TaskSheetRow[] {
     view.groups.filter((g) => g.collapsed).map((g) => g.key),
   )
 
+  const taskById = new Map(view.orderedTasks.map((t) => [t.id, t]))
+
   for (const group of view.groups) {
     rows.push({ type: 'group' as const, group })
     if (!collapsed.has(group.key)) {
       for (const taskId of group.taskIds) {
-        const task = view.orderedTasks.find((t) => t.id === taskId)
+        const task = taskById.get(taskId)
         if (task) rows.push({ type: 'task' as const, task })
       }
     }

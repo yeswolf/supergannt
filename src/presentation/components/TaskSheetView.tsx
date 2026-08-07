@@ -49,7 +49,7 @@ export function TaskSheetView() {
   const rows: TaskSheetRow[] = flattenForRendering(view)
 
   useArrowRowNavigation({
-    ids: project.tasks.map((t) => t.id),
+    ids: rows.filter((r) => r.type === 'task').map((r) => r.task.id),
     selectedId: selectedTaskId,
     onSelect: (taskId) => dispatch({ type: 'selectTask', taskId }),
   })
@@ -96,10 +96,24 @@ export function TaskSheetView() {
           <tbody>
             {rows.map((row, index) => {
               if (row.type === 'group') {
+                const isCollapsed = filterState.collapsedGroups.includes(row.group.key)
                 return (
-                  <tr key={`group-${row.group.key}`} className={styles.groupRow}>
+                  <tr
+                    key={`group-${row.group.key}`}
+                    className={styles.groupRow}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() =>
+                      setFilterState((prev) => {
+                        const collapsed = prev.collapsedGroups
+                        const next = isCollapsed
+                          ? collapsed.filter((k) => k !== row.group.key)
+                          : [...collapsed, row.group.key]
+                        return { ...prev, collapsedGroups: next }
+                      })
+                    }
+                  >
                     <td colSpan={columns.length}>
-                      {row.group.label} ({row.group.taskIds.length} tasks)
+                      {isCollapsed ? '▸' : '▾'} {row.group.label} ({row.group.taskIds.length} tasks)
                     </td>
                   </tr>
                 )
