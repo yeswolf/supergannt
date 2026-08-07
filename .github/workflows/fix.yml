@@ -274,7 +274,7 @@ jobs:
           echo "Merge stopped with conflicts — leaving markers for the Fix agent"
           git diff --name-only --diff-filter=U | tee /tmp/conflict-paths.txt
           {
-            echo "## Обязательно исправить — merge conflicts"
+            echo "## Must fix — merge conflicts"
             echo ""
             echo "Merge of origin/${{ steps.pr.outputs.base_ref }} into this PR left conflict markers in:"
             sed 's/^/- /' /tmp/conflict-paths.txt

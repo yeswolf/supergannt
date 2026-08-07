@@ -223,8 +223,8 @@ jobs:
             }
 
             const lines = [
-              `- PR #${prNumber} **не мержится в \`${pr.base.ref}\`** (\`mergeable=${pr.mergeable}\`, \`mergeable_state=${pr.mergeable_state}\`).`,
-              '- Разрулить конфликты с базовой веткой и запушить в head.',
+              `- PR #${prNumber} **does not merge cleanly into \`${pr.base.ref}\`** (\`mergeable=${pr.mergeable}\`, \`mergeable_state=${pr.mergeable_state}\`).`,
+              '- Resolve conflicts with the base branch and push to the PR head.',
             ];
 
             fs.writeFileSync('/tmp/ci-merge-conflicts.md', lines.join('\n') + '\n');
@@ -253,7 +253,7 @@ jobs:
           # Conflicted files show as "changed in both"
           {
             echo ""
-            echo "Конфликтные пути (merge-tree):"
+            echo "Conflict paths (merge-tree):"
             grep -E '^(changed in both|CONFLICT)' /tmp/merge-tree.txt | head -40 || true
             # Also try a throwaway merge for path list
             git merge --no-commit --no-ff origin/${{ steps.pr.outputs.base_ref }} >/tmp/merge-try.txt 2>&1
@@ -425,7 +425,7 @@ jobs:
             }
             if (testFailures) {
               mustFix.push(
-                'Упали тесты в CI workflow — починить до мержа:',
+                'CI Tests workflow failed — fix before merge:',
                 '',
                 testFailures,
               );
@@ -439,7 +439,7 @@ jobs:
             if (mergeConflicts) {
               if (mustFix.length) mustFix.push('');
               mustFix.push(
-                'Есть merge conflicts с базовой веткой — обязательно разрулить:',
+                'Merge conflicts with the base branch — resolve before merge:',
                 '',
                 mergeConflicts,
               );
@@ -447,7 +447,7 @@ jobs:
             if (mustFix.length) {
               reaction = REACT_NEEDS;
               prose = [
-                '### Обязательно исправить',
+                '### Must fix',
                 '',
                 ...mustFix,
                 '',
