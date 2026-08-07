@@ -8,7 +8,7 @@ import {
 } from 'react'
 import {
   createInitialState,
-  workspaceReducer,
+  undoableReducer,
   type WorkspaceAction,
   type WorkspaceState,
 } from './workspace'
@@ -19,7 +19,7 @@ const WorkspaceDispatchContext = createContext<Dispatch<WorkspaceAction> | null>
 )
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(workspaceReducer, undefined, createInitialState)
+  const [state, dispatch] = useReducer(undoableReducer, undefined, createInitialState)
   const memoState = useMemo(() => state, [state])
   return (
     <WorkspaceStateContext.Provider value={memoState}>

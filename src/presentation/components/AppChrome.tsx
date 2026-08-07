@@ -469,6 +469,12 @@ export function AppChrome() {
         case 'assign':
           if (selectedTaskId) dispatch({ type: 'openAssignDialog' })
           return
+        case 'undo':
+          dispatch({ type: 'undo' })
+          return
+        case 'redo':
+          dispatch({ type: 'redo' })
+          return
       }
     }
 
@@ -482,6 +488,13 @@ export function AppChrome() {
 
       const action = matchProjectShortcut(e)
       if (!action) return
+
+      // Undo/Redo work everywhere — including dialogs.
+      if (action === 'undo' || action === 'redo') {
+        e.preventDefault()
+        runShortcut(action)
+        return
+      }
 
       if (action === 'palette') {
         e.preventDefault()
