@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useId, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import {
   type ColumnFilter,
   type FilterValue,
@@ -32,6 +32,7 @@ const NUMERIC_FILTER_COLUMNS: readonly TaskColumnId[] = [
   'percent',
   'totalSlack',
   'freeSlack',
+  'cost',
 ]
 
 /** Columns that support date range filtering. */

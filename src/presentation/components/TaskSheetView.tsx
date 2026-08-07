@@ -58,6 +58,8 @@ export function TaskSheetView() {
     [rows],
   )
 
+  // Key on project.tasks.length (not rows.length) so column widths persist
+  // across filter/sort/group changes — resizing on every keystroke is jarring.
   const { tableRef, colgroup, onResizeStart, onResizeAuto } =
     useResizableColumns(`${project.tasks.length}:${columns.join(',')}`)
 

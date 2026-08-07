@@ -162,6 +162,10 @@ function getTaskFieldValue(
 ): string | number | boolean | Date {
   switch (column) {
     case 'id':
+      // ID column displays WBS (work breakdown structure) as the task
+      // identifier, matching MS Project convention. Note: this means ID
+      // filters (e.g. numeric range) operate on the WBS string, not the
+      // internal numeric task ID.
       return task.wbs
     case 'wbs':
       return task.wbs
