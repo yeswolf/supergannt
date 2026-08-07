@@ -7,6 +7,12 @@
   flex-shrink: 0;
 }
 
+.empty {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+}
+
 .emptyIcon {
   margin-right: 4px;
   color: var(--success, #2e7d32);

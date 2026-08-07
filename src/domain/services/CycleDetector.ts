@@ -127,17 +127,23 @@ export function wouldCreateCycle(
 
   if (!dfsReachable(successorId, predecessorId)) return null
 
-  // Reconstruct the cycle path: successor → ... → predecessor → successor
-  const taskPath: string[] = [successorId]
+  // Reconstruct the cycle path: predecessorId → successorId → ... → predecessorId
+  if (predecessorId === successorId) return { taskPath: [predecessorId, successorId] }
+
+  const taskPath: string[] = [predecessorId, successorId]
+  const middle: string[] = []
   let cur = predecessorId
   while (cur !== successorId) {
-    taskPath.push(cur)
     const p = parent.get(cur)
     if (!p || p === cur) break
+    middle.push(p)
     cur = p
   }
-  taskPath.push(successorId)
-  taskPath.reverse() // predecessorId → ... → successorId → predecessorId
+  // middle is the parent chain from pred back to succ, in reverse order.
+  // Reverse to get forward order and drop the terminal successorId.
+  middle.reverse()
+  taskPath.push(...middle.slice(1))
+  taskPath.push(predecessorId) // close the loop
 
   return { taskPath }
 }

@@ -22,7 +22,7 @@ export function InspectionPane() {
 
   if (inspections.length === 0) {
     return (
-      <div className={styles.pane} aria-label="No project issues found">
+      <div className={`${styles.pane} ${styles.empty}`} aria-label="No project issues found">
         <span className={styles.emptyIcon}>✓</span>
         <span className={styles.emptyText}>No issues found</span>
       </div>

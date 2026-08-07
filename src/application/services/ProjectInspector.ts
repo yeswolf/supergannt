@@ -50,18 +50,35 @@ export function inspectProject(project: Project): InspectionFinding[] {
     }
   }
 
+  // ── Precompute dependency adjacency for O(1) per-task queries ──────────
+  const adj = new Map<
+    string,
+    { hasPred: boolean; hasSucc: boolean; connectedIds: Set<string> }
+  >()
+  for (const task of project.tasks) {
+    adj.set(task.id, { hasPred: false, hasSucc: false, connectedIds: new Set() })
+  }
+  for (const dep of project.dependencies) {
+    let entry = adj.get(dep.predecessorId)
+    if (entry) {
+      entry.hasSucc = true
+      entry.connectedIds.add(dep.successorId)
+    }
+    entry = adj.get(dep.successorId)
+    if (entry) {
+      entry.hasPred = true
+      entry.connectedIds.add(dep.predecessorId)
+    }
+  }
+
   // ── Summary tasks with dependencies ──────────────────────────────────
   for (const task of project.tasks) {
     if (!task.summary) continue
-    const deps = project.dependencies.filter(
-      (d) => d.predecessorId === task.id || d.successorId === task.id,
-    )
-    if (deps.length > 0) {
-      const names = deps.map((d) => {
-        const other =
-          d.predecessorId === task.id ? d.successorId : d.predecessorId
-        return project.getTask(other)?.name ?? other
-      })
+    const a = adj.get(task.id)
+    if (a && a.connectedIds.size > 0) {
+      const names = [...a.connectedIds].map(
+        (id) => project.getTask(id)?.name ?? id,
+      )
       findings.push({
         key: `summary-dep:${task.id}`,
         severity: 'warning',
@@ -76,13 +93,8 @@ export function inspectProject(project: Project): InspectionFinding[] {
   // ── Orphan tasks (no predecessors, no successors, non-summary) ──────
   for (const task of project.tasks) {
     if (task.summary || task.milestone) continue
-    const hasPred = project.dependencies.some(
-      (d) => d.successorId === task.id,
-    )
-    const hasSucc = project.dependencies.some(
-      (d) => d.predecessorId === task.id,
-    )
-    if (!hasPred && !hasSucc) {
+    const a = adj.get(task.id)
+    if (!a || (!a.hasPred && !a.hasSucc)) {
       findings.push({
         key: `orphan:${task.id}`,
         severity: 'info',

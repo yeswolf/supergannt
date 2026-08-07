@@ -101,7 +101,7 @@ describe('wouldCreateCycle', () => {
     expect(cycle!.taskPath).toContain('2')
   })
 
-  it('returns null when predecessor and successor are identical (self-loop guarded elsewhere)', () => {
+  it('detects a self-loop (1→1)', () => {
     const deps: Dependency[] = []
     // Self-loop: wouldCreateCycle is called only after the self-link guard in
     // linkTasks, but the function should handle it gracefully.
