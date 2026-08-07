@@ -89,32 +89,68 @@ jobs:
             const headSha = '${{ steps.pr.outputs.head_sha }}';
             const isTestCheck = (name) =>
               /^(vitest|tests)$/i.test(name) || /\bvitest\b/i.test(name) || /^Tests\b/i.test(name);
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-            const deadline = Date.now() + 12 * 60 * 1000;
-            let checks = [];
-            while (Date.now() < deadline) {
+            async function listTestChecks() {
               const { data } = await github.rest.checks.listForRef({
                 owner,
                 repo,
                 ref: headSha,
                 per_page: 100,
               });
-              checks = (data.check_runs || []).filter((c) => isTestCheck(c.name));
-              if (checks.length === 0) {
-                // Tests may not have started yet — brief wait
-                await new Promise((r) => setTimeout(r, 15000));
-                continue;
-              }
+              return (data.check_runs || []).filter((c) => isTestCheck(c.name));
+            }
+
+            async function hasActiveTestsRun() {
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                owner,
+                repo,
+                head_sha: headSha,
+                per_page: 30,
+              });
+              return (data.workflow_runs || []).some(
+                (r) =>
+                  (r.name === 'Tests' || /\/tests\.yml$/.test(r.path || '')) &&
+                  ['queued', 'pending', 'in_progress', 'waiting', 'requested'].includes(
+                    r.status,
+                  ),
+              );
+            }
+
+            // Wait only while Tests is actually running/queued. If nothing is
+            // scheduled (e.g. history wiped, or Tests never fired), do not hang.
+            const deadline = Date.now() + 12 * 60 * 1000;
+            let checks = await listTestChecks();
+            let emptyStreak = 0;
+            while (Date.now() < deadline) {
+              checks = await listTestChecks();
               const pending = checks.some(
                 (c) => c.status !== 'completed' || c.conclusion === null,
               );
-              if (!pending) break;
+              const activeRun = pending ? true : await hasActiveTestsRun();
+
+              if (checks.length === 0 && !activeRun) {
+                emptyStreak += 1;
+                // One short retry in case the check is still registering, then bail.
+                if (emptyStreak >= 2) {
+                  core.info(
+                    'No Tests checks/runs for this head SHA — skipping CI test gate',
+                  );
+                  break;
+                }
+                await sleep(5000);
+                continue;
+              }
+
+              emptyStreak = 0;
+              if (!pending && !activeRun) break;
+
               core.info(
-                `Waiting for Tests checks: ${checks
+                `Waiting for Tests: checks=${checks
                   .map((c) => `${c.name}=${c.status}/${c.conclusion || '…'}`)
-                  .join(', ')}`,
+                  .join(', ') || '(none)'} activeRun=${activeRun}`,
               );
-              await new Promise((r) => setTimeout(r, 15000));
+              await sleep(15000);
             }
 
             const failed = checks.filter((c) =>
