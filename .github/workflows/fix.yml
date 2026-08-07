@@ -100,34 +100,10 @@ jobs:
       - name: Detect allow_github for this PR
         if: steps.pr.outputs.skip != 'true'
         id: scope
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          ALLOW=false
-          # Already touching .github on the PR → keep allowing CI edits in fix.
-          if git diff --name-only "${{ steps.pr.outputs.base_sha }}...HEAD" | grep -qE '^\.github/'; then
-            ALLOW=true
-            echo "PR already modifies .github → allow_github=true"
-          fi
-          gh pr view "${{ steps.pr.outputs.number }}" --repo "$GH_REPO" --json title,body > /tmp/pr-meta.json
-          jq -r '.title // ""' /tmp/pr-meta.json > /tmp/pr-title.txt
-          jq -r '.body // ""' /tmp/pr-meta.json > /tmp/pr-body.md
-          if [ "$(bash .github/scripts/allow-github-ci.sh /tmp/pr-title.txt /tmp/pr-body.md)" = "true" ]; then
-            ALLOW=true
-            echo "PR title/body authorizes .github work"
-          fi
-          # Linked issues from PR body (Closes #N / Fixes #N / #N)
-          for n in $(grep -Eo '(Closes|Fixes|Resolves|closes|fixes|resolves)[[:space:]]*#[0-9]+|#[0-9]+' /tmp/pr-body.md | grep -Eo '[0-9]+' | sort -u); do
-            gh issue view "$n" --repo "$GH_REPO" --json title,body > "/tmp/linked-issue-$n.json" || continue
-            jq -r '.title // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-title-$n.txt"
-            jq -r '.body // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-body-$n.md"
-            if [ "$(bash .github/scripts/allow-github-ci.sh "/tmp/linked-title-$n.txt" "/tmp/linked-body-$n.md")" = "true" ]; then
-              ALLOW=true
-              echo "Linked issue #$n authorizes .github work"
-            fi
-          done
-          echo "allow_github=$ALLOW" >> "$GITHUB_OUTPUT"
-          echo "allow_github=$ALLOW"
+          # Hard ban: Claude never edits .github/ (even if the PR already touches it).
+          echo "allow_github=false" >> "$GITHUB_OUTPUT"
+          echo "allow_github=false"
 
       - name: Install CLI
         if: steps.pr.outputs.skip != 'true'
@@ -312,7 +288,7 @@ jobs:
           Also read /tmp/pr-inline-comments.json if non-empty.
           PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`.
           Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}.
-          allow_github=${ALLOW_GITHUB}
+          allow_github=false — NEVER modify anything under .github/.
           ${CONFLICT_HINT}
           Working directory is the git repo root (PR branch; npm install already done)."
 
@@ -393,13 +369,8 @@ jobs:
             implement-output.md implement-output-retry.md
             fix-output.md review.md review-output.md fixes.patch
           )
-          if [ "${{ steps.scope.outputs.allow_github }}" = "true" ]; then
-            echo "allow_github=true — keeping .github changes staged"
-            git reset -q -- "${ARTIFACTS[@]}" 2>/dev/null || true
-          else
-            echo "allow_github=false — unstaging .github"
-            git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
-          fi
+          echo "Unstaging .github (Claude must not change workflows/actions)"
+          git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
 
           MADE_COMMIT=false
           if ! git diff --cached --quiet; then
