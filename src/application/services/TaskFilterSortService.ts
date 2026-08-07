@@ -27,17 +27,11 @@ export interface BooleanFilter {
   value: boolean
 }
 
-export interface ResourceNameFilter {
-  type: 'resourceName'
-  value: string
-}
-
 export type FilterValue =
   | TextFilter
   | NumericRangeFilter
   | DateRangeFilter
   | BooleanFilter
-  | ResourceNameFilter
 
 export interface ColumnFilter {
   id: string
@@ -135,12 +129,14 @@ function dateRange(
   if (!(raw instanceof Date)) return false
   const val = raw.getTime()
   if (from) {
-    const fromMs = new Date(from + 'T00:00:00').getTime()
+    const [fy, fm, fd] = from.split('-').map(Number) as [number, number, number]
+    const fromMs = new Date(fy, fm - 1, fd).getTime()
     if (val < fromMs) return false
   }
   if (to) {
-    const toMs = new Date(to + 'T00:00:00').getTime()
-    if (val > toMs + 86_399_999) return false
+    const [ty, tm, td] = to.split('-').map(Number) as [number, number, number]
+    const toMs = new Date(ty, tm - 1, td, 23, 59, 59, 999).getTime()
+    if (val > toMs) return false
   }
   return true
 }
@@ -157,15 +153,6 @@ function matchesBoolean(
   }
   const raw = getTaskFieldValue(task, column)
   return Boolean(raw) === value
-}
-
-function matchesResourceName(
-  project: Project,
-  task: Task,
-  value: string,
-): boolean {
-  const names = formatTaskResourceNames(project, task.id)
-  return names.toLowerCase().includes(value.toLowerCase())
 }
 
 /** Extract a primitive value from a task for a given column. */
@@ -224,8 +211,6 @@ function taskMatchesFilter(
       return dateRange(task, filter.column, f.from, f.to)
     case 'boolean':
       return matchesBoolean(project, task, filter.column, f.value)
-    case 'resourceName':
-      return matchesResourceName(project, task, f.value)
   }
 }
 
@@ -304,6 +289,18 @@ function sortTasks(tasks: Task[], sort: TaskSort): Task[] {
 }
 
 // ── Grouping ───────────────────────────────────────────────────────────
+
+/** Cache formatters keyed by currency to avoid re-allocating per group header. */
+const costFormatters = new Map<string, Intl.NumberFormat>()
+
+function getCostFormatter(currency: string): Intl.NumberFormat {
+  let fmt = costFormatters.get(currency)
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(undefined, { style: 'currency', currency })
+    costFormatters.set(currency, fmt)
+  }
+  return fmt
+}
 
 function groupTasks(
   project: Project,
@@ -391,10 +388,7 @@ function makeGroupHeader(
     costAmount += task.cost.amount
     workHours += task.workHours
   }
-  const fmtCost = new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-  }).format(costAmount)
+  const fmtCost = getCostFormatter(currency).format(costAmount)
   return {
     type: 'groupHeader',
     groupLabel: label,

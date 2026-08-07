@@ -67,7 +67,7 @@ const GROUP_FIELDS: { value: TaskGroupField; label: string }[] = [
 ]
 
 function generateFilterId(): string {
-  return `f${Math.random().toString(36).slice(2, 10)}`
+  return crypto.randomUUID()
 }
 
 export function FilterBar({
@@ -98,8 +98,8 @@ export function FilterBar({
     } else if (NUMERIC_FILTER_COLUMNS.includes(addCol)) {
       filter = {
         type: 'numericRange',
-        min: numMin ? Number(numMin) : undefined,
-        max: numMax ? Number(numMax) : undefined,
+        min: numMin !== '' ? Number(numMin) : undefined,
+        max: numMax !== '' ? Number(numMax) : undefined,
       }
       if (filter.min === undefined && filter.max === undefined) return
     } else if (DATE_FILTER_COLUMNS.includes(addCol)) {
@@ -337,7 +337,5 @@ function describeFilter(f: FilterValue): string {
     }
     case 'boolean':
       return f.value ? 'Yes' : 'No'
-    case 'resourceName':
-      return `"${f.value}"`
   }
 }

@@ -155,16 +155,28 @@ export function filterGanttData(
   }
 }
 
-/** Filter Gantt data using TaskFilterSortState (workspace-level AutoFilter). */
+/** Filter Gantt data using TaskFilterSortState (workspace-level AutoFilter).
+ *  Includes ancestor summary tasks so the tree structure stays intact. */
 export function filterGanttDataByState(
   project: Project,
   state: TaskFilterSortState,
 ): { data: GanttTaskDto[]; links: GanttLinkDto[] } {
   const filteredTasks = applyTaskFilter(project, state)
+  const byId = new Map(project.tasks.map((t) => [String(t.id), t]))
   const keep = new Set(filteredTasks.map((t) => String(t.id)))
 
-  // Build Gantt DTOs only for the filtered tasks
-  const data: GanttTaskDto[] = filteredTasks.map((task, index) => {
+  // Walk up each matching task's parent chain to include ancestor summaries
+  for (const task of filteredTasks) {
+    let cur: typeof task | undefined = task
+    while (cur) {
+      keep.add(String(cur.id))
+      cur = cur.parentId ? byId.get(String(cur.parentId)) : undefined
+    }
+  }
+
+  // Build Gantt DTOs for the union (matching tasks + ancestor summaries)
+  const keptTasks = project.tasks.filter((t) => keep.has(String(t.id)))
+  const data: GanttTaskDto[] = keptTasks.map((task, index) => {
     const hours = task.milestone ? 0 : Math.max(task.duration.toHours(), 1)
     const start = formatGanttDateTime(task.start)
     const end = task.milestone ? start : formatGanttDateTime(task.finish)
@@ -175,7 +187,7 @@ export function filterGanttDataByState(
       end_date: end,
       duration: hours,
       progress: task.percentComplete / 100,
-      parent: 0, // Flat list when filtered — tree parent links would break with partial sets
+      parent: task.parentId ?? 0,
       open: true,
       type: task.milestone ? 'milestone' : task.summary ? 'project' : 'task',
       critical: task.critical,
