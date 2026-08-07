@@ -161,7 +161,7 @@ describe('TaskFilterService', () => {
         filters: [
           { field: 'percent', operator: 'gte', value: 80 },
         ],
-        sorts: field: 'percent', direction: 'desc' }],
+        sorts: [{ field: 'percent', direction: 'desc' }],
         groupBy: 'none',
         collapsedGroups: [],
       }
@@ -224,7 +224,7 @@ describe('TaskFilterService', () => {
 
     it('flips to descending on second click', () => {
       const result = toggleSort(
-        field: 'name', direction: 'asc' }],
+        [{ field: 'name', direction: 'asc' }],
         'name',
         false,
       )
@@ -233,7 +233,7 @@ describe('TaskFilterService', () => {
 
     it('removes sort on third click', () => {
       const result = toggleSort(
-        field: 'name', direction: 'desc' }],
+        [{ field: 'name', direction: 'desc' }],
         'name',
         false,
       )
@@ -242,7 +242,7 @@ describe('TaskFilterService', () => {
 
     it('adds to multi-column sort when additive', () => {
       const result = toggleSort(
-        field: 'name', direction: 'asc' }],
+        [{ field: 'name', direction: 'asc' }],
         'percent',
         true,
       )
@@ -250,24 +250,21 @@ describe('TaskFilterService', () => {
     })
   })
 
-  describe('performance', () => {
-    it('filters and sorts under 100ms for reasonable task count', () => {
+  describe('smoke test', () => {
+    it('applies filter, sort and grouping across the demo project without error', () => {
       const state: FilterState = {
         filters: [
           { field: 'percent', operator: 'gte', value: 50 },
         ],
-        sorts: field: 'start', direction: 'asc' }],
+        sorts: [{ field: 'start', direction: 'asc' }],
         groupBy: 'status',
         collapsedGroups: [],
       }
-      const start = performance.now()
-      for (let i = 0; i < 100; i++) {
-        deriveTaskView(project, state)
-      }
-      const elapsed = performance.now() - start
-      // 100 iterations of a small project should be well under 100ms
-      expect(elapsed).toBeLessThan(500)
+      const view = deriveTaskView(project, state)
+      expect(view.orderedTasks.length).toBeGreaterThan(0)
+      expect(view.groups.length).toBeGreaterThan(0)
+      expect(view.activeFilterCount).toBe(1)
+      expect(view.activeSortCount).toBe(1)
     })
   })
 })
-

@@ -91,7 +91,7 @@ function FilterControls({ state, onChange }: FilterBarProps) {
       {state.filters.length > 0 ? (
         <ul className={styles.chipList}>
           {state.filters.map((f, i) => (
-            <li key={i} className={styles.chip}>
+            <li key={`${f.field}-${i}`} className={styles.chip}>
               <span className={styles.chipField}>
                 {FILTERABLE_FIELDS.find((ff) => ff.id === f.field)?.label ??
                   f.field}
@@ -126,6 +126,7 @@ function SortControls({ state, onChange }: FilterBarProps) {
       {state.sorts.length > 0 ? (
         <button
           type="button"
+          className={styles.clearBtn}
           onClick={() => onChange({ ...state, sorts: [] })}
           aria-label="Clear sorting"
         >

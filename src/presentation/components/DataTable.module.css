@@ -119,6 +119,18 @@
   background: var(--msp-row-hover);
 }
 
+.groupRow {
+  background: var(--msp-surface-alt);
+  font-weight: 600;
+}
+
+.groupRow td {
+  padding: 6px var(--msp-cell-px);
+  font-size: var(--msp-text-sm);
+  color: var(--msp-text-secondary);
+  border-bottom: 2px solid var(--msp-border);
+}
+
 .table input,
 .table select {
   width: 100%;

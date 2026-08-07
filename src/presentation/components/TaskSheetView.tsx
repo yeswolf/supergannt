@@ -19,6 +19,16 @@ import {
 import { TaskColumnsDialog } from '../taskColumns/TaskColumnsDialog'
 import { useTaskColumns } from '../taskColumns/taskColumnStore'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
+import {
+  FilterBar,
+} from './FilterBar'
+import {
+  DEFAULT_FILTER_STATE,
+  deriveTaskView,
+  flattenForRendering,
+  type FilterState,
+  type TaskSheetRow,
+} from '../../application/services/TaskFilterService'
 import styles from './DataTable.module.css'
 import { IconAction } from './IconAction'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
@@ -30,9 +40,13 @@ export function TaskSheetView() {
   const { columns } = useTaskColumns()
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [draftPreds, setDraftPreds] = useState<Record<string, string>>({})
+  const [filterState, setFilterState] = useState<FilterState>(DEFAULT_FILTER_STATE)
   const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
     `${project.tasks.length}:${columns.join(',')}`,
   )
+
+  const view = deriveTaskView(project, filterState)
+  const rows: TaskSheetRow[] = flattenForRendering(view)
 
   useArrowRowNavigation({
     ids: project.tasks.map((t) => t.id),
@@ -61,6 +75,7 @@ export function TaskSheetView() {
           />
         }
       />
+      <FilterBar state={filterState} onChange={setFilterState} />
       <div className={styles.tableWrap}>
         <table ref={tableRef} className={styles.table}>
           {colgroup}
@@ -79,7 +94,17 @@ export function TaskSheetView() {
             </tr>
           </thead>
           <tbody>
-            {project.tasks.map((task, index) => {
+            {rows.map((row, index) => {
+              if (row.type === 'group') {
+                return (
+                  <tr key={`group-${row.group.key}`} className={styles.groupRow}>
+                    <td colSpan={columns.length}>
+                      {row.group.label} ({row.group.taskIds.length} tasks)
+                    </td>
+                  </tr>
+                )
+              }
+              const task = row.task
               const multiSelected = selectedTaskIds.includes(task.id)
               return (
                 <tr

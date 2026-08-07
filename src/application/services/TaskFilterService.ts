@@ -112,6 +112,11 @@ function getFieldValue(
       return task.summary
     case 'outlineLevel':
       return task.outlineLevel
+    // No default case is intentional: FilterField is a union that is kept
+    // wider than TaskColumnId so we can add filter-only fields like
+    // 'milestone'/'critical'/'summary'.  When a new TaskColumnId is added
+    // to the TASK_COLUMN_IDS tuple, you must also add a case above —
+    // TypeScript won't enforce it here because of the broader union.
   }
 }
 
@@ -354,6 +359,7 @@ export function defaultOperatorForField(field: FilterField): FilterOperator {
 export const FILTERABLE_FIELDS: { id: FilterField; label: string }[] = [
   { id: 'name', label: 'Name' },
   { id: 'wbs', label: 'WBS' },
+  // Column-backed fields mirror TASK_SHEET_LABELS.
   { id: 'duration', label: 'Duration (h)' },
   { id: 'percent', label: '% Complete' },
   { id: 'start', label: 'Start' },
@@ -361,6 +367,7 @@ export const FILTERABLE_FIELDS: { id: FilterField; label: string }[] = [
   { id: 'cost', label: 'Cost' },
   { id: 'resources', label: 'Resource Names' },
   { id: 'predecessors', label: 'Predecessors' },
+  // Filter-only fields (not backed by TaskColumnId).
   { id: 'milestone', label: 'Milestone' },
   { id: 'critical', label: 'Critical' },
   { id: 'summary', label: 'Summary' },
