@@ -41,7 +41,7 @@ jobs:
             local wf="$1"
             shift
             echo "Dispatching ${wf} $*"
-            gh workflow run "$wf" --ref "$REF" "$@"
+            gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref "$REF" "$@"
           }
 
           # First matching command wins.
