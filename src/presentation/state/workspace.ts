@@ -17,6 +17,8 @@ import { HttpMppToXmlConverter } from '../../infrastructure/mpp/HttpMppToXmlConv
 import { HttpXmlToMppConverter } from '../../infrastructure/mpp/HttpXmlToMppConverter'
 import { PreferTauriMppToXmlConverter } from '../../infrastructure/mpp/PreferTauriMppToXmlConverter'
 import { PreferTauriXmlToMppConverter } from '../../infrastructure/mpp/PreferTauriXmlToMppConverter'
+import type { InspectionFinding } from '../../application/services/ProjectInspector'
+import { inspectProject } from '../../application/services/ProjectInspector'
 
 export type AppView =
   | 'gantt'
@@ -92,6 +94,8 @@ export interface WorkspaceState {
   redoStack: UndoEntry[]
   /** Auto-save state for the toolbar indicator and recovery. */
   autoSave: AutoSaveState
+  /** Project inspection findings updated after every mutation. */
+  inspections: InspectionFinding[]
 }
 
 const INITIAL_AUTO_SAVE: AutoSaveState = {
@@ -102,8 +106,9 @@ const INITIAL_AUTO_SAVE: AutoSaveState = {
 }
 
 export function createInitialState(services = createAppServices()): WorkspaceState {
+  const project = createEmptyProject(services.ids)
   return {
-    project: createEmptyProject(services.ids),
+    project,
     view: 'gantt',
     selectedTaskId: null,
     selectedTaskIds: [],
@@ -117,6 +122,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     undoStack: [],
     redoStack: [],
     autoSave: { ...INITIAL_AUTO_SAVE },
+    inspections: inspectProject(project),
   }
 }
 
@@ -304,6 +310,7 @@ export function undoableReducer(
       project: prev,
       statusMessage: `Undo: ${entry.label}`,
       autoSave: { ...state.autoSave, dirty: true },
+      inspections: inspectProject(prev),
     }
   }
 
@@ -321,6 +328,7 @@ export function undoableReducer(
       project: next,
       statusMessage: `Redo: ${entry.label}`,
       autoSave: { ...state.autoSave, dirty: true },
+      inspections: inspectProject(next),
     }
   }
 
@@ -331,7 +339,7 @@ export function undoableReducer(
     action.type === 'loadDemo'
   ) {
     const result = workspaceReducer(state, action)
-    return { ...result, undoStack: [], redoStack: [], autoSave: { ...result.autoSave, dirty: false } }
+    return { ...result, undoStack: [], redoStack: [], autoSave: { ...result.autoSave, dirty: false }, inspections: inspectProject(result.project) }
   }
 
   // --- Project-mutating actions: snapshot before, clear redo after -------
@@ -349,6 +357,7 @@ export function undoableReducer(
         }),
         redoStack: [],
         autoSave: { ...result.autoSave, dirty: true },
+        inspections: inspectProject(result.project),
       }
     }
     return result

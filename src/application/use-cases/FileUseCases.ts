@@ -75,9 +75,13 @@ export class FileUseCases {
 
   async saveAutoSnapshot(project: Project, metadata: AutoSnapshotMetadata): Promise<boolean> {
     await this.repository.saveAutoSnapshot(project, metadata)
-    // Return true if snapshot was persisted (we trust the repo to handle quota checks).
+    // Verify both metadata and payload were persisted.  The write order is
+    // metadata-first, so metadata may succeed while the payload write hits
+    // quota — guard against showing a recovery banner for a missing snapshot.
     const stored = await this.repository.getAutoSnapshotMetadata()
-    return stored != null && stored.savedAt === metadata.savedAt
+    if (stored == null || stored.savedAt !== metadata.savedAt) return false
+    const snap = await this.repository.loadAutoSnapshot()
+    return snap != null
   }
 
   async getAutoSnapshotMetadata(): Promise<AutoSnapshotMetadata | null> {

@@ -15,6 +15,7 @@ import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
 import { RecoveryBanner } from './components/RecoveryBanner'
 import { useAutoSave } from './hooks/useAutoSave'
+import { InspectionPane } from './components/InspectionPane'
 import { openPlanFile } from './openPlanFile'
 import { viewLabel } from './components/nav/views'
 import { useWorkspaceDispatch, useWorkspaceState } from './state/WorkspaceContext'
@@ -39,8 +40,9 @@ export function AppShell() {
       const meta = await services.files.getAutoSnapshotMetadata()
       if (cancelled || !meta) return
       // Guard against a stale snapshot from a different file (e.g. PlanA's
-      // snapshot surfacing when PlanB is opened).
-      if (meta.fileName && project.fileName && meta.fileName !== project.fileName) {
+      // snapshot surfacing when PlanB is opened, or when opening a blank
+      // new project that has no file name yet).
+      if (meta.fileName && meta.fileName !== project.fileName) {
         return
       }
       dispatch({ type: 'setRecoverySnapshot', snapshot: meta })
@@ -111,6 +113,7 @@ export function AppShell() {
       </footer>
       <TaskInformationDialog />
       <AssignResourcesDialog />
+      <InspectionPane />
       {busyMessage ? (
         <div className={styles.busyOverlay} role="alertdialog" aria-live="assertive" aria-busy="true">
           <div className={styles.busyCard}>

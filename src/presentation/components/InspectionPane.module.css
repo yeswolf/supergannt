@@ -1,0 +1,143 @@
+.pane {
+  border-top: 1px solid var(--border, #e0e0e0);
+  background: var(--surface, #fafafa);
+  font-size: 0.8rem;
+  max-height: 180px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.empty {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+}
+
+.emptyIcon {
+  margin-right: 4px;
+  color: var(--success, #2e7d32);
+}
+
+.emptyText {
+  color: var(--text-secondary, #666);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: var(--surface-hover, #f0f0f0);
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.7rem;
+  color: var(--text-secondary, #666);
+}
+
+.counts {
+  display: flex;
+  gap: 6px;
+}
+
+.errorBadge,
+.warningBadge,
+.infoBadge {
+  font-size: 0.7rem;
+  padding: 0 6px;
+  border-radius: 8px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.errorBadge {
+  background: var(--error-bg, #fdecea);
+  color: var(--error, #d32f2f);
+}
+
+.warningBadge {
+  background: var(--warning-bg, #fff8e1);
+  color: var(--warning, #f57f17);
+}
+
+.infoBadge {
+  background: var(--info-bg, #e3f2fd);
+  color: var(--info, #1565c0);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  transition: background 0.1s;
+}
+
+.item:hover {
+  background: var(--surface-hover, #f0f0f0);
+}
+
+.severity {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.sev_error {
+  background: var(--error, #d32f2f);
+  color: #fff;
+}
+
+.sev_warning {
+  background: var(--warning, #f57f17);
+  color: #fff;
+}
+
+.sev_info {
+  background: var(--info, #1565c0);
+  color: #fff;
+}
+
+.message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.detail {
+  padding: 4px 12px 8px 34px;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #666);
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
