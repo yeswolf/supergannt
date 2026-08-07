@@ -86,6 +86,39 @@ jobs:
           git fetch origin ${{ steps.pr.outputs.head_ref }}
           git checkout ${{ steps.pr.outputs.head_ref }}
 
+      - name: Detect allow_github for this PR
+        if: steps.pr.outputs.skip != 'true'
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x .github/scripts/allow-github-ci.sh
+          ALLOW=false
+          # Already touching .github on the PR → keep allowing CI edits in fix.
+          if git diff --name-only "${{ steps.pr.outputs.base_sha }}...HEAD" | grep -qE '^\.github/'; then
+            ALLOW=true
+            echo "PR already modifies .github → allow_github=true"
+          fi
+          gh pr view "${{ steps.pr.outputs.number }}" --json title,body > /tmp/pr-meta.json
+          jq -r '.title // ""' /tmp/pr-meta.json > /tmp/pr-title.txt
+          jq -r '.body // ""' /tmp/pr-meta.json > /tmp/pr-body.md
+          if [ "$(bash .github/scripts/allow-github-ci.sh /tmp/pr-title.txt /tmp/pr-body.md)" = "true" ]; then
+            ALLOW=true
+            echo "PR title/body authorizes .github work"
+          fi
+          # Linked issues from PR body (Closes #N / Fixes #N / #N)
+          for n in $(grep -Eo '(Closes|Fixes|Resolves|closes|fixes|resolves)[[:space:]]*#[0-9]+|#[0-9]+' /tmp/pr-body.md | grep -Eo '[0-9]+' | sort -u); do
+            gh issue view "$n" --json title,body > "/tmp/linked-issue-$n.json" || continue
+            jq -r '.title // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-title-$n.txt"
+            jq -r '.body // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-body-$n.md"
+            if [ "$(bash .github/scripts/allow-github-ci.sh "/tmp/linked-title-$n.txt" "/tmp/linked-body-$n.md")" = "true" ]; then
+              ALLOW=true
+              echo "Linked issue #$n authorizes .github work"
+            fi
+          done
+          echo "allow_github=$ALLOW" >> "$GITHUB_OUTPUT"
+          echo "allow_github=$ALLOW"
+
       - name: Install Claude Code CLI
         if: steps.pr.outputs.skip != 'true'
         run: npm install -g @anthropic-ai/claude-code
@@ -190,6 +223,12 @@ jobs:
           CLAUDE_CODE_GLOB_NO_IGNORE: "false"
         run: |
           set +e
+          ALLOW_GITHUB="${{ steps.scope.outputs.allow_github }}"
+          if [ "$ALLOW_GITHUB" = "true" ]; then
+            GITHUB_RULE="This PR/issue authorizes .github work — you MAY edit workflows/actions under .github/ when the review asks for it."
+          else
+            GITHUB_RULE="Do NOT modify anything under .github/ unless the review is specifically about CI and the original task authorized it (it did not)."
+          fi
           PROMPT="You are fixing EVERY finding from the latest code review on this PR. \
             PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`. \
             Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}. \
@@ -197,7 +236,7 @@ jobs:
             ALSO read /tmp/pr-inline-comments.json if non-empty. \
             Working directory is the git repo root. Prefer Write/Edit on disk. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
-            Do not modify anything under .github/ unless initial task intentionally requires it. \
+            ${GITHUB_RULE} \
             Hard rules: \
             1) Collect EVERY actionable item from the review (issues and suggestions). \
             2) Implement each with Write/Edit. SKIPPED only if code already satisfies it (prove with a short quote). \
@@ -217,7 +256,7 @@ jobs:
             "$PROMPT" > fix-output.md 2>&1
           CLAUDE_EXIT=$?
           BYTES=$(wc -c < fix-output.md | tr -d ' ')
-          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
+          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES} allow_github=${ALLOW_GITHUB}"
           echo "claude_exit=${CLAUDE_EXIT}" >> "$GITHUB_OUTPUT"
 
           if ! grep -qE 'FIX_CHECKLIST:' fix-output.md; then
@@ -257,10 +296,17 @@ jobs:
           git config user.name "Claude Code"
           git config user.email "claude@anthropic.com"
           git add -A
-          git reset -q -- .github \
-            implement-output.md implement-output-retry.md \
-            fix-output.md review.md review-output.md fixes.patch \
-            2>/dev/null || true
+          ARTIFACTS=(
+            implement-output.md implement-output-retry.md
+            fix-output.md review.md review-output.md fixes.patch
+          )
+          if [ "${{ steps.scope.outputs.allow_github }}" = "true" ]; then
+            echo "allow_github=true — keeping .github changes staged"
+            git reset -q -- "${ARTIFACTS[@]}" 2>/dev/null || true
+          else
+            echo "allow_github=false — unstaging .github"
+            git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
+          fi
           if git diff --cached --quiet; then
             echo "NO_CHANGES=true" >> "$GITHUB_ENV"
             echo "has_changes=false" >> "$GITHUB_OUTPUT"

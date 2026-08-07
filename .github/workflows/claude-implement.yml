@@ -57,13 +57,17 @@ jobs:
             exit 1
           fi
           BRANCH="feature/issue-${ISSUE_NUMBER}-$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
+          printf '%s' "$TITLE" > /tmp/issue-title.txt
+          chmod +x .github/scripts/allow-github-ci.sh
+          ALLOW_GITHUB=$(bash .github/scripts/allow-github-ci.sh /tmp/issue-title.txt /tmp/issue.md)
           {
             echo "title<<EOF"
             echo "$TITLE"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-          echo "Loaded issue #$ISSUE_NUMBER → branch $BRANCH"
+          echo "allow_github=$ALLOW_GITHUB" >> "$GITHUB_OUTPUT"
+          echo "Loaded issue #$ISSUE_NUMBER → branch $BRANCH allow_github=$ALLOW_GITHUB"
           echo "---- issue.md ----"
           cat /tmp/issue.md
 
@@ -86,26 +90,35 @@ jobs:
         run: |
           ISSUE_TITLE="${{ steps.meta.outputs.title }}"
           BRANCH="${{ steps.meta.outputs.branch }}"
+          ALLOW_GITHUB="${{ steps.meta.outputs.allow_github }}"
           git checkout -b "$BRANCH"
+
+          if [ "$ALLOW_GITHUB" = "true" ]; then
+            GITHUB_RULE="This issue EXPLICITLY asks to create/fix/finish GitHub Actions. You MUST create or edit the required files under .github/ (workflows, actions, scripts) and any docs it asks for. Do not skip .github work."
+            APPEND_EXTRA=" When the issue is about workflows, writing .github/*.yml is the main deliverable — start there quickly."
+          else
+            GITHUB_RULE="Do NOT modify anything under .github/ (workflows, actions, or scripts). Leave CI alone unless the issue text explicitly says to create/fix/finish workflows."
+            APPEND_EXTRA=""
+          fi
 
           PROMPT="Implement the GitHub issue described in /tmp/issue.md. \
             Issue title: ${ISSUE_TITLE}. \
             Working directory is the git repo root. You may create/edit files anywhere except node_modules, dist, data, logs, magic/, and build outputs. \
             Do not read node_modules, dist, data, logs, magic/, package-lock.json, wasm, or binary files. \
-            Do not modify anything under .github unless it specifically set in task like create the workflow in title or description. \
+            ${GITHUB_RULE} \
             Critical rules: \
             1) Read /tmp/issue.md first and follow its acceptance criteria exactly. Do not invent a different task. \
             2) Within the first 8 tool turns, start writing code with Write/Edit. Exploration is capped: at most 8 Read/Glob/Grep calls before the first Write/Edit. \
             3) Do NOT use the Agent tool. Do NOT spawn subagents. Do NOT use TaskCreate/TaskUpdate at all. \
             4) Prefer Read/Glob/Grep over Bash for file discovery. Do not run long find/ls -R loops. \
             5) Creating a new file requires the Write tool (or an equivalent shell write). Printed diffs alone are not enough. \
-            6) Keep going until acceptance criteria are met on disk (source + unit tests), then verify with a short test command if available. \
+            6) Keep going until acceptance criteria are met on disk (source + unit tests and/or workflow YAML as required), then verify with a short test command if available. \
             7) Never end_turn with only prose or a \"how can I help\" menu — if work remains, call Write/Edit. \
             8) Do not summarize the codebase and stop; implement the issue. \
             9) When finished, print one line starting with IMPLEMENT_SUMMARY: describing what changed."
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
-          APPEND_SYS="CI implement mode: never end_turn until acceptance criteria exist on disk (source + tests). Do not only explore or plan."
+          APPEND_SYS="CI implement mode: never end_turn until acceptance criteria exist on disk. Do not only explore or plan.${APPEND_EXTRA}"
 
           run_claude() {
             local out="$1"
@@ -124,6 +137,9 @@ jobs:
           if [ -z "$(git status --porcelain)" ]; then
             echo "==== No file changes after first Claude pass — retrying once ===="
             RETRY_PROMPT="${PROMPT} IMPORTANT: previous pass wrote nothing. Start with Write/Edit immediately. No more exploration-only turns."
+            if [ "$ALLOW_GITHUB" = "true" ]; then
+              RETRY_PROMPT="${RETRY_PROMPT} Write the workflow YAML under .github/workflows/ now."
+            fi
             run_claude implement-output-retry.md "$RETRY_PROMPT"
             CLAUDE_EXIT=$?
             cat implement-output-retry.md >> implement-output.md 2>/dev/null || true
@@ -132,7 +148,7 @@ jobs:
 
           echo "claude_exit=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
           BYTES=$(wc -c < implement-output.md | tr -d ' ')
-          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
+          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES} allow_github=${ALLOW_GITHUB}"
           if [ "$CLAUDE_EXIT" -ne 0 ]; then
             echo "::warning::Claude exited with code $CLAUDE_EXIT (see implement-output.md)"
             tail -50 implement-output.md || true
@@ -168,11 +184,19 @@ jobs:
           git status --short || true
 
           git add -A
-          # Agent must not commit CI/workflow or Claude stdout artifacts.
-          git reset -q -- .github \
-            implement-output.md implement-output-retry.md \
-            fix-output.md review.md review-output.md fixes.patch \
-            2>/dev/null || true
+          # Always drop Claude stdout artifacts. Drop .github/ unless the issue
+          # explicitly authorized workflow/action work (allow_github=true).
+          ARTIFACTS=(
+            implement-output.md implement-output-retry.md
+            fix-output.md review.md review-output.md fixes.patch
+          )
+          if [ "${{ steps.meta.outputs.allow_github }}" = "true" ]; then
+            echo "allow_github=true — keeping .github changes staged"
+            git reset -q -- "${ARTIFACTS[@]}" 2>/dev/null || true
+          else
+            echo "allow_github=false — unstaging .github"
+            git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
+          fi
 
           echo "---- staged ----"
           git diff --cached --stat || true

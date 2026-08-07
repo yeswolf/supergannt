@@ -30,6 +30,9 @@ runs:
     - name: Build magic
       run: |
         cd magic
+        MAGIC_SHA=$(git rev-parse --short HEAD)
+        echo "Building magic@$MAGIC_SHA (ref=master)"
+        echo "MAGIC_SHA=$MAGIC_SHA" >> "$GITHUB_ENV"
         npm ci
         npm run build
       shell: bash
@@ -47,7 +50,7 @@ runs:
         nohup node dist/main.js > /tmp/magic-proxy.log 2>&1 &
         for i in $(seq 1 30); do
           if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
-            echo "magic ready (end-gap=${DEEPSEEK_COMPLETION_END_GAP_MS}ms)"
+            echo "magic ready sha=${MAGIC_SHA:-unknown} end-gap=${DEEPSEEK_COMPLETION_END_GAP_MS}ms"
             cp /tmp/magic-proxy.log /tmp/magic-magic.log 2>/dev/null || true
             exit 0
           fi
