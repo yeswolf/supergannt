@@ -1,0 +1,123 @@
+name: Claude Code Product Manager
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  claude-product-manager:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        contains(github.event.comment.body, '/product-manager') &&
+        github.event.issue.pull_request == null
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    steps:
+      - name: Checkout supergannt
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup magic
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Claude Code product manager
+        id: product-manager
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
+          ANTHROPIC_API_KEY: unused
+          ANTHROPIC_AUTH_TOKEN: unused
+          CLAUDE_CODE_GLOB_NO_IGNORE: "false"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+
+          PROMPT='You are a Product Manager analyzing this repository.
+
+          ## Task
+          1. Analyze competitors and possible user needs for this project.
+          2. Identify 3 new features and the 2 biggest improvements the repository needs.
+          3. For each feature and improvement, create a detailed GitHub issue labeled "implement" so other workflows are triggered.
+          4. For each feature and improvement, write a detailed requirements document in the `docs/` directory.
+
+          ## Requirements for each issue
+          - Title must clearly describe the feature or improvement.
+          - Body must include: motivation, user story, acceptance criteria, and technical notes.
+          - Label the issue with "implement" and "task".
+
+          ## Requirements for each doc
+          - Save to `docs/requirements/<slug>.md`.
+          - Include: overview, user needs, functional requirements, non-functional requirements, competitors analysis, and success metrics.
+
+          ## Output format
+          After creating all issues and docs, print a summary of what was created.'
+
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+          ALLOW_TOOLS="Write,Edit,Read,Glob,Grep,Bash(${{ github.token }},gh:*) gh:*"
+
+          printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --add-dir magic \
+            --append-system-prompt-file magic/.claude/skills/ci-implement/SKILL.md \
+            --allowed-tools "$ALLOW_TOOLS" \
+            --disallowed-tools "$DISALLOW_TOOLS" \
+            > pm-output.md 2>&1
+          CLAUDE_EXIT=$?
+
+          echo "claude_exit=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
+          BYTES=$(wc -c < pm-output.md | tr -d ' ')
+          echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
+
+          if [ "$CLAUDE_EXIT" -ne 0 ]; then
+            echo "::warning::Claude exited with code $CLAUDE_EXIT (see pm-output.md)"
+            tail -80 pm-output.md || true
+          fi
+
+          # Create issues via gh CLI if Claude produced structured output
+          if [ -f /tmp/issues.json ]; then
+            echo "Creating GitHub issues from /tmp/issues.json..."
+            jq -c '.[]' /tmp/issues.json | while read -r issue; do
+              TITLE=$(echo "$issue" | jq -r '.title')
+              BODY=$(echo "$issue" | jq -r '.body')
+              gh issue create --title "$TITLE" --body "$BODY" --label "implement,task" || true
+            done
+          fi
+
+          set -e
+
+      - name: Commit and push docs
+        id: commit
+        env:
+          MAGIC_TOKEN: ${{ secrets.MAGIC_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "no changes to commit"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${MAGIC_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git add docs/
+          git commit -m "docs: product manager requirements analysis
+
+          Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+          git push origin master
+          echo "pushed=true" >> "$GITHUB_OUTPUT"

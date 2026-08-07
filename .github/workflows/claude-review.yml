@@ -251,6 +251,20 @@ jobs:
             });
             console.log('Dispatched claude-fix after 👀 review for PR ${{ steps.pr.outputs.number }}');
 
+      - name: Dispatch merge after review clean
+        if: steps.post.outputs.status == 'clean'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'claude-merge.yml',
+              ref: 'master',
+              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
+            });
+            console.log('Dispatched claude-merge after 👍 review for PR ${{ steps.pr.outputs.number }}');
+
       - name: Upload logs
         if: always() && steps.pr.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
