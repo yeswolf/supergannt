@@ -1,0 +1,432 @@
+name: Fix
+
+# Loop protocol (GitHub comment reactions — not body markers):
+#   Review 👀 (eyes)  → needs fixes → this workflow (via dispatch or /fix)
+#   Review 👍 (+1)    → clean → do not fix
+#   Fix 🚀 (rocket)   → changes pushed → dispatch Review
+#   Fix 👀 (eyes)     → no commits; re-check → dispatch Review
+#   Fix 😕 (confused) → capacity; self-retry
+# Slash command /fix still works.
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to fix from latest review'
+        required: true
+        type: string
+
+concurrency:
+  group: loop-pr-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        contains(github.event.comment.body, '/fix') &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.user.login == 'github-actions[bot]'
+        ))
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    steps:
+      - name: Resolve PR details
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prNumber;
+            if (context.eventName === 'issue_comment') {
+              prNumber = context.payload.issue.number;
+            } else {
+              prNumber = Number(core.getInput('pr_number') || process.env.PR_NUMBER);
+            }
+            if (!prNumber) {
+              core.setFailed('Missing PR number');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            core.setOutput('skip', 'false');
+            core.setOutput('number', String(prNumber));
+            core.setOutput('base_sha', pr.base.sha);
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('base_ref', pr.base.ref);
+            core.setOutput('head_ref', pr.head.ref);
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+
+      - name: Checkout supergannt
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup magic
+        if: steps.pr.outputs.skip != 'true'
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
+
+      - name: Checkout PR branch
+        if: steps.pr.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
+        run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git fetch origin ${{ steps.pr.outputs.head_ref }}
+          git checkout ${{ steps.pr.outputs.head_ref }}
+
+      - name: Detect allow_github for this PR
+        if: steps.pr.outputs.skip != 'true'
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ALLOW=false
+          # Already touching .github on the PR → keep allowing CI edits in fix.
+          if git diff --name-only "${{ steps.pr.outputs.base_sha }}...HEAD" | grep -qE '^\.github/'; then
+            ALLOW=true
+            echo "PR already modifies .github → allow_github=true"
+          fi
+          gh pr view "${{ steps.pr.outputs.number }}" --json title,body > /tmp/pr-meta.json
+          jq -r '.title // ""' /tmp/pr-meta.json > /tmp/pr-title.txt
+          jq -r '.body // ""' /tmp/pr-meta.json > /tmp/pr-body.md
+          if [ "$(bash .github/scripts/allow-github-ci.sh /tmp/pr-title.txt /tmp/pr-body.md)" = "true" ]; then
+            ALLOW=true
+            echo "PR title/body authorizes .github work"
+          fi
+          # Linked issues from PR body (Closes #N / Fixes #N / #N)
+          for n in $(grep -Eo '(Closes|Fixes|Resolves|closes|fixes|resolves)[[:space:]]*#[0-9]+|#[0-9]+' /tmp/pr-body.md | grep -Eo '[0-9]+' | sort -u); do
+            gh issue view "$n" --json title,body > "/tmp/linked-issue-$n.json" || continue
+            jq -r '.title // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-title-$n.txt"
+            jq -r '.body // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-body-$n.md"
+            if [ "$(bash .github/scripts/allow-github-ci.sh "/tmp/linked-title-$n.txt" "/tmp/linked-body-$n.md")" = "true" ]; then
+              ALLOW=true
+              echo "Linked issue #$n authorizes .github work"
+            fi
+          done
+          echo "allow_github=$ALLOW" >> "$GITHUB_OUTPUT"
+          echo "allow_github=$ALLOW"
+
+      - name: Install CLI
+        if: steps.pr.outputs.skip != 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Fetch latest review for PR
+        if: steps.pr.outputs.skip != 'true'
+        id: comments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const isSlashFix =
+              context.eventName === 'issue_comment' &&
+              /(?:^|\s)\/fix(?:\s|$)/.test(context.payload.comment?.body || '');
+
+            const issueComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: prNumber, per_page: 100 },
+            );
+
+            const inlineComments = await github.paginate(
+              github.rest.pulls.listReviewComments,
+              { owner, repo, pull_number: prNumber, per_page: 100 },
+            );
+
+            const isReviewComment = (body) =>
+              typeof body === 'string' && /^##\s*Review\b/m.test(body);
+
+            const reviewComments = issueComments
+              .filter((c) => isReviewComment(c.body))
+              .sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime(),
+              );
+
+            const latest = reviewComments[0];
+            if (!latest?.body?.trim()) {
+              core.setFailed('No review comment found on this PR. Wait for review or run /review.');
+              return;
+            }
+
+            // Decide by reaction on the review comment (👍 = clean, 👀 = needs fix).
+            const { data: reactions } = await github.rest.reactions.listForIssueComment({
+              owner,
+              repo,
+              comment_id: latest.id,
+              per_page: 100,
+            });
+            const contents = new Set(reactions.map((r) => r.content));
+            const isClean = contents.has('+1') && !contents.has('eyes');
+            const isNeeds = contents.has('eyes');
+
+            if (!isSlashFix && isClean && !isNeeds) {
+              core.setOutput('skip_clean', 'true');
+              console.log(`Latest review ${latest.id} has 👍 — nothing to fix`);
+              fs.writeFileSync('/tmp/latest-review.md', latest.body);
+              return;
+            }
+
+            const inline = inlineComments.map((c) => ({
+              id: c.id,
+              path: c.path,
+              line: c.line,
+              body: c.body,
+              user: c.user?.login,
+            }));
+
+            fs.writeFileSync('/tmp/latest-review.md', latest.body);
+            fs.writeFileSync(
+              '/tmp/latest-review-meta.json',
+              JSON.stringify(
+                {
+                  id: latest.id,
+                  user: latest.user?.login,
+                  created_at: latest.created_at,
+                  html_url: latest.html_url,
+                  reactions: [...contents],
+                  inline_count: inline.length,
+                },
+                null,
+                2,
+              ),
+            );
+            fs.writeFileSync('/tmp/pr-inline-comments.json', JSON.stringify(inline, null, 2));
+            core.setOutput('skip_clean', 'false');
+            core.setOutput('review_bytes', String(Buffer.byteLength(latest.body)));
+            console.log(`Using review comment ${latest.id} reactions=[${[...contents]}]`);
+
+      - name: Run fix
+        if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
+        id: agent
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
+          ANTHROPIC_API_KEY: unused
+          ANTHROPIC_AUTH_TOKEN: unused
+          CLAUDE_CODE_GLOB_NO_IGNORE: "false"
+        run: |
+          set +e
+          ALLOW_GITHUB="${{ steps.scope.outputs.allow_github }}"
+          PROMPT="/ci-fix
+          Fix every finding from /tmp/latest-review.md.
+          Also read /tmp/pr-inline-comments.json if non-empty.
+          PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`.
+          Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}.
+          allow_github=${ALLOW_GITHUB}
+          Working directory is the git repo root."
+
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+          SYS_FILE="/tmp/ci-fix-sys.md"
+          cat magic/.claude/skills/ci-fix/SKILL.md magic/ci/personas/fix.md > "$SYS_FILE"
+
+          printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --add-dir magic \
+            --append-system-prompt-file "$SYS_FILE" \
+            --disallowed-tools "$DISALLOW_TOOLS" \
+            > fix-output.md 2>&1
+          AGENT_EXIT=$?
+          BYTES=$(wc -c < fix-output.md | tr -d ' ')
+          echo "agent_exit=${AGENT_EXIT} bytes=${BYTES} allow_github=${ALLOW_GITHUB}"
+          echo "agent_exit=${AGENT_EXIT}" >> "$GITHUB_OUTPUT"
+
+          if ! grep -qE 'FIX_CHECKLIST:' fix-output.md; then
+            echo "==== Checklist follow-up ===="
+            git diff --stat "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff-stat.txt || true
+            git diff "${{ steps.pr.outputs.base_sha }}...HEAD" > /tmp/fix-diff.txt || true
+            echo "" >> fix-output.md
+            echo "==== CHECKLIST FOLLOW-UP ====" >> fix-output.md
+            printf '%s\n' "Do NOT edit files. Read /tmp/latest-review.md and /tmp/fix-diff-stat.txt plus /tmp/fix-diff.txt. Emit ONLY: FIX_CHECKLIST: - [DONE|SKIPPED] <item>: <proof> FIX_SUMMARY: <one sentence> SKIPPED only if already satisfied (say already)." \
+              | claude -p --dangerously-skip-permissions --max-turns 20 \
+              --add-dir magic \
+              --disallowed-tools "$DISALLOW_TOOLS" \
+              >> fix-output.md 2>&1 || true
+          fi
+          true
+          set -e
+
+      - name: Apply printed diffs (fallback)
+        if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
+        run: |
+          awk '/^```diff($| )/{flag=1; next} /^```$/{flag=0} flag' fix-output.md > fixes.patch || true
+          if [ -s fixes.patch ]; then
+            git apply fixes.patch || git apply --3way fixes.patch || true
+          fi
+
+      - name: Commit and push fixes
+        if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
+        id: commit
+        env:
+          # PAT: same as implement — GITHUB_TOKEN cannot push workflow file changes.
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          ARTIFACTS=(
+            implement-output.md implement-output-retry.md
+            fix-output.md review.md review-output.md fixes.patch
+          )
+          if [ "${{ steps.scope.outputs.allow_github }}" = "true" ]; then
+            echo "allow_github=true — keeping .github changes staged"
+            git reset -q -- "${ARTIFACTS[@]}" 2>/dev/null || true
+          else
+            echo "allow_github=false — unstaging .github"
+            git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
+          fi
+          if git diff --cached --quiet; then
+            echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "$(bash .github/scripts/commit-msg-from-summary.sh 'fix: ' fix-output.md 'fix: address review feedback')"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+            git push origin ${{ steps.pr.outputs.head_ref }}
+            echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post fix comment + reaction
+        if: always() && steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
+        id: post
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
+            const hasChanges = '${{ steps.commit.outputs.has_changes }}' === 'true';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Reaction protocol:
+            //   rocket   🚀 → pushed changes → kick Review
+            //   eyes     👀 → no commits; re-check → kick Review
+            const REACT_APPLIED = 'rocket';
+            const REACT_CHECKED = 'eyes';
+
+            let raw = '';
+            try {
+              raw = fs.readFileSync('fix-output.md', 'utf8');
+            } catch {
+              raw = '';
+            }
+
+            const summaryMatch = raw.match(/FIX_SUMMARY:\s*(.*)/);
+            let summary = summaryMatch ? summaryMatch[1].trim() : '';
+
+            const looksLikeNoise =
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|too frequent/i.test(
+                raw,
+              ) && !/FIX_SUMMARY:|FIX_CHECKLIST:/.test(raw);
+
+            async function postWithReaction(body, reaction) {
+              const { data: comment } = await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body,
+              });
+              await github.rest.reactions.createForIssueComment({
+                owner,
+                repo,
+                comment_id: comment.id,
+                content: reaction,
+              });
+              return comment;
+            }
+
+            if (looksLikeNoise) {
+              await postWithReaction(
+                [
+                  '## Fixes',
+                  '',
+                  'Could not finish applying the review on this pass.',
+                ].join('\n'),
+                REACT_CHECKED,
+              );
+              core.setOutput('status', 'failed');
+              return;
+            }
+
+            const bullets = [];
+            for (const line of raw.split(/\r?\n/)) {
+              const m = line.match(/^\- \[(DONE|SKIPPED)\]\s*(.+)$/i);
+              if (m) {
+                const kind = m[1].toUpperCase();
+                const text = m[2].replace(/:\s*/, ' — ').trim();
+                bullets.push(
+                  kind === 'DONE' ? `- Done: ${text}` : `- Already covered: ${text}`,
+                );
+              }
+            }
+
+            if (!summary) {
+              summary = hasChanges
+                ? 'Pushed fixes for the latest review.'
+                : 'Checked the latest review — no further code changes were needed.';
+            }
+
+            const parts = ['## Fixes', '', summary];
+            if (bullets.length) {
+              parts.push('', ...bullets);
+            }
+            if (hasChanges) {
+              parts.push('', 'Pushed to the PR branch.');
+            } else {
+              parts.push('', 'No new commits.');
+            }
+
+            const reaction = hasChanges ? REACT_APPLIED : REACT_CHECKED;
+            await postWithReaction(parts.join('\n'), reaction);
+            core.setOutput('status', hasChanges ? 'applied' : 'noop');
+
+
+      - name: Dispatch review after fix
+        if: steps.post.outputs.status == 'applied' || steps.post.outputs.status == 'noop'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'review.yml',
+              ref: 'master',
+              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
+            });
+            console.log('Dispatched review after fix (${{ steps.post.outputs.status }}) for PR ${{ steps.pr.outputs.number }}');
+
+      - name: Upload logs
+        if: always() && steps.pr.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fix-logs
+          path: |
+            fix-output.md
+            /tmp/magic-proxy.log
+            /tmp/magic-data/traffic-log.jsonl*
+            /tmp/latest-review.md
+            /tmp/latest-review-meta.json
+            /tmp/pr-inline-comments.json
+          if-no-files-found: warn

@@ -1,0 +1,295 @@
+name: Review
+
+# Loop protocol (GitHub comment reactions — not body markers):
+#   Review 👀 (eyes)  → needs fixes → dispatch Fix
+#   Review 👍 (+1)    → clean → stop
+#   Review 😕 (confused) → capacity; self-retry
+#   Fix 🚀 (rocket)   → changes pushed → dispatch Review
+#   Fix 👀 (eyes)     → no commits; re-check → dispatch Review
+# Slash command /review still works.
+
+on:
+  # No synchronize: Actions pushes from Fix often land as action_required, and Fix
+  # already dispatches review after 🚀/👀. Use /review for manual re-checks.
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
+
+concurrency:
+  group: loop-pr-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && (
+        github.event.action == 'opened' ||
+        github.event.action == 'reopened' ||
+        github.event.action == 'ready_for_review'
+      ) && (
+        github.event.pull_request.user.login == github.repository_owner ||
+        github.event.pull_request.user.login == 'github-actions[bot]' ||
+        github.event.pull_request.user.login == 'claude'
+      )) ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.user.login == 'github-actions[bot]'
+        ) && (
+          contains(github.event.comment.body, '/review')
+        ))
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: write
+    steps:
+      - name: Resolve PR details
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prNumber;
+            if (context.eventName === 'pull_request') {
+              prNumber = context.payload.pull_request.number;
+            } else if (context.eventName === 'issue_comment') {
+              prNumber = context.payload.issue.number;
+            } else {
+              prNumber = Number(core.getInput('pr_number') || process.env.PR_NUMBER);
+            }
+            if (!prNumber) {
+              core.setFailed('Missing PR number');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            core.setOutput('skip', 'false');
+            core.setOutput('number', String(prNumber));
+            core.setOutput('base_sha', pr.base.sha);
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('base_ref', pr.base.ref);
+            core.setOutput('head_ref', pr.head.ref);
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+
+      - name: Checkout supergannt
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout PR branch
+        if: steps.pr.outputs.skip != 'true'
+        run: |
+          git fetch origin ${{ steps.pr.outputs.head_ref }}
+          git checkout ${{ steps.pr.outputs.head_ref }}
+
+      - name: Setup magic
+        if: steps.pr.outputs.skip != 'true'
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
+
+      - name: Install CLI
+        if: steps.pr.outputs.skip != 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Prepare PR diff
+        if: steps.pr.outputs.skip != 'true'
+        run: |
+          git diff --stat ${{ steps.pr.outputs.base_sha }}...${{ steps.pr.outputs.head_sha }} > /tmp/pr-stat.txt
+          git diff ${{ steps.pr.outputs.base_sha }}...${{ steps.pr.outputs.head_sha }} > /tmp/pr.diff
+          if [ "$(wc -c < /tmp/pr.diff)" -gt 500000 ]; then
+            head -c 500000 /tmp/pr.diff > /tmp/pr.diff.trimmed
+            echo -e "\n\n[diff truncated to 500KB]" >> /tmp/pr.diff.trimmed
+            mv /tmp/pr.diff.trimmed /tmp/pr.diff
+          fi
+
+      - name: Run review
+        if: steps.pr.outputs.skip != 'true'
+        id: agent
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
+          ANTHROPIC_API_KEY: unused
+          ANTHROPIC_AUTH_TOKEN: unused
+          CLAUDE_CODE_GLOB_NO_IGNORE: "false"
+        run: |
+          set +e
+          PROMPT="/ci-review
+          Review PR base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`.
+          Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}.
+          Diff summary: /tmp/pr-stat.txt. Full diff: /tmp/pr.diff."
+
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+          SYS_FILE="/tmp/ci-review-sys.md"
+          cat magic/.claude/skills/ci-review/SKILL.md magic/ci/personas/review.md > "$SYS_FILE"
+
+          printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --add-dir magic \
+            --append-system-prompt-file "$SYS_FILE" \
+            --disallowed-tools "$DISALLOW_TOOLS" \
+            > review.md 2>&1
+          AGENT_EXIT=$?
+          BYTES=$(wc -c < review.md | tr -d ' ')
+          echo "agent_exit=${AGENT_EXIT} bytes=${BYTES}"
+          echo "agent_exit=${AGENT_EXIT}" >> "$GITHUB_OUTPUT"
+          true
+          set -e
+
+      - name: Post review comment + reaction
+        id: post
+        if: always() && steps.pr.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Reaction protocol (visible under the comment):
+            //   eyes     👀 → needs fixes → kick Fix
+            //   +1       👍 → clean → stop
+            //   confused 😕 → capacity → self-retry
+            const REACT_NEEDS = 'eyes';
+            const REACT_CLEAN = '+1';
+
+            let raw = '';
+            try {
+              raw = fs.readFileSync('review.md', 'utf8');
+            } catch {
+              raw = '';
+            }
+
+            const looksLikeApiNoise = (text) =>
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|too frequent/i.test(text) &&
+              !/STATUS_CLEAN|STATUS_NEEDS_FIXES/.test(text);
+
+            async function postWithReaction(body, reaction) {
+              const { data: comment } = await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body,
+              });
+              await github.rest.reactions.createForIssueComment({
+                owner,
+                repo,
+                comment_id: comment.id,
+                content: reaction,
+              });
+              return comment;
+            }
+
+            if (looksLikeApiNoise(raw) || !raw.trim()) {
+              await postWithReaction(
+                [
+                  '## Review',
+                  '',
+                  'Could not finish the review on this pass.',
+                ].join('\n'),
+                REACT_NEEDS,
+              );
+              core.setOutput('status', 'failed');
+              return;
+            }
+
+            let reaction = REACT_NEEDS;
+            if (/\bSTATUS_CLEAN\b/.test(raw) && !/\bSTATUS_NEEDS_FIXES\b/.test(raw)) {
+              reaction = REACT_CLEAN;
+            } else if (/\bSTATUS_NEEDS_FIXES\b/.test(raw)) {
+              reaction = REACT_NEEDS;
+            }
+
+            let prose = raw
+              .replace(/\bSTATUS_CLEAN\b/g, '')
+              .replace(/\bSTATUS_NEEDS_FIXES\b/g, '')
+              .replace(/\bREVIEW_CLEAN\b/g, '')
+              .replace(/\bREVIEW_NEEDS_CHANGES\b/g, '')
+              .replace(/\bREVIEW_START\b/g, '')
+              .trim();
+
+            // Drop common "thinking aloud" preambles before the real review.
+            prose = prose
+              .replace(/^[\s\S]*?\n---\s*\n+/m, '')
+              .replace(
+                /^(?:Now I have[^\n]*\n|Let me (?:compose|write|start)[^\n]*\n)+/i,
+                '',
+              )
+              .replace(/^(?:Okay[,.]?|Alright[,.]?|Sure[,.]?)\s*/i, '')
+              .trim();
+
+            if (!prose) {
+              prose =
+                reaction === REACT_CLEAN
+                  ? 'Looks good — I do not see anything else that needs code changes.'
+                  : 'I found a few things worth fixing before merge.';
+            }
+
+            await postWithReaction(['## Review', '', prose].join('\n'), reaction);
+            core.setOutput('status', reaction === REACT_CLEAN ? 'clean' : 'needs');
+
+
+      - name: Dispatch fix after review needs changes
+        if: steps.post.outputs.status == 'needs'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'fix.yml',
+              ref: '${{ steps.pr.outputs.base_ref }}',
+              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
+            });
+            console.log('Dispatched fix after 👀 review for PR ${{ steps.pr.outputs.number }}');
+
+      - name: Dispatch merge after review clean
+        if: steps.post.outputs.status == 'clean'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const baseRef = '${{ steps.pr.outputs.base_ref }}';
+            if (baseRef !== 'master') {
+              core.warning(
+                `PR base ref is "${baseRef}", not "master". ` +
+                `Merge dispatch targets "${baseRef}" — verify this is intentional.`,
+              );
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'merge.yml',
+              ref: baseRef,
+              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
+            });
+            console.log('Dispatched merge after 👍 review for PR ${{ steps.pr.outputs.number }}');
+
+      - name: Upload logs
+        if: always() && steps.pr.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-logs
+          path: |
+            review.md
+            /tmp/magic-proxy.log
+            /tmp/magic-data/traffic-log.jsonl*
+            /tmp/pr-stat.txt
+            /tmp/pr.diff
+          if-no-files-found: warn

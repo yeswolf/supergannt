@@ -1,0 +1,107 @@
+name: Product Manager
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+
+concurrency:
+  group: pm-${{ github.event.issue.number || 'dispatch' }}
+  cancel-in-progress: false
+
+jobs:
+  product-manager:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '/product-manager') &&
+        github.event.issue.pull_request == null &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.user.login == 'github-actions[bot]'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Checkout supergannt
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup magic
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
+
+      - name: Install CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run product manager
+        id: product-manager
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
+          ANTHROPIC_API_KEY: unused
+          ANTHROPIC_AUTH_TOKEN: unused
+          CLAUDE_CODE_GLOB_NO_IGNORE: "false"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+
+          PROMPT="/ci-product-manager
+          Analyze this repository: 3 new features + 2 biggest improvements.
+          Create GitHub issues (labels implement + task) and docs/requirements/<slug>.md for each.
+          Working directory is the git repo root.
+          When finished print PM_SUMMARY: <one line>."
+
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+          ALLOW_TOOLS="Write,Edit,Read,Glob,Grep,Bash"
+          SYS_FILE="/tmp/ci-pm-sys.md"
+          cat magic/.claude/skills/ci-product-manager/SKILL.md magic/ci/personas/product-manager.md > "$SYS_FILE"
+
+          printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
+            --add-dir magic \
+            --append-system-prompt-file "$SYS_FILE" \
+            --allowed-tools "$ALLOW_TOOLS" \
+            --disallowed-tools "$DISALLOW_TOOLS" \
+            > pm-output.md 2>&1
+          AGENT_EXIT=$?
+
+          echo "agent_exit=$AGENT_EXIT" >> "$GITHUB_OUTPUT"
+          BYTES=$(wc -c < pm-output.md | tr -d ' ')
+          echo "agent_exit=${AGENT_EXIT} bytes=${BYTES}"
+
+          if [ "$AGENT_EXIT" -ne 0 ]; then
+            echo "::warning::Agent exited with code $AGENT_EXIT (see pm-output.md)"
+            tail -80 pm-output.md || true
+          fi
+
+          set -e
+
+      - name: Commit and push docs
+        id: commit
+        env:
+          MAGIC_TOKEN: ${{ secrets.MAGIC_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "no changes to commit"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${MAGIC_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git add docs/requirements/
+          git commit -m "$(bash .github/scripts/commit-msg-from-summary.sh 'docs: ' pm-output.md 'docs: product manager requirements analysis')"
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git push origin master
+          echo "pushed=true" >> "$GITHUB_OUTPUT"

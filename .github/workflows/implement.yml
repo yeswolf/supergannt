@@ -1,0 +1,355 @@
+name: Implement
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to implement'
+        required: true
+        type: string
+
+jobs:
+  implement:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '/implement') &&
+        github.event.issue.pull_request == null &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.user.login == 'github-actions[bot]'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    steps:
+      - name: Resolve issue number
+        id: issue
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout supergannt
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          # Avoid GITHUB_TOKEN http.extraheader overriding MAGIC_TOKEN on push
+          # (otherwise workflow file pushes fail with "GitHub App ... workflows permission").
+          persist-credentials: false
+
+      - name: Load issue details
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUMBER="${{ steps.issue.outputs.number }}"
+          gh issue view "$ISSUE_NUMBER" --json title,body,labels > /tmp/issue.json
+          TITLE=$(jq -r '.title' /tmp/issue.json)
+          jq -r '.body // ""' /tmp/issue.json > /tmp/issue.md
+          HAS_TASK=$(jq -r '[.labels[].name] | any(. == "task")' /tmp/issue.json)
+          if [ "$HAS_TASK" != "true" ]; then
+            echo "Issue #$ISSUE_NUMBER does not have 'task' label" >&2
+            cat /tmp/issue.json >&2
+            exit 1
+          fi
+          BRANCH="feature/issue-${ISSUE_NUMBER}-$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
+          printf '%s' "$TITLE" > /tmp/issue-title.txt
+          # Do NOT chmod the script — that dirties a mode-only git change and can
+          # produce empty PRs when the agent writes nothing.
+          ALLOW_GITHUB=$(bash .github/scripts/allow-github-ci.sh /tmp/issue-title.txt /tmp/issue.md)
+          {
+            echo "title<<EOF"
+            echo "$TITLE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "allow_github=$ALLOW_GITHUB" >> "$GITHUB_OUTPUT"
+          echo "Loaded issue #$ISSUE_NUMBER → branch $BRANCH allow_github=$ALLOW_GITHUB"
+          echo "---- issue.md ----"
+          cat /tmp/issue.md
+
+      - name: Setup magic
+        uses: ./.github/actions/setup-magic
+        with:
+          magic-token: ${{ secrets.MAGIC_TOKEN }}
+          bearer-token: ${{ secrets.MAGIC_BEARER_TOKEN }}
+
+      - name: Install CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run implement
+        id: implement
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:11434/anthropic
+          ANTHROPIC_API_KEY: unused
+          ANTHROPIC_AUTH_TOKEN: unused
+          CLAUDE_CODE_GLOB_NO_IGNORE: "false"
+        run: |
+          ISSUE_TITLE="${{ steps.meta.outputs.title }}"
+          BRANCH="${{ steps.meta.outputs.branch }}"
+          ALLOW_GITHUB="${{ steps.meta.outputs.allow_github }}"
+          git checkout -b "$BRANCH"
+
+          # Skill text is force-injected (slash alone is unreliable with DeepSeek).
+          # Persona lives in magic/ci/personas (CI-only; not a human-facing skill).
+          SKILL_FILE="magic/.claude/skills/ci-implement/SKILL.md"
+          PERSONA_FILE="magic/ci/personas/implement.md"
+          SYS_FILE="/tmp/ci-implement-sys.md"
+          cat "$SKILL_FILE" "$PERSONA_FILE" > "$SYS_FILE"
+          DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
+          # Prefer write path; still allow discovery tools.
+          ALLOW_TOOLS="Write,Edit,Read,Glob,Grep,Bash"
+
+          run_agent() {
+            local out="$1"
+            local prompt="$2"
+            # Prompt via stdin: --disallowed-tools/--allowed-tools are variadic and
+            # would otherwise swallow the prompt words as fake tool names (exit 1).
+            printf '%s\n' "$prompt" | claude -p --dangerously-skip-permissions --max-turns 999999 \
+              --add-dir magic \
+              --append-system-prompt-file "$SYS_FILE" \
+              --allowed-tools "$ALLOW_TOOLS" \
+              --disallowed-tools "$DISALLOW_TOOLS" \
+              > "$out" 2>&1
+          }
+
+          base_prompt() {
+            local extra="$1"
+            # Avoid <<-heredoc: unindented EOF breaks YAML `run: |` parsing (GitHub then
+            # drops workflow_dispatch → 422 on dispatch).
+            printf '%s\n' \
+              '/ci-implement' \
+              'Implement the GitHub issue in /tmp/issue.md.' \
+              "Issue title: ${ISSUE_TITLE}" \
+              "allow_github=${ALLOW_GITHUB}" \
+              'Working directory is the git repo root.' \
+              'Your second tool call (after reading /tmp/issue.md) MUST be Write or Edit.' \
+              'When finished print IMPLEMENT_SUMMARY: <one line>.' \
+              "${extra}"
+          }
+
+          set +e
+          : > implement-output.md
+          for attempt in 1 2 3; do
+            EXTRA=""
+            if [ "$attempt" -gt 1 ]; then
+              EXTRA="Attempt ${attempt}: previous pass wrote nothing. Call Write NOW."
+              if [ "$ALLOW_GITHUB" = "true" ]; then
+                EXTRA="${EXTRA} Create/overwrite real workflow YAML under .github/workflows/ as required by /tmp/issue.md (product-manager + pr-merge or equivalent names). Also write docs if the issue requires them."
+              fi
+              echo "==== Implement attempt ${attempt} (tree still clean) ===="
+            fi
+            OUT="implement-output-a${attempt}.md"
+            run_agent "$OUT" "$(base_prompt "$EXTRA")"
+            AGENT_EXIT=$?
+            {
+              echo "==== attempt ${attempt} exit=${AGENT_EXIT} ===="
+              cat "$OUT"
+            } >> implement-output.md
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "attempt ${attempt}: working tree dirty — stopping retries"
+              break
+            fi
+          done
+          set -e
+
+          echo "agent_exit=$AGENT_EXIT" >> "$GITHUB_OUTPUT"
+          BYTES=$(wc -c < implement-output.md | tr -d ' ')
+          echo "agent_exit=${AGENT_EXIT} bytes=${BYTES} allow_github=${ALLOW_GITHUB}"
+          if [ "$AGENT_EXIT" -ne 0 ]; then
+            echo "::warning::Agent exited with code $AGENT_EXIT (see implement-output.md)"
+            tail -80 implement-output.md || true
+            if curl -sf http://127.0.0.1:11434/api/health >/dev/null 2>&1; then
+              echo "magic still healthy after agent failure"
+            else
+              echo "::error::magic proxy is down after agent failure"
+              tail -80 /tmp/magic-proxy.log || true
+            fi
+          fi
+
+      - name: Apply printed diffs (fallback)
+        run: |
+          awk '/^```diff($| )/{flag=1; next} /^```$/{flag=0} flag' implement-output.md > fixes.patch || true
+          if [ -s fixes.patch ]; then
+            git apply fixes.patch || git apply --3way fixes.patch || true
+            echo "attempted to apply printed diffs"
+          else
+            echo "no printed diffs"
+          fi
+
+      - name: Commit and push branch
+        id: commit
+        env:
+          # PAT: GITHUB_TOKEN cannot push commits that touch .github/workflows
+          # ("refusing to allow a GitHub App to create or update workflow").
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "---- working tree after agent ----"
+          git status --short || true
+
+          git add -A
+          # Always drop agent stdout artifacts. Drop .github/ unless the issue
+          # explicitly authorized workflow/action work (allow_github=true).
+          ARTIFACTS=(
+            implement-output.md implement-output-retry.md
+            implement-output-a1.md implement-output-a2.md implement-output-a3.md
+            fix-output.md review.md review-output.md fixes.patch
+          )
+          if [ "${{ steps.meta.outputs.allow_github }}" = "true" ]; then
+            echo "allow_github=true — keeping .github changes staged"
+            git reset -q -- "${ARTIFACTS[@]}" 2>/dev/null || true
+          else
+            echo "allow_github=false — unstaging .github"
+            git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
+          fi
+
+          echo "---- staged ----"
+          git diff --cached --stat || true
+          git status --short || true
+
+          # Mode-only / empty content must not become a PR (chmod noise).
+          CONTENT_LINES=$(git diff --cached --numstat | awk '{ a+=$1; d+=$2 } END { print a+d+0 }')
+          if [ "${CONTENT_LINES:-0}" -eq 0 ]; then
+            echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::error::No content changes for issue #${{ steps.issue.outputs.number }} (mode-only or empty)"
+            git reset -q HEAD 2>/dev/null || true
+            exit 1
+          fi
+
+          if [ "${{ steps.meta.outputs.allow_github }}" = "true" ]; then
+            if ! git diff --cached --name-only | grep -qE '^\.github/workflows/[^/]+\.ya?ml$'; then
+              echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+              echo "::error::Issue authorizes workflows but no .github/workflows/*.yml content was staged"
+              git diff --cached --name-only || true
+              git reset -q HEAD 2>/dev/null || true
+              exit 1
+            fi
+          fi
+
+          if git diff --cached --quiet; then
+            echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::error::No file changes for issue #${{ steps.issue.outputs.number }}"
+            exit 1
+          fi
+
+          git commit -m "$(bash .github/scripts/commit-msg-from-summary.sh '' implement-output.md "${{ steps.meta.outputs.title }}")"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git push -u origin "${{ steps.meta.outputs.branch }}"
+          echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR via gh
+        if: steps.commit.outputs.has_changes == 'true'
+        id: pr
+        env:
+          # Prefer MAGIC_TOKEN (PAT): GITHUB_TOKEN cannot create PRs unless the
+          # repo setting "Allow GitHub Actions to create and approve pull requests" is on.
+          GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
+        run: |
+          URL=$(gh pr create --base master --head "${{ steps.meta.outputs.branch }}" \
+            --title "${{ steps.meta.outputs.title }}" \
+            --body "Closes #${{ steps.issue.outputs.number }}")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Created PR: $URL"
+
+      - name: Post comment to issue
+        if: always()
+        id: post
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+
+            let raw = '';
+            try {
+              raw = fs.readFileSync('implement-output.md', 'utf8');
+            } catch {
+              raw = '';
+            }
+
+            const match = raw.match(/IMPLEMENT_SUMMARY:\s*(.*)/);
+            let summary = match ? match[1].trim() : '';
+
+            const looksLikeNoise =
+              /rate-limited|API Error:|all bearers are|Request rejected|Overloaded|429|too frequent/i.test(
+                raw,
+              ) && !/IMPLEMENT_SUMMARY:/.test(raw);
+
+            const hasChanges = '${{ steps.commit.outputs.has_changes }}' === 'true';
+            const branch = '${{ steps.meta.outputs.branch }}';
+            const issueNumber = ${{ steps.issue.outputs.number }};
+            const prUrl = '${{ steps.pr.outputs.url }}';
+            const repoUrl = 'https://github.com/' + context.repo.owner + '/' + context.repo.repo;
+            const branchUrl = repoUrl + '/tree/' + branch;
+
+            if (!summary) {
+              if (looksLikeNoise) {
+                summary =
+                  'Could not finish this pass — the model hit a temporary capacity limit.';
+              } else {
+                summary = hasChanges
+                  ? 'Opened a branch with the first pass on this issue.'
+                  : 'Could not produce file changes on this pass.';
+              }
+            }
+
+            let body;
+            if (hasChanges) {
+              body = [
+                '## Implementation',
+                '',
+                summary,
+                '',
+                `Branch: [${branch}](${branchUrl})`,
+                prUrl ? `PR: ${prUrl}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n');
+            } else {
+              body = [
+                '## Implementation',
+                '',
+                summary,
+                '',
+                'No file changes landed this pass — please poke `/implement` again if needed.',
+              ].join('\n');
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body,
+            });
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: implement-logs
+          path: |
+            implement-output.md
+            /tmp/magic-proxy.log
+            /tmp/magic-magic.log
+            /tmp/magic-data/traffic-log.jsonl*
+            /tmp/issue.md
+          if-no-files-found: warn
