@@ -103,12 +103,14 @@ jobs:
           run_claude() {
             local out="$1"
             local prompt="$2"
-            claude -p --dangerously-skip-permissions --max-turns 999999 \
+            # Prompt via stdin: --disallowed-tools/--allowed-tools are variadic and
+            # would otherwise swallow the prompt words as fake tool names (exit 1).
+            printf '%s\n' "$prompt" | claude -p --dangerously-skip-permissions --max-turns 999999 \
               --add-dir magic \
               --append-system-prompt-file "$SKILL_FILE" \
               --allowed-tools "$ALLOW_TOOLS" \
               --disallowed-tools "$DISALLOW_TOOLS" \
-              "$prompt" > "$out" 2>&1
+              > "$out" 2>&1
           }
 
           base_prompt() {

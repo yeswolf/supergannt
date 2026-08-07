@@ -131,11 +131,11 @@ jobs:
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
 
-          claude -p --dangerously-skip-permissions --max-turns 999999 \
+          printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
             --add-dir magic \
             --append-system-prompt-file magic/.claude/skills/ci-review/SKILL.md \
             --disallowed-tools "$DISALLOW_TOOLS" \
-            "$PROMPT" > review.md 2>&1
+            > review.md 2>&1
           CLAUDE_EXIT=$?
           BYTES=$(wc -c < review.md | tr -d ' ')
           echo "claude_exit=${CLAUDE_EXIT} bytes=${BYTES}"
