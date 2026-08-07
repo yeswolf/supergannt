@@ -347,26 +347,27 @@ jobs:
             });
             console.log('Dispatched fix after 👀 review for PR ${{ steps.pr.outputs.number }}');
 
-      - name: Dispatch merge after review clean
-        if: steps.post.outputs.status == 'clean'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const baseRef = '${{ steps.pr.outputs.base_ref }}';
-            if (baseRef !== 'master') {
-              core.warning(
-                `PR base ref is "${baseRef}", not "master". ` +
-                `Merge dispatch targets "${baseRef}" — verify this is intentional.`,
-              );
-            }
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'merge.yml',
-              ref: baseRef,
-              inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
-            });
-            console.log('Dispatched merge after 👍 review for PR ${{ steps.pr.outputs.number }}');
+      # TEMP: auto-merge after clean review disabled — re-enable when ready.
+      # - name: Dispatch merge after review clean
+      #   if: steps.post.outputs.status == 'clean'
+      #   uses: actions/github-script@v7
+      #   with:
+      #     script: |
+      #       const baseRef = '${{ steps.pr.outputs.base_ref }}';
+      #       if (baseRef !== 'master') {
+      #         core.warning(
+      #           `PR base ref is "${baseRef}", not "master". ` +
+      #           `Merge dispatch targets "${baseRef}" — verify this is intentional.`,
+      #         );
+      #       }
+      #       await github.rest.actions.createWorkflowDispatch({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         workflow_id: 'merge.yml',
+      #         ref: baseRef,
+      #         inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
+      #       });
+      #       console.log('Dispatched merge after 👍 review for PR ${{ steps.pr.outputs.number }}');
 
       - name: Upload logs
         if: always() && steps.pr.outputs.skip != 'true'
