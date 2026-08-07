@@ -105,13 +105,14 @@ jobs:
 
           # Squash-merge via gh CLI — this squashes all commits and merges to base
           # without generating a merge commit message (--squash + manual commit).
+          set +e
           gh pr merge "$PR_NUMBER" \
             --squash \
             --delete-branch \
             --subject "${PR_TITLE} (#${PR_NUMBER})" \
             --body ""
-
           MERGE_EXIT=$?
+          set -e
           if [ "$MERGE_EXIT" -ne 0 ]; then
             echo "::error::gh pr merge failed with exit code $MERGE_EXIT"
             exit $MERGE_EXIT

@@ -246,7 +246,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'claude-fix.yml',
-              ref: 'master',
+              ref: '${{ steps.pr.outputs.base_ref }}',
               inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
             });
             console.log('Dispatched claude-fix after 👀 review for PR ${{ steps.pr.outputs.number }}');
@@ -260,7 +260,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'claude-merge.yml',
-              ref: 'master',
+              ref: '${{ steps.pr.outputs.base_ref }}',
               inputs: { pr_number: '${{ steps.pr.outputs.number }}' },
             });
             console.log('Dispatched claude-merge after 👍 review for PR ${{ steps.pr.outputs.number }}');

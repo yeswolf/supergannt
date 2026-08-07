@@ -70,7 +70,7 @@ jobs:
           After creating all issues and docs, print a summary of what was created.'
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
-          ALLOW_TOOLS="Write,Edit,Read,Glob,Grep,Bash(${{ github.token }},gh:*) gh:*"
+          ALLOW_TOOLS="Write,Edit,Read,Glob,Grep,Bash(${{ github.token }},gh:*)"
 
           printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
             --add-dir magic \
@@ -87,17 +87,6 @@ jobs:
           if [ "$CLAUDE_EXIT" -ne 0 ]; then
             echo "::warning::Claude exited with code $CLAUDE_EXIT (see pm-output.md)"
             tail -80 pm-output.md || true
-          fi
-
-          # Create issues via gh CLI if Claude produced structured output
-          if [ -f /tmp/issues.json ]; then
-            echo "Creating GitHub issues from /tmp/issues.json..."
-            jq -c '.[]' /tmp/issues.json | while read -r issue; do
-              TITLE=$(echo "$issue" | jq -r '.title')
-              BODY=$(echo "$issue" | jq -r '.body')
-              gh issue create --title "$TITLE" --body "$BODY" --label "implement,task" || \
-                echo "::warning::Failed to create issue: $TITLE"
-            done
           fi
 
           set -e
