@@ -17,6 +17,8 @@ import { HttpMppToXmlConverter } from '../../infrastructure/mpp/HttpMppToXmlConv
 import { HttpXmlToMppConverter } from '../../infrastructure/mpp/HttpXmlToMppConverter'
 import { PreferTauriMppToXmlConverter } from '../../infrastructure/mpp/PreferTauriMppToXmlConverter'
 import { PreferTauriXmlToMppConverter } from '../../infrastructure/mpp/PreferTauriXmlToMppConverter'
+import type { InspectionFinding } from '../../application/services/ProjectInspector'
+import { inspectProject } from '../../application/services/ProjectInspector'
 
 export type AppView =
   | 'gantt'
@@ -76,11 +78,14 @@ export interface WorkspaceState {
   undoStack: UndoEntry[]
   /** Redo stack — most recently undone at the end. */
   redoStack: UndoEntry[]
+  /** Project inspection findings updated after every mutation. */
+  inspections: InspectionFinding[]
 }
 
 export function createInitialState(services = createAppServices()): WorkspaceState {
+  const project = createEmptyProject(services.ids)
   return {
-    project: createEmptyProject(services.ids),
+    project,
     view: 'gantt',
     selectedTaskId: null,
     selectedTaskIds: [],
@@ -93,6 +98,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     services,
     undoStack: [],
     redoStack: [],
+    inspections: inspectProject(project),
   }
 }
 
@@ -273,6 +279,7 @@ export function undoableReducer(
       }),
       project: prev,
       statusMessage: `Undo: ${entry.label}`,
+      inspections: inspectProject(prev),
     }
   }
 
@@ -289,6 +296,7 @@ export function undoableReducer(
       }),
       project: next,
       statusMessage: `Redo: ${entry.label}`,
+      inspections: inspectProject(next),
     }
   }
 
@@ -299,7 +307,12 @@ export function undoableReducer(
     action.type === 'loadDemo'
   ) {
     const result = workspaceReducer(state, action)
-    return { ...result, undoStack: [], redoStack: [] }
+    return {
+      ...result,
+      undoStack: [],
+      redoStack: [],
+      inspections: inspectProject(result.project),
+    }
   }
 
   // --- Project-mutating actions: snapshot before, clear redo after -------
@@ -316,6 +329,7 @@ export function undoableReducer(
           label: ACTION_LABELS[action.type] ?? action.type,
         }),
         redoStack: [],
+        inspections: inspectProject(result.project),
       }
     }
     return result
