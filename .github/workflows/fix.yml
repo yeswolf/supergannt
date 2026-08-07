@@ -28,6 +28,8 @@ jobs:
       pull-requests: write
       issues: write
       actions: write
+    env:
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Resolve PR details
         id: pr
@@ -95,7 +97,7 @@ jobs:
             ALLOW=true
             echo "PR already modifies .github → allow_github=true"
           fi
-          gh pr view "${{ steps.pr.outputs.number }}" --json title,body > /tmp/pr-meta.json
+          gh pr view "${{ steps.pr.outputs.number }}" --repo "$GH_REPO" --json title,body > /tmp/pr-meta.json
           jq -r '.title // ""' /tmp/pr-meta.json > /tmp/pr-title.txt
           jq -r '.body // ""' /tmp/pr-meta.json > /tmp/pr-body.md
           if [ "$(bash .github/scripts/allow-github-ci.sh /tmp/pr-title.txt /tmp/pr-body.md)" = "true" ]; then
@@ -104,7 +106,7 @@ jobs:
           fi
           # Linked issues from PR body (Closes #N / Fixes #N / #N)
           for n in $(grep -Eo '(Closes|Fixes|Resolves|closes|fixes|resolves)[[:space:]]*#[0-9]+|#[0-9]+' /tmp/pr-body.md | grep -Eo '[0-9]+' | sort -u); do
-            gh issue view "$n" --json title,body > "/tmp/linked-issue-$n.json" || continue
+            gh issue view "$n" --repo "$GH_REPO" --json title,body > "/tmp/linked-issue-$n.json" || continue
             jq -r '.title // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-title-$n.txt"
             jq -r '.body // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-body-$n.md"
             if [ "$(bash .github/scripts/allow-github-ci.sh "/tmp/linked-title-$n.txt" "/tmp/linked-body-$n.md")" = "true" ]; then

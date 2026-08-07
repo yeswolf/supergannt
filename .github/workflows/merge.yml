@@ -23,6 +23,9 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+    env:
+      # No checkout in this workflow — gh must not rely on .git
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Resolve PR details
         id: pr
@@ -107,6 +110,7 @@ jobs:
           # without generating a merge commit message (--squash + manual commit).
           set +e
           gh pr merge "$PR_NUMBER" \
+            --repo "$GH_REPO" \
             --squash \
             --delete-branch \
             --subject "${PR_TITLE} (#${PR_NUMBER})" \

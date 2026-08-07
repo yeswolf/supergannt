@@ -25,6 +25,8 @@ jobs:
     permissions:
       actions: write
       contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Dispatch matching workflow
         env:
@@ -41,7 +43,7 @@ jobs:
             local wf="$1"
             shift
             echo "Dispatching ${wf} $*"
-            gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref "$REF" "$@"
+            gh workflow run "$wf" --repo "$GH_REPO" --ref "$REF" "$@"
           }
 
           # First matching command wins.

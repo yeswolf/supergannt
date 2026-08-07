@@ -13,6 +13,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+    env:
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Checkout supergannt
         uses: actions/checkout@v4
@@ -34,9 +36,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
-          gh label create task --color 1d76db --description "Ready for Implement workflow" 2>/dev/null || true
-          gh label create feature --color 0e8a16 --description "New feature" 2>/dev/null || true
-          gh label create enhancement --color a2eeef --description "Improvement to existing behavior" 2>/dev/null || true
+          gh label create task --repo "$GH_REPO" --color 1d76db --description "Ready for Implement workflow" 2>/dev/null || true
+          gh label create feature --repo "$GH_REPO" --color 0e8a16 --description "New feature" 2>/dev/null || true
+          gh label create enhancement --repo "$GH_REPO" --color a2eeef --description "Improvement to existing behavior" 2>/dev/null || true
 
       - name: Run product manager
         id: product-manager
