@@ -22,11 +22,6 @@ on:
         required: true
         type: string
 
-concurrency:
-  # Shared with Implement/Fix — only one magic agent globally; queue the rest.
-  group: magic-agent
-  cancel-in-progress: false
-
 jobs:
   review:
     if: |
@@ -48,6 +43,10 @@ jobs:
         ) && (
           contains(github.event.comment.body, '/review')
         ))
+    # Job-level so skipped comment triggers do not stampede-cancel pending agents.
+    concurrency:
+      group: magic-agent
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:

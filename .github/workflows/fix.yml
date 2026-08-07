@@ -18,11 +18,6 @@ on:
         required: true
         type: string
 
-concurrency:
-  # Shared with Implement/Review — only one magic agent globally; queue the rest.
-  group: magic-agent
-  cancel-in-progress: false
-
 jobs:
   fix:
     if: |
@@ -34,6 +29,11 @@ jobs:
           github.event.comment.author_association == 'OWNER' ||
           github.event.comment.user.login == 'github-actions[bot]'
         ))
+    # Job-level: skipped issue_comment runs must not enter the queue (workflow-level
+    # concurrency cancels other pending magic-agent runs on the same comment stampede).
+    concurrency:
+      group: magic-agent
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
