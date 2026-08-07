@@ -18,6 +18,8 @@ export type ProjectShortcut =
   | 'newBlank'
   | 'open'
   | 'saveXml'
+  | 'undo'
+  | 'redo'
 
 export function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   return (
@@ -89,6 +91,11 @@ export function matchProjectShortcut(e: KeyboardEvent): ProjectShortcut | null {
   // Ctrl+Shift+F — Assign resources (common Power User binding near Task Info)
   if (ctrl && shift && !alt && lower === 'f') return 'assign'
 
+  // Undo/Redo — available everywhere (including inputs).
+  if (ctrl && !alt && !shift && (lower === 'z' || e.code === 'KeyZ')) return 'undo'
+  if (ctrl && !alt && shift && (lower === 'z' || e.code === 'KeyZ')) return 'redo'
+  if (ctrl && !alt && !shift && (lower === 'y' || e.code === 'KeyY')) return 'redo'
+
   return null
 }
 
@@ -108,4 +115,6 @@ export const PROJECT_SHORTCUT_HINTS: Partial<Record<ProjectShortcut, string>> = 
   newBlank: 'Ctrl+N',
   open: 'Ctrl+O',
   saveXml: 'Ctrl+S',
+  undo: 'Ctrl+Z',
+  redo: 'Ctrl+Y',
 }
