@@ -97,6 +97,11 @@ jobs:
       - name: Install CLI
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Install supergannt deps
+        run: |
+          # Repo root (master / task branch base). Agent must not waste turns on install.
+          npm install
+
       - name: Run implement
         id: implement
         env:
@@ -142,10 +147,10 @@ jobs:
               'Implement the GitHub issue in /tmp/issue.md.' \
               "Issue title: ${ISSUE_TITLE}" \
               "allow_github=${ALLOW_GITHUB}" \
-              'Working directory is the git repo root (feature branch already checked out).' \
+              'Working directory is the git repo root (feature branch already checked out; npm install already done).' \
               'After reading /tmp/issue.md, first Write docs/requirements/<slug>.md from the issue (overview, user story, acceptance criteria, technical notes).' \
               'Then implement the acceptance criteria with more Write/Edit.' \
-              'Before finishing: from the git repo root ONLY run npm ci if needed, then npm test. Never cd into magic/ and never run magic tests. If tests fail, fix this project and re-run until green. Do not print IMPLEMENT_SUMMARY until npm test exits 0.' \
+              'Before finishing: from the git repo root ONLY run npm test (deps are already installed). Never cd into magic/ and never run magic tests. If tests fail, fix this project and re-run until green. Do not print IMPLEMENT_SUMMARY until npm test exits 0.' \
               'When finished print IMPLEMENT_SUMMARY: <one line>.' \
               "${extra}"
           }

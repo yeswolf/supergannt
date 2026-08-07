@@ -86,6 +86,12 @@ jobs:
           git fetch origin ${{ steps.pr.outputs.head_ref }}
           git checkout ${{ steps.pr.outputs.head_ref }}
 
+      - name: Install supergannt deps
+        if: steps.pr.outputs.skip != 'true'
+        run: |
+          # PR branch root — agent must not waste turns on install.
+          npm install
+
       - name: Detect allow_github for this PR
         if: steps.pr.outputs.skip != 'true'
         id: scope
