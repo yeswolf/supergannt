@@ -1,4 +1,5 @@
 import type { Project } from '../../domain/entities/Project'
+import type { AutoSnapshotMetadata } from '../ports/ProjectRepository'
 import type { ProjectFileCodec } from '../ports/ProjectFileCodec'
 import type { ProjectRepository } from '../ports/ProjectRepository'
 import { refreshProject } from '../services/ProjectRefresh'
@@ -68,5 +69,31 @@ export class FileUseCases {
   async loadDraft(): Promise<Project | null> {
     const draft = await this.repository.loadDraft()
     return draft ? refreshProject(draft) : null
+  }
+
+  // --- Auto-save (crash recovery) ----------------------------------------
+
+  async saveAutoSnapshot(project: Project, metadata: AutoSnapshotMetadata): Promise<boolean> {
+    // The repository never throws — it cleans up metadata on any error and
+    // logs non-quota failures.  We verify both keys were persisted to guard
+    // against metadata-first partial writes (quota hit on payload).
+    await this.repository.saveAutoSnapshot(project, metadata)
+    const stored = await this.repository.getAutoSnapshotMetadata()
+    if (stored == null || stored.savedAt !== metadata.savedAt) return false
+    const snap = await this.repository.loadAutoSnapshot()
+    return snap != null
+  }
+
+  async getAutoSnapshotMetadata(): Promise<AutoSnapshotMetadata | null> {
+    return this.repository.getAutoSnapshotMetadata()
+  }
+
+  async loadAutoSnapshot(): Promise<Project | null> {
+    const snap = await this.repository.loadAutoSnapshot()
+    return snap ? refreshProject(snap) : null
+  }
+
+  async clearAutoSnapshot(): Promise<void> {
+    await this.repository.clearAutoSnapshot()
   }
 }

@@ -130,6 +130,7 @@ export function AppChrome() {
     busyMessage,
     taskInfoOpen,
     assignDialogOpen,
+    autoSave,
   } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const { theme, setTheme, themes } = useTheme()
@@ -592,7 +593,7 @@ export function AppChrome() {
             dispatch({ type: 'updateProjectInfo', patch: { name: e.target.value } })
           }
         />
-        {project.dirty ? <span className={styles.dirty}>●</span> : null}
+        {autoSave.dirty ? <span className={styles.dirty}>●</span> : null}
 
         <div className={styles.topActions}>
           <Menu

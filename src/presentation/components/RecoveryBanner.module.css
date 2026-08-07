@@ -1,0 +1,52 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--msp-accent-soft);
+  border-bottom: 1px solid var(--msp-accent-border);
+  font-size: var(--msp-text-sm);
+  color: var(--msp-text);
+  flex-wrap: wrap;
+  min-height: var(--msp-row-h);
+}
+
+.text {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.restoreBtn,
+.discardBtn {
+  appearance: none;
+  border: 1px solid var(--msp-border-strong);
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  font: inherit;
+  font-size: var(--msp-text-sm);
+  font-weight: 400;
+  border-radius: var(--msp-radius);
+  padding: 0.28rem 0.65rem;
+  cursor: pointer;
+  min-height: var(--msp-touch-min);
+}
+
+.restoreBtn {
+  background: var(--msp-accent);
+  color: var(--msp-surface);
+  border-color: var(--msp-accent);
+}
+
+.restoreBtn:hover {
+  filter: brightness(1.1);
+}
+
+.discardBtn:hover {
+  background: var(--msp-row-hover);
+}

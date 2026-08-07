@@ -59,6 +59,23 @@ interface UndoEntry {
   label: string
 }
 
+export interface AutoSaveState {
+  /** 'idle' | 'saving' | 'saved' — shown in the toolbar indicator. */
+  status: 'idle' | 'saving' | 'saved'
+  /** True when there are unsaved changes since the last explicit save. */
+  dirty: boolean
+  /** True when auto-save skipped because localStorage is near quota. */
+  quotaWarning: boolean
+  /** Non-null when a recovery snapshot exists on app open. */
+  recoverySnapshot: {
+    savedAt: string
+    fileName: string | null
+  } | null
+  /** Incremented on every project mutation — a robust trigger for the auto-save
+   *  hook that doesn't depend on object-reference identity. */
+  mutationCounter: number
+}
+
 export interface WorkspaceState {
   project: Project
   view: AppView
@@ -78,8 +95,18 @@ export interface WorkspaceState {
   undoStack: UndoEntry[]
   /** Redo stack — most recently undone at the end. */
   redoStack: UndoEntry[]
+  /** Auto-save state for the toolbar indicator and recovery. */
+  autoSave: AutoSaveState
   /** Project inspection findings updated after every mutation. */
   inspections: InspectionFinding[]
+}
+
+const INITIAL_AUTO_SAVE: AutoSaveState = {
+  status: 'idle',
+  dirty: false,
+  quotaWarning: false,
+  recoverySnapshot: null,
+  mutationCounter: 0,
 }
 
 export function createInitialState(services = createAppServices()): WorkspaceState {
@@ -98,6 +125,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     services,
     undoStack: [],
     redoStack: [],
+    autoSave: { ...INITIAL_AUTO_SAVE },
     inspections: inspectProject(project),
   }
 }
@@ -178,6 +206,11 @@ export type WorkspaceAction =
     }
   | { type: 'undo' }
   | { type: 'redo' }
+  | { type: 'autoSaveSaving' }
+  | { type: 'autoSaveSaved'; quotaWarning?: boolean }
+  | { type: 'autoSaveIdle' }
+  | { type: 'setRecoverySnapshot'; snapshot: AutoSaveState['recoverySnapshot'] }
+  | { type: 'dismissRecoverySnapshot' }
 
 /** Push a snapshot onto the undo stack, capping at MAX_UNDO_DEPTH. */
 function pushUndo(stack: UndoEntry[], entry: UndoEntry): UndoEntry[] {
@@ -246,6 +279,13 @@ const ACTION_LABELS: Record<string, string> = {
   updateProjectInfo: 'Edit project info',
 }
 
+/** Increments the mutation counter and sets dirty — used by every
+ *  project-mutating action so the auto-save hook can detect changes
+ *  without relying on object-reference identity. */
+function markDirty(autoSave: AutoSaveState): AutoSaveState {
+  return { ...autoSave, dirty: true, mutationCounter: autoSave.mutationCounter + 1 }
+}
+
 /**
  * Wrap the base reducer to capture project snapshots before every mutation.
  *
@@ -279,6 +319,7 @@ export function undoableReducer(
       }),
       project: prev,
       statusMessage: `Undo: ${entry.label}`,
+      autoSave: markDirty(state.autoSave),
       inspections: inspectProject(prev),
     }
   }
@@ -296,6 +337,7 @@ export function undoableReducer(
       }),
       project: next,
       statusMessage: `Redo: ${entry.label}`,
+      autoSave: markDirty(state.autoSave),
       inspections: inspectProject(next),
     }
   }
@@ -307,12 +349,7 @@ export function undoableReducer(
     action.type === 'loadDemo'
   ) {
     const result = workspaceReducer(state, action)
-    return {
-      ...result,
-      undoStack: [],
-      redoStack: [],
-      inspections: inspectProject(result.project),
-    }
+    return { ...result, undoStack: [], redoStack: [], autoSave: { ...result.autoSave, dirty: false }, inspections: inspectProject(result.project) }
   }
 
   // --- Project-mutating actions: snapshot before, clear redo after -------
@@ -329,6 +366,7 @@ export function undoableReducer(
           label: ACTION_LABELS[action.type] ?? action.type,
         }),
         redoStack: [],
+        autoSave: markDirty(result.autoSave),
         inspections: inspectProject(result.project),
       }
     }
@@ -747,6 +785,24 @@ export function workspaceReducer(
         ...state,
         project: ProjectUseCases.updateProjectInfo(state.project, action.patch),
       }
+    // --- Auto-save --------------------------------------------------------
+    case 'autoSaveSaving':
+      return { ...state, autoSave: { ...state.autoSave, status: 'saving' } }
+    case 'autoSaveSaved':
+      return {
+        ...state,
+        autoSave: {
+          ...state.autoSave,
+          status: 'saved',
+          quotaWarning: action.quotaWarning ?? false,
+        },
+      }
+    case 'autoSaveIdle':
+      return { ...state, autoSave: { ...state.autoSave, status: 'idle' } }
+    case 'setRecoverySnapshot':
+      return { ...state, autoSave: { ...state.autoSave, recoverySnapshot: action.snapshot } }
+    case 'dismissRecoverySnapshot':
+      return { ...state, autoSave: { ...state.autoSave, recoverySnapshot: null } }
     default:
       return state
   }
