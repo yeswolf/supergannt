@@ -1,0 +1,107 @@
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--msp-bg-secondary, #f5f5f5);
+  border-bottom: 1px solid var(--msp-border, #ddd);
+  font-size: 12px;
+  min-height: 32px;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.label {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--msp-text-secondary, #555);
+}
+
+.group select,
+.group input {
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid var(--msp-border, #ccc);
+  border-radius: 3px;
+  background: var(--msp-bg, #fff);
+  color: var(--msp-text, #222);
+}
+
+.group select {
+  max-width: 140px;
+}
+
+.group input {
+  max-width: 120px;
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--msp-accent, #007acc);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.chipField {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.chipOp {
+  opacity: 0.7;
+}
+
+.chipVal {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chipRemove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.7;
+}
+
+.chipRemove:hover {
+  opacity: 1;
+}
+
+.clearBtn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--msp-border, #ccc);
+  border-radius: 3px;
+  background: var(--msp-bg, #fff);
+  color: var(--msp-text, #222);
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  background: var(--msp-bg-hover, #e8e8e8);
+}
