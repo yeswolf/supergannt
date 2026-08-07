@@ -2,6 +2,7 @@ export type TaskId = string & { readonly __brand: 'TaskId' }
 export type ResourceId = string & { readonly __brand: 'ResourceId' }
 export type DependencyId = string & { readonly __brand: 'DependencyId' }
 export type AssignmentId = string & { readonly __brand: 'AssignmentId' }
+export type GodId = string & { readonly __brand: 'GodId' }
 export type CalendarId = string & { readonly __brand: 'CalendarId' }
 export type ProjectId = string & { readonly __brand: 'ProjectId' }
 
@@ -19,6 +20,10 @@ export function asDependencyId(value: string): DependencyId {
 
 export function asAssignmentId(value: string): AssignmentId {
   return value as AssignmentId
+}
+
+export function asGodId(value: string): GodId {
+  return value as GodId
 }
 
 export function asCalendarId(value: string): CalendarId {

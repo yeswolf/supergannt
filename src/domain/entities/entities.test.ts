@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Task } from '../entities/Task'
 import { Resource } from '../entities/Resource'
 import { Dependency } from '../entities/Dependency'
+import { God } from '../entities/God'
 import { Assignment } from '../entities/Assignment'
 import { WorkCalendar } from '../entities/WorkCalendar'
 import { Project } from '../entities/Project'
@@ -11,6 +12,7 @@ import {
   asAssignmentId,
   asCalendarId,
   asDependencyId,
+  asGodId,
   asProjectId,
   asResourceId,
   asTaskId,
@@ -206,5 +208,64 @@ describe('entities', () => {
     expect(() =>
       Project.create({ ...project.toProps(), calendars: [], calendarId: asCalendarId('x') }).getCalendar(),
     ).toThrow(/calendar/i)
+  })
+
+  it('validates god invariants', () => {
+    expect(() =>
+      God.create({ id: asGodId('g'), name: '   ', domain: 'sky', benevolence: 50 }),
+    ).toThrow(/name/)
+
+    expect(() =>
+      God.create({ id: asGodId('g'), name: 'Zeus', domain: 'thunder' as any, benevolence: 50 }),
+    ).toThrow(/domain/)
+
+    expect(() =>
+      God.create({ id: asGodId('g'), name: 'Zeus', domain: 'sky', benevolence: 150 }),
+    ).toThrow(/Benevolence/)
+
+    expect(() =>
+      God.create({ id: asGodId('g'), name: 'Zeus', domain: 'sky', benevolence: -1 }),
+    ).toThrow(/Benevolence/)
+  })
+
+  it('creates a valid god and derives isPleased', () => {
+    const zeus = God.create({
+      id: asGodId('g1'),
+      name: 'Zeus',
+      domain: 'sky',
+      benevolence: 75,
+    })
+    expect(zeus.id).toBe('g1')
+    expect(zeus.name).toBe('Zeus')
+    expect(zeus.domain).toBe('sky')
+    expect(zeus.benevolence).toBe(75)
+    expect(zeus.isPleased).toBe(true)
+
+    const grumpy = God.create({
+      id: asGodId('g2'),
+      name: '  Loki  ',
+      domain: 'craftsmanship',
+      benevolence: 30,
+    })
+    expect(grumpy.name).toBe('Loki')
+    expect(grumpy.isPleased).toBe(false)
+  })
+
+  it('updates god via with()', () => {
+    const athena = God.create({
+      id: asGodId('g3'),
+      name: 'Athena',
+      domain: 'wisdom',
+      benevolence: 80,
+    })
+    const pleased = athena.with({ benevolence: 49 })
+    expect(pleased.isPleased).toBe(false)
+    expect(pleased.benevolence).toBe(49)
+    expect(pleased.id).toBe('g3')
+
+    const promoted = athena.with({ name: 'Athena Promachos', domain: 'project management' })
+    expect(promoted.name).toBe('Athena Promachos')
+    expect(promoted.domain).toBe('project management')
+    expect(promoted.toProps().benevolence).toBe(80)
   })
 })
