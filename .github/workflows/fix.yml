@@ -89,8 +89,12 @@ jobs:
       - name: Install supergannt deps
         if: steps.pr.outputs.skip != 'true'
         run: |
-          # PR branch root — agent must not waste turns on install.
-          npm install
+          # Prefer lockfile; legacy-peer-deps covers older PR branches still on esbuild 0.25.
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
 
       - name: Detect allow_github for this PR
         if: steps.pr.outputs.skip != 'true'
@@ -233,7 +237,7 @@ jobs:
           PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`.
           Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}.
           allow_github=${ALLOW_GITHUB}
-          Working directory is the git repo root."
+          Working directory is the git repo root (PR branch; npm install already done)."
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
           SYS_FILE="/tmp/ci-fix-sys.md"
