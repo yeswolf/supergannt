@@ -31,16 +31,22 @@ export function AppShell() {
   // Activate auto-save polling.
   useAutoSave()
 
-  // On mount, check for a crash-recovery snapshot.
+  // On mount, check for a crash-recovery snapshot. Only offer recovery
+  // when the snapshot belongs to the currently-open file.
   useEffect(() => {
     let cancelled = false
     void (async () => {
       const meta = await services.files.getAutoSnapshotMetadata()
       if (cancelled || !meta) return
+      // Guard against a stale snapshot from a different file (e.g. PlanA's
+      // snapshot surfacing when PlanB is opened).
+      if (meta.fileName && project.fileName && meta.fileName !== project.fileName) {
+        return
+      }
       dispatch({ type: 'setRecoverySnapshot', snapshot: meta })
     })()
     return () => { cancelled = true }
-  }, [services.files, dispatch])
+  }, [services.files, dispatch, project.fileName])
 
   const { autoSave } = useWorkspaceState()
 

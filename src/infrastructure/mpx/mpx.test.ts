@@ -10,8 +10,7 @@ import { refreshProject } from '../../application/services/ProjectRefresh'
 import { FileUseCases } from '../../application/use-cases/FileUseCases'
 import { MspdiCodec } from '../mspdi/MspdiCodec'
 import type { IdGenerator } from '../../application/ports/IdGenerator'
-import type { ProjectRepository } from '../../application/ports/ProjectRepository'
-import type { Project } from '../../domain/entities/Project'
+import { MemoryRepo } from '../../test/memoryRepo'
 
 class SeqIds implements IdGenerator {
   private n = 0
@@ -36,35 +35,6 @@ class SeqIds implements IdGenerator {
   }
   calendarId() {
     return this.next('c')
-  }
-}
-
-class MemoryRepo implements ProjectRepository {
-  draft: Project | null = null
-  autoSnapshot: Project | null = null
-  autoMeta: import('../../application/ports/ProjectRepository').AutoSnapshotMetadata | null = null
-  async saveDraft(project: Project) {
-    this.draft = project
-  }
-  async loadDraft() {
-    return this.draft
-  }
-  async clearDraft() {
-    this.draft = null
-  }
-  async saveAutoSnapshot(project: Project, meta: import('../../application/ports/ProjectRepository').AutoSnapshotMetadata) {
-    this.autoSnapshot = project
-    this.autoMeta = meta
-  }
-  async getAutoSnapshotMetadata() {
-    return this.autoMeta
-  }
-  async loadAutoSnapshot() {
-    return this.autoSnapshot
-  }
-  async clearAutoSnapshot() {
-    this.autoSnapshot = null
-    this.autoMeta = null
   }
 }
 

@@ -64,8 +64,13 @@ export function useAutoSave() {
   }, [autoSave.dirty, doSave])
 
   // When dirty resets (explicit save / new file), clear auto-snapshot.
+  // Skip the first mount — dirty starts false and we must not nuke a
+  // crash-recovery snapshot before AppShell checks for it.
+  const hasBeenDirtyRef = useRef(false)
   useEffect(() => {
-    if (!autoSave.dirty) {
+    if (autoSave.dirty) {
+      hasBeenDirtyRef.current = true
+    } else if (hasBeenDirtyRef.current) {
       void services.files.clearAutoSnapshot()
     }
   }, [autoSave.dirty, services.files])
