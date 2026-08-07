@@ -12,6 +12,11 @@ on:
         required: true
         type: string
 
+# One magic agent at a time across Implement / Fix / Review; others queue.
+concurrency:
+  group: magic-agent
+  cancel-in-progress: false
+
 jobs:
   implement:
     if: |

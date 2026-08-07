@@ -23,7 +23,8 @@ on:
         type: string
 
 concurrency:
-  group: loop-pr-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
+  # Shared with Implement/Fix — only one magic agent globally; queue the rest.
+  group: magic-agent
   cancel-in-progress: false
 
 jobs:
