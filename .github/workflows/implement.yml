@@ -76,7 +76,8 @@ jobs:
           printf '%s' "$TITLE" > /tmp/issue-title.txt
           # Do NOT chmod the script — that dirties a mode-only git change and can
           # produce empty PRs when the agent writes nothing.
-          ALLOW_GITHUB=$(bash .github/scripts/allow-github-ci.sh /tmp/issue-title.txt /tmp/issue.md)
+          # Claude must never touch .github/ (enforced in prompt + unstage on commit).
+          ALLOW_GITHUB=false
           {
             echo "title<<EOF"
             echo "$TITLE"
@@ -150,7 +151,7 @@ jobs:
               '/ci-implement' \
               'Implement the GitHub issue in /tmp/issue.md.' \
               "Issue title: ${ISSUE_TITLE}" \
-              "allow_github=${ALLOW_GITHUB}" \
+              'allow_github=false — NEVER modify anything under .github/ (workflows, actions, scripts).' \
               'Working directory is the git repo root (feature branch already checked out; npm install already done).' \
               'After reading /tmp/issue.md, first Write docs/requirements/<slug>.md from the issue (overview, user story, acceptance criteria, technical notes).' \
               'Then implement the acceptance criteria with more Write/Edit.' \
@@ -165,9 +166,6 @@ jobs:
             EXTRA=""
             if [ "$attempt" -gt 1 ]; then
               EXTRA="Attempt ${attempt}: previous pass wrote nothing. Call Write NOW."
-              if [ "$ALLOW_GITHUB" = "true" ]; then
-                EXTRA="${EXTRA} Create/overwrite real workflow YAML under .github/workflows/ as required by /tmp/issue.md (product-manager + pr-merge or equivalent names). Also write docs if the issue requires them."
-              fi
               echo "==== Implement attempt ${attempt} (tree still clean) ===="
             fi
             OUT="implement-output-a${attempt}.md"
@@ -222,20 +220,14 @@ jobs:
           git status --short || true
 
           git add -A
-          # Always drop agent stdout artifacts. Drop .github/ unless the issue
-          # explicitly authorized workflow/action work (allow_github=true).
+          # Always drop agent stdout artifacts and anything under .github/.
           ARTIFACTS=(
             implement-output.md implement-output-retry.md
             implement-output-a1.md implement-output-a2.md implement-output-a3.md
             fix-output.md review.md review-output.md fixes.patch
           )
-          if [ "${{ steps.meta.outputs.allow_github }}" = "true" ]; then
-            echo "allow_github=true — keeping .github changes staged"
-            git reset -q -- "${ARTIFACTS[@]}" 2>/dev/null || true
-          else
-            echo "allow_github=false — unstaging .github"
-            git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
-          fi
+          echo "Unstaging .github (Claude must not change workflows/actions)"
+          git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
 
           echo "---- staged ----"
           git diff --cached --stat || true
@@ -249,17 +241,6 @@ jobs:
             echo "::error::No content changes for issue #${{ steps.issue.outputs.number }} (mode-only or empty)"
             git reset -q HEAD 2>/dev/null || true
             exit 1
-          fi
-
-          if [ "${{ steps.meta.outputs.allow_github }}" = "true" ]; then
-            if ! git diff --cached --name-only | grep -qE '^\.github/workflows/[^/]+\.ya?ml$'; then
-              echo "NO_CHANGES=true" >> "$GITHUB_ENV"
-              echo "has_changes=false" >> "$GITHUB_OUTPUT"
-              echo "::error::Issue authorizes workflows but no .github/workflows/*.yml content was staged"
-              git diff --cached --name-only || true
-              git reset -q HEAD 2>/dev/null || true
-              exit 1
-            fi
           fi
 
           if git diff --cached --quiet; then

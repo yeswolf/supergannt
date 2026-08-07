@@ -84,6 +84,7 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
           git fetch origin ${{ steps.pr.outputs.head_ref }}
+          git fetch origin ${{ steps.pr.outputs.base_ref }}
           git checkout ${{ steps.pr.outputs.head_ref }}
 
       - name: Install supergannt deps
@@ -99,34 +100,10 @@ jobs:
       - name: Detect allow_github for this PR
         if: steps.pr.outputs.skip != 'true'
         id: scope
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          ALLOW=false
-          # Already touching .github on the PR → keep allowing CI edits in fix.
-          if git diff --name-only "${{ steps.pr.outputs.base_sha }}...HEAD" | grep -qE '^\.github/'; then
-            ALLOW=true
-            echo "PR already modifies .github → allow_github=true"
-          fi
-          gh pr view "${{ steps.pr.outputs.number }}" --repo "$GH_REPO" --json title,body > /tmp/pr-meta.json
-          jq -r '.title // ""' /tmp/pr-meta.json > /tmp/pr-title.txt
-          jq -r '.body // ""' /tmp/pr-meta.json > /tmp/pr-body.md
-          if [ "$(bash .github/scripts/allow-github-ci.sh /tmp/pr-title.txt /tmp/pr-body.md)" = "true" ]; then
-            ALLOW=true
-            echo "PR title/body authorizes .github work"
-          fi
-          # Linked issues from PR body (Closes #N / Fixes #N / #N)
-          for n in $(grep -Eo '(Closes|Fixes|Resolves|closes|fixes|resolves)[[:space:]]*#[0-9]+|#[0-9]+' /tmp/pr-body.md | grep -Eo '[0-9]+' | sort -u); do
-            gh issue view "$n" --repo "$GH_REPO" --json title,body > "/tmp/linked-issue-$n.json" || continue
-            jq -r '.title // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-title-$n.txt"
-            jq -r '.body // ""' "/tmp/linked-issue-$n.json" > "/tmp/linked-body-$n.md"
-            if [ "$(bash .github/scripts/allow-github-ci.sh "/tmp/linked-title-$n.txt" "/tmp/linked-body-$n.md")" = "true" ]; then
-              ALLOW=true
-              echo "Linked issue #$n authorizes .github work"
-            fi
-          done
-          echo "allow_github=$ALLOW" >> "$GITHUB_OUTPUT"
-          echo "allow_github=$ALLOW"
+          # Hard ban: Claude never edits .github/ (even if the PR already touches it).
+          echo "allow_github=false" >> "$GITHUB_OUTPUT"
+          echo "allow_github=false"
 
       - name: Install CLI
         if: steps.pr.outputs.skip != 'true'
@@ -220,6 +197,75 @@ jobs:
             core.setOutput('review_bytes', String(Buffer.byteLength(latest.body)));
             console.log(`Using review comment ${latest.id} reactions=[${[...contents]}]`);
 
+      - name: Merge base into PR if conflicted
+        if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
+        id: merge_base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          MERGEABLE=""
+          STATE=""
+          for i in 1 2 3 4 5; do
+            JSON=$(gh pr view "${{ steps.pr.outputs.number }}" --repo "$GH_REPO" --json mergeable,mergeStateStatus)
+            MERGEABLE=$(echo "$JSON" | jq -r '.mergeable')
+            STATE=$(echo "$JSON" | jq -r '.mergeStateStatus')
+            if [ "$MERGEABLE" != "UNKNOWN" ] && [ "$MERGEABLE" != "null" ]; then
+              break
+            fi
+            sleep 3
+          done
+          echo "mergeable=${MERGEABLE} mergeStateStatus=${STATE}"
+          echo "mergeable=${MERGEABLE}" >> "$GITHUB_OUTPUT"
+          echo "mergeable_state=${STATE}" >> "$GITHUB_OUTPUT"
+
+          NEED_MERGE=false
+          # mergeable: MERGEABLE | CONFLICTING | UNKNOWN
+          # mergeStateStatus: CLEAN | DIRTY | BEHIND | BLOCKED | ...
+          if [ "$MERGEABLE" = "CONFLICTING" ] || [ "$STATE" = "DIRTY" ]; then
+            NEED_MERGE=true
+          fi
+          if [ -f /tmp/latest-review.md ] && grep -qiE 'conflict|конфликт' /tmp/latest-review.md; then
+            NEED_MERGE=true
+          fi
+
+          if [ "$NEED_MERGE" != "true" ]; then
+            echo "No merge-base step needed"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            echo "had_conflicts=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit "origin/${{ steps.pr.outputs.base_ref }}"
+          MERGE_EXIT=$?
+          if [ "$MERGE_EXIT" -eq 0 ]; then
+            echo "Clean merge of base into PR head"
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            echo "had_conflicts=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Merge stopped with conflicts — leaving markers for the Fix agent"
+          git diff --name-only --diff-filter=U | tee /tmp/conflict-paths.txt
+          {
+            echo "## Must fix — merge conflicts"
+            echo ""
+            echo "Merge of origin/${{ steps.pr.outputs.base_ref }} into this PR left conflict markers in:"
+            sed 's/^/- /' /tmp/conflict-paths.txt
+            echo ""
+            echo "Resolve EVERY <<<<<<< ======= >>>>>>> marker."
+            echo "Keep functionality from BOTH master and this PR branch."
+            echo "Do NOT git merge --abort. Leave the merge in progress; CI will commit."
+            echo ""
+          } > /tmp/merge-conflict-instructions.md
+          cat /tmp/merge-conflict-instructions.md /tmp/latest-review.md > /tmp/latest-review-merged.md
+          mv /tmp/latest-review-merged.md /tmp/latest-review.md
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+          echo "had_conflicts=true" >> "$GITHUB_OUTPUT"
+          exit 0
+
       - name: Run fix
         if: steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
         id: agent
@@ -231,12 +277,19 @@ jobs:
         run: |
           set +e
           ALLOW_GITHUB="${{ steps.scope.outputs.allow_github }}"
+          CONFLICT_HINT=""
+          if [ "${{ steps.merge_base.outputs.had_conflicts }}" = "true" ]; then
+            CONFLICT_HINT="MERGE IN PROGRESS with conflict markers on disk. Resolve them with Edit/Write before anything else. Do not abort the merge."
+          elif [ "${{ steps.merge_base.outputs.merged }}" = "true" ]; then
+            CONFLICT_HINT="Base was already merged cleanly into this branch; commit will include that merge if not pushed yet."
+          fi
           PROMPT="/ci-fix
           Fix every finding from /tmp/latest-review.md.
           Also read /tmp/pr-inline-comments.json if non-empty.
           PR: base \`${{ steps.pr.outputs.base_ref }}\` ← head \`${{ steps.pr.outputs.head_ref }}\`.
           Base SHA: ${{ steps.pr.outputs.base_sha }}, Head SHA: ${{ steps.pr.outputs.head_sha }}.
-          allow_github=${ALLOW_GITHUB}
+          allow_github=false — NEVER modify anything under .github/.
+          ${CONFLICT_HINT}
           Working directory is the git repo root (PR branch; npm install already done)."
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
@@ -285,29 +338,64 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          HEAD_REF="${{ steps.pr.outputs.head_ref }}"
+          START_SHA="${{ steps.pr.outputs.head_sha }}"
+
+          # Agent Write/Edit updates the working tree but often skips `git add`.
+          # During a merge, paths stay unmerged until staged — mark resolved ones.
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            if [ -f "$f" ] && ! grep -qE '^<<<<<<< |^>>>>>>> ' "$f"; then
+              echo "Marking resolved (no markers): $f"
+              git add -- "$f"
+            fi
+          done < <(git diff --name-only --diff-filter=U)
+
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo "::error::Unresolved merge conflicts remain after Fix agent"
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=magic \
+              -e '^<<<<<<< ' -e '^>>>>>>> ' . 2>/dev/null | head -20 | grep -q .; then
+            echo "::error::Conflict markers still present in the tree"
+            grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=magic \
+              -e '^<<<<<<< ' -e '^>>>>>>> ' . | head -40
+            exit 1
+          fi
+
           git add -A
           ARTIFACTS=(
             implement-output.md implement-output-retry.md
             fix-output.md review.md review-output.md fixes.patch
           )
-          if [ "${{ steps.scope.outputs.allow_github }}" = "true" ]; then
-            echo "allow_github=true — keeping .github changes staged"
-            git reset -q -- "${ARTIFACTS[@]}" 2>/dev/null || true
-          else
-            echo "allow_github=false — unstaging .github"
-            git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
+          echo "Unstaging .github (Claude must not change workflows/actions)"
+          git reset -q -- .github "${ARTIFACTS[@]}" 2>/dev/null || true
+
+          MADE_COMMIT=false
+          if ! git diff --cached --quiet; then
+            git commit -m "$(bash .github/scripts/commit-msg-from-summary.sh 'fix: ' fix-output.md 'fix: address review feedback')"
+            MADE_COMMIT=true
           fi
-          if git diff --cached --quiet; then
+
+          NOW_SHA=$(git rev-parse HEAD)
+          if [ "$NOW_SHA" = "$START_SHA" ]; then
+            if [ "${{ steps.merge_base.outputs.had_conflicts }}" = "true" ]; then
+              echo "::error::Conflict merge was started but nothing was committed"
+              exit 1
+            fi
             echo "NO_CHANGES=true" >> "$GITHUB_ENV"
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            git commit -m "$(bash .github/scripts/commit-msg-from-summary.sh 'fix: ' fix-output.md 'fix: address review feedback')"
-            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-            git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
-            git push origin ${{ steps.pr.outputs.head_ref }}
-            echo "NO_CHANGES=false" >> "$GITHUB_ENV"
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          # Local HEAD moved (agent commit and/or clean merge commit) — push.
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git push origin "$HEAD_REF"
+          echo "pushed ${START_SHA:0:7}..${NOW_SHA:0:7} made_commit=${MADE_COMMIT}"
+          echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Post fix comment + reaction
         if: always() && steps.pr.outputs.skip != 'true' && steps.comments.outputs.skip_clean != 'true'
