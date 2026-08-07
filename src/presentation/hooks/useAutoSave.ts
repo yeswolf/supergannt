@@ -9,6 +9,9 @@ const MAX_INTERVAL_MS = 30000
  *
  * - Polls every ~500 ms while dirty.  Saves after 2 s of idle or 30 s since
  *   the last save if mutations are continuous.
+ * - On the very first edit the 30 s branch fires immediately (lastSaveRef
+ *   starts at 0, so Date.now() - 0 always exceeds MAX_INTERVAL_MS), giving
+ *   a fast initial save instead of waiting a full debounce cycle.
  * - Skips saving if localStorage is near quota (sets quotaWarning).
  * - Clears the auto-snapshot when dirty goes false (explicit save / new file).
  */

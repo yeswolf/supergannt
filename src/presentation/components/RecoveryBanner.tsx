@@ -29,11 +29,13 @@ export function RecoveryBanner() {
     }
   }
 
-  const handleDiscard = () => {
-    void services.files.clearAutoSnapshot().catch(() => {
+  const handleDiscard = async () => {
+    try {
+      await services.files.clearAutoSnapshot()
+    } catch {
       // If storage is inaccessible the snapshot stays on disk, but the
       // banner is gone — the user already made their choice.
-    })
+    }
     dispatch({ type: 'dismissRecoverySnapshot' })
   }
 

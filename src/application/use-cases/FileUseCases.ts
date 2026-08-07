@@ -74,7 +74,14 @@ export class FileUseCases {
   // --- Auto-save (crash recovery) ----------------------------------------
 
   async saveAutoSnapshot(project: Project, metadata: AutoSnapshotMetadata): Promise<boolean> {
-    await this.repository.saveAutoSnapshot(project, metadata)
+    try {
+      await this.repository.saveAutoSnapshot(project, metadata)
+    } catch {
+      // Non-quota errors (SecurityError, TypeError when storage is disabled)
+      // mean auto-save is unavailable — fail gracefully so the UI shows the
+      // warning without crashing.
+      return false
+    }
     // Verify both metadata and payload were persisted.  The write order is
     // metadata-first, so metadata may succeed while the payload write hits
     // quota — guard against showing a recovery banner for a missing snapshot.

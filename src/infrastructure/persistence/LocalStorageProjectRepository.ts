@@ -36,8 +36,16 @@ export class LocalStorageProjectRepository implements ProjectRepository {
       // payload blob that can never be discovered.
       this.storage.setItem(AUTO_SNAPSHOT_META_KEY, metaJson)
       this.storage.setItem(AUTO_SNAPSHOT_KEY, payload)
-    } catch {
-      // QuotaExceededError or similar — let the caller decide what to do.
+    } catch (err: unknown) {
+      // Only silence QuotaExceededError — the caller (FileUseCases) verifies
+      // both metadata and payload were persisted and returns false if not,
+      // which maps to a quotaWarning in the UI.  Other errors (SecurityError
+      // when localStorage is disabled, TypeError, etc.) propagate so the
+      // service layer can handle them explicitly.
+      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+        return
+      }
+      throw err
     }
   }
 
