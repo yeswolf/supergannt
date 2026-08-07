@@ -113,16 +113,17 @@ jobs:
 
           base_prompt() {
             local extra="$1"
-            cat <<EOF
-/ci-implement
-Implement the GitHub issue in /tmp/issue.md.
-Issue title: ${ISSUE_TITLE}
-allow_github=${ALLOW_GITHUB}
-Working directory is the git repo root.
-Your second tool call (after reading /tmp/issue.md) MUST be Write or Edit.
-When finished print IMPLEMENT_SUMMARY: <one line>.
-${extra}
-EOF
+            # Avoid <<-heredoc: unindented EOF breaks YAML `run: |` parsing (GitHub then
+            # drops workflow_dispatch → 422 on dispatch).
+            printf '%s\n' \
+              '/ci-implement' \
+              'Implement the GitHub issue in /tmp/issue.md.' \
+              "Issue title: ${ISSUE_TITLE}" \
+              "allow_github=${ALLOW_GITHUB}" \
+              'Working directory is the git repo root.' \
+              'Your second tool call (after reading /tmp/issue.md) MUST be Write or Edit.' \
+              'When finished print IMPLEMENT_SUMMARY: <one line>.' \
+              "${extra}"
           }
 
           set +e
@@ -132,8 +133,7 @@ EOF
             if [ "$attempt" -gt 1 ]; then
               EXTRA="Attempt ${attempt}: previous pass wrote nothing. Call Write NOW."
               if [ "$ALLOW_GITHUB" = "true" ]; then
-                EXTRA="${EXTRA}
-Create/overwrite real workflow YAML under .github/workflows/ as required by /tmp/issue.md (product-manager + pr-merge or equivalent names). Also write docs if the issue requires them."
+                EXTRA="${EXTRA} Create/overwrite real workflow YAML under .github/workflows/ as required by /tmp/issue.md (product-manager + pr-merge or equivalent names). Also write docs if the issue requires them."
               fi
               echo "==== Implement attempt ${attempt} (tree still clean) ===="
             fi
