@@ -19,6 +19,7 @@ import {
 import { TaskColumnsDialog } from '../taskColumns/TaskColumnsDialog'
 import { useTaskColumns } from '../taskColumns/taskColumnStore'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
+import { formatSlackHours } from '../common/formatSlack'
 import styles from './DataTable.module.css'
 import { IconAction } from './IconAction'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
@@ -240,6 +241,10 @@ function renderTaskSheetCell(opts: {
           }}
         />
       )
+    case 'totalSlack':
+      return formatSlackHours(task.totalSlackHours)
+    case 'freeSlack':
+      return formatSlackHours(task.freeSlackHours)
     case 'cost':
       return task.cost.format()
     case 'resources':

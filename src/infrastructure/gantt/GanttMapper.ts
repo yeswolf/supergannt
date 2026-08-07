@@ -2,6 +2,7 @@ import type { Project } from '../../domain/entities/Project'
 import type { LinkType } from '../../domain/entities/Dependency'
 import { formatPredecessors } from '../../application/services/PredecessorNotation'
 import { formatTaskResourceNames } from '../../application/use-cases/ResourceUseCases'
+import { formatSlackHours } from '../../presentation/common/formatSlack'
 
 export interface GanttTaskDto {
   id: string
@@ -21,6 +22,8 @@ export interface GanttTaskDto {
   percent: number
   cost: string
   predecessors: string
+  totalSlack: string
+  freeSlack: string
 }
 
 export interface GanttLinkDto {
@@ -95,6 +98,8 @@ export function toGanttData(project: Project): {
       percent: task.percentComplete,
       cost: task.cost.format(),
       predecessors: formatPredecessors(project, task.id),
+      totalSlack: formatSlackHours(task.totalSlackHours),
+      freeSlack: formatSlackHours(task.freeSlackHours),
     }
   })
 
