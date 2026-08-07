@@ -25,6 +25,8 @@ jobs:
         github.event.issue.pull_request != null &&
         contains(github.event.comment.body, '/merge') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+      # Note: workflow_dispatch has no author_association check — it relies on
+      # GitHub's own permission model (only repo collaborators can dispatch).
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -85,15 +87,21 @@ jobs:
               repo: context.repo.repo,
               ref: headSha,
             });
-            const failing = checks.check_runs.filter(c => c.conclusion === 'failure');
+            const blocked = ['failure', 'action_required', 'timed_out', 'cancelled'];
+            const failing = checks.check_runs.filter(c => blocked.includes(c.conclusion));
             if (failing.length > 0) {
-              const names = failing.map(c => c.name).join(', ');
+              const names = failing.map(c => `${c.name} (${c.conclusion})`).join(', ');
               core.setOutput('skip', 'true');
-              core.info(`Skipping merge — ${failing.length} failing check(s): ${names}`);
+              core.info(`Skipping merge — ${failing.length} blocked check(s): ${names}`);
               return;
             }
+            const pending = checks.check_runs.filter(c => c.conclusion === null);
+            if (pending.length > 0) {
+              const names = pending.map(c => c.name).join(', ');
+              core.warning(`${pending.length} check(s) still pending: ${names}. Merge may fail if branch protection requires them.`);
+            }
             core.setOutput('skip', 'false');
-            core.info('All CI checks passed');
+            core.info('All completed CI checks passed');
 
       - name: Squash and merge PR
         if: steps.pr.outputs.skip != 'true' && steps.checks.outputs.skip != 'true'
