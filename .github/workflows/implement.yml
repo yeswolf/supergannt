@@ -12,11 +12,9 @@ on:
         required: true
         type: string
 
-# One magic agent at a time across Implement / Fix / Review; others queue.
-concurrency:
-  group: magic-agent
-  cancel-in-progress: false
-
+# One magic agent at a time across Implement / Fix / Review / PM; others queue.
+# Concurrency is on the job so skipped labeled events (feature/enhancement) do not
+# claim a queue slot.
 jobs:
   implement:
     if: |
@@ -36,6 +34,9 @@ jobs:
           github.event.comment.user.login == 'github-actions[bot]'
         )
       )
+    concurrency:
+      group: magic-agent
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:

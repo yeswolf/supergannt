@@ -45,11 +45,13 @@ jobs:
       - name: Install CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Ensure task label
+      - name: Ensure labels
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh label create task --color 1d76db --description "Ready for Implement workflow" 2>/dev/null || true
+          gh label create feature --color 0e8a16 --description "New feature" 2>/dev/null || true
+          gh label create enhancement --color a2eeef --description "Improvement to existing behavior" 2>/dev/null || true
 
       - name: Run product manager
         id: product-manager
@@ -65,13 +67,15 @@ jobs:
           PROMPT="/ci-product-manager
           Analyze current master of this repository.
           Create exactly 2 new feature issues and 2 improvement issues (4 total).
-          Each issue: label ONLY task (no other labels), detailed body with motivation, user story, acceptance criteria, technical notes.
-          Creating with label task auto-starts Implement — do NOT comment /implement.
+          Feature issues: labels feature + task.
+          Improvement issues: labels enhancement + task.
+          No other labels. Detailed body: motivation, user story, acceptance criteria, technical notes.
+          Label task auto-starts Implement — do NOT comment /implement.
           Do NOT write any files. Do NOT git add/commit/push. Docs/requirements are the Implementer's job on the feature branch.
           Working directory is the git repo root (read-only analysis).
           When finished print PM_SUMMARY: <issue numbers and titles>."
 
-          # No Write/Edit — PM must not touch the tree; issues + /implement comments only.
+          # No Write/Edit — PM must not touch the tree; issues only.
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite,Write,Edit"
           ALLOW_TOOLS="Read,Glob,Grep,Bash"
           SYS_FILE="/tmp/ci-pm-sys.md"
