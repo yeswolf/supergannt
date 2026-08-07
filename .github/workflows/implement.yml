@@ -145,6 +145,7 @@ jobs:
               'Working directory is the git repo root (feature branch already checked out).' \
               'After reading /tmp/issue.md, first Write docs/requirements/<slug>.md from the issue (overview, user story, acceptance criteria, technical notes).' \
               'Then implement the acceptance criteria with more Write/Edit.' \
+              'Before finishing: run npm ci if needed, then npm test via Bash. If tests fail, fix and re-run until green. Do not print IMPLEMENT_SUMMARY until tests pass.' \
               'When finished print IMPLEMENT_SUMMARY: <one line>.' \
               "${extra}"
           }
