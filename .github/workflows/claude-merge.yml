@@ -69,11 +69,34 @@ jobs:
             core.setOutput('skip', 'false');
             core.setOutput('number', String(prNumber));
             core.setOutput('title', pr.title);
+            core.setOutput('head_sha', pr.head.sha);
         env:
           PR_NUMBER: ${{ inputs.pr_number }}
 
-      - name: Squash and merge PR
+      - name: Verify CI checks passed
         if: steps.pr.outputs.skip != 'true'
+        id: checks
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headSha = '${{ steps.pr.outputs.head_sha }}';
+            const { data: checks } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+            });
+            const failing = checks.check_runs.filter(c => c.conclusion === 'failure');
+            if (failing.length > 0) {
+              const names = failing.map(c => c.name).join(', ');
+              core.setOutput('skip', 'true');
+              core.info(`Skipping merge — ${failing.length} failing check(s): ${names}`);
+              return;
+            }
+            core.setOutput('skip', 'false');
+            core.info('All CI checks passed');
+
+      - name: Squash and merge PR
+        if: steps.pr.outputs.skip != 'true' && steps.checks.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.MAGIC_TOKEN }}
         run: |
@@ -100,7 +123,7 @@ jobs:
           echo "PR #${PR_NUMBER} squash-merged successfully"
 
       - name: Post merge confirmation
-        if: steps.pr.outputs.skip != 'true'
+        if: steps.pr.outputs.skip != 'true' && steps.checks.outputs.skip != 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -115,5 +138,10 @@ jobs:
             });
 
       - name: Skip message
-        if: steps.pr.outputs.skip == 'true'
-        run: echo "Skipping merge — PR is already merged or closed"
+        if: steps.pr.outputs.skip == 'true' || steps.checks.outputs.skip == 'true'
+        run: |
+          if [ "${{ steps.checks.outputs.skip }}" = "true" ]; then
+            echo "Skipping merge — CI checks are failing"
+          else
+            echo "Skipping merge — PR is already merged or closed"
+          fi
