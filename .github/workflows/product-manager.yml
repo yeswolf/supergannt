@@ -69,7 +69,7 @@ jobs:
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite,Write,Edit"
           ALLOW_TOOLS="Read,Glob,Grep,Bash"
           SYS_FILE="/tmp/ci-pm-sys.md"
-          cat magic/.claude/skills/ci-product-manager/SKILL.md magic/ci/personas/product-manager.md > "$SYS_FILE"
+          cat magic/.claude/skills/ci-product-manager/SKILL.md ci/personas/product-manager.md > "$SYS_FILE"
 
           printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
             --add-dir magic \

@@ -111,9 +111,9 @@ jobs:
           git checkout -b "$BRANCH"
 
           # Skill text is force-injected (slash alone is unreliable with DeepSeek).
-          # Persona lives in magic/ci/personas (CI-only; not a human-facing skill).
+          # Persona lives in this repo (ci/personas); skills still come from magic checkout.
           SKILL_FILE="magic/.claude/skills/ci-implement/SKILL.md"
-          PERSONA_FILE="magic/ci/personas/implement.md"
+          PERSONA_FILE="ci/personas/implement.md"
           SYS_FILE="/tmp/ci-implement-sys.md"
           cat "$SKILL_FILE" "$PERSONA_FILE" > "$SYS_FILE"
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"

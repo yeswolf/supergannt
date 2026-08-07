@@ -231,7 +231,7 @@ jobs:
 
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
           SYS_FILE="/tmp/ci-fix-sys.md"
-          cat magic/.claude/skills/ci-fix/SKILL.md magic/ci/personas/fix.md > "$SYS_FILE"
+          cat magic/.claude/skills/ci-fix/SKILL.md ci/personas/fix.md > "$SYS_FILE"
 
           printf '%s\n' "$PROMPT" | claude -p --dangerously-skip-permissions --max-turns 999999 \
             --add-dir magic \

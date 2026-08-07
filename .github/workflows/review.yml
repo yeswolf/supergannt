@@ -237,7 +237,7 @@ jobs:
           DISALLOW_TOOLS="TaskCreate,TaskUpdate,TaskList,TaskGet,TaskOutput,Agent,TodoWrite"
           SYS_FILE="/tmp/ci-review-sys.md"
           # Persona last so voice wins over generic skill tone.
-          cat magic/.claude/skills/ci-review/SKILL.md magic/ci/personas/review.md > "$SYS_FILE"
+          cat magic/.claude/skills/ci-review/SKILL.md ci/personas/review.md > "$SYS_FILE"
           echo "==== sys prompt (persona tail) ===="
           tail -20 "$SYS_FILE"
 
