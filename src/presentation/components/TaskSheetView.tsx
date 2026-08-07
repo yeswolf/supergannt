@@ -19,6 +19,7 @@ import {
 import { TaskColumnsDialog } from '../taskColumns/TaskColumnsDialog'
 import { useTaskColumns } from '../taskColumns/taskColumnStore'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
+import { formatSlackHours } from '../common/formatSlack'
 import styles from './DataTable.module.css'
 import { IconAction } from './IconAction'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
@@ -299,18 +300,4 @@ function renderTaskSheetCell(opts: {
     default:
       return null
   }
-}
-
-function formatSlackHours(hours: number | null): string {
-  if (hours == null) return ''
-  if (hours === 0) return '0h'
-  if (Math.abs(hours) < 0.005) return '0h'
-  const h = Math.floor(hours)
-  const m = Math.round((hours - h) * 60)
-  if (h === 0 && m === 0) return '0h'
-  if (m === 0) return `${h}h`
-  if (h === 0) return `${m}m`
-  const sign = hours < 0 ? '-' : ''
-  const absH = Math.abs(h)
-  return `${sign}${absH}h ${m}m`
 }

@@ -250,49 +250,119 @@ export function computeFloat(
     Math.max(...leafTasks.map((t) => t.finish.getTime())),
   )
 
-  // Initialize late finish = project finish for all leaf tasks
+  // Initialize late finish: project finish for all leaf tasks, then clamp
+  // by late-date constraints (SNLT, FNLT, MFO) so the backward pass respects
+  // the same constraint infrastructure the forward pass already applies.
   const lateFinish = new Map<TaskId, Date>()
   for (const t of leafTasks) {
-    lateFinish.set(t.id, new Date(projectFinish.getTime()))
+    let lf = new Date(projectFinish.getTime())
+    const dur = t.milestone ? 0 : Math.max(0, t.duration.toHours())
+
+    // Constraint-derived late-finish ceiling.
+    // Only constraints that tighten the late date are applied:
+    // - finishNoLaterThan: late finish ≤ constraint date
+    // - startNoLaterThan:  late start  ≤ constraint date  → late finish ≤ constraint date + duration
+    // - mustFinishOn:      late finish == constraint date
+    // - mustStartOn:       late start  == constraint date → late finish == constraint date + duration
+    if (t.constraintDate) {
+      const cd = new Date(t.constraintDate.getTime())
+      switch (t.constraintType) {
+        case 'finishNoLaterThan': {
+          if (cd.getTime() < lf.getTime()) lf = cd
+          break
+        }
+        case 'startNoLaterThan': {
+          const constraintLf = calendar.addWorkingHours(cd, dur)
+          if (constraintLf.getTime() < lf.getTime()) lf = constraintLf
+          break
+        }
+        case 'mustFinishOn': {
+          lf = cd
+          break
+        }
+        case 'mustStartOn': {
+          lf = calendar.addWorkingHours(cd, dur)
+          break
+        }
+        // finishNoEarlierThan / startNoEarlierThan loosen (not tighten) late dates;
+        // asLateAsPossible needs a full backward pass already; skip here.
+      }
+    }
+
+    lateFinish.set(t.id, lf)
   }
 
-  // Bellman-Ford relaxation: push late dates backward through the dependency graph.
-  // Continue until no late finish moves earlier.
-  const MAX_ITER = leafTasks.length + 10
-  for (let iter = 0; iter < MAX_ITER; iter += 1) {
-    let changed = false
+  // Build predecessor adjacency (reverse of successor): which tasks depend
+  // on this one. Used by both the topological sort and the backward pass.
+  const predEdges = new Map<TaskId, Dependency[]>()
+  for (const dep of dependencies) {
+    const list = predEdges.get(dep.successorId) ?? []
+    list.push(dep)
+    predEdges.set(dep.successorId, list)
+  }
 
-    for (const dep of dependencies) {
+  // Topological sort of leaf tasks via DFS post-order.
+  // The precedence graph is a DAG (cycle detection lives in scheduleProject).
+  const visited = new Set<TaskId>()
+  const topo: TaskId[] = []
+
+  const dfs = (id: TaskId) => {
+    if (visited.has(id)) return
+    visited.add(id)
+    const mySuccs = succs.get(id)
+    if (mySuccs) {
+      for (const dep of mySuccs) {
+        const succ = byId.get(dep.successorId)
+        if (succ && !succ.summary) dfs(succ.id)
+      }
+    }
+    topo.push(id)
+  }
+
+  for (const t of leafTasks) {
+    dfs(t.id)
+  }
+
+  // Process in reverse-topological order (post-order = children before parents,
+  // so sinks come first). For each task, push its late date backward to its
+  // predecessors through the incoming dependency edges.
+  for (const id of topo) {
+    const t = byId.get(id)
+    if (!t) continue
+
+    const myLf = lateFinish.get(id)
+    if (!myLf) continue
+    const myDur = t.milestone ? 0 : Math.max(0, t.duration.toHours())
+    const myLs = calendar.snapToWorkStart(
+      calendar.addWorkingHours(myLf, -myDur),
+    )
+
+    const myPreds = predEdges.get(id)
+    if (!myPreds) continue
+
+    for (const dep of myPreds) {
       const pred = byId.get(dep.predecessorId)
-      const succ = byId.get(dep.successorId)
-      if (!pred || !succ || pred.summary || succ.summary) continue
+      if (!pred || pred.summary) continue
 
-      const succLf = lateFinish.get(succ.id)
-      if (!succLf) continue
-
-      const succDur = succ.milestone ? 0 : Math.max(0, succ.duration.toHours())
-      const succLs = calendar.snapToWorkStart(
-        calendar.addWorkingHours(succLf, -succDur),
-      )
       const predDur = pred.milestone ? 0 : Math.max(0, pred.duration.toHours())
       const lagHours = dep.lag.toHours()
 
       let impliedPredLf: Date
       switch (dep.type) {
         case 'FS':
-          impliedPredLf = calendar.addWorkingHours(succLs, -lagHours)
+          impliedPredLf = calendar.addWorkingHours(myLs, -lagHours)
           break
         case 'FF':
-          impliedPredLf = calendar.addWorkingHours(succLf, -lagHours)
+          impliedPredLf = calendar.addWorkingHours(myLf, -lagHours)
           break
         case 'SS': {
-          const predLs = calendar.addWorkingHours(succLs, -lagHours)
+          const predLs = calendar.addWorkingHours(myLs, -lagHours)
           impliedPredLf = calendar.addWorkingHours(predLs, predDur)
           break
         }
         case 'SF':
         default: {
-          const predLs = calendar.addWorkingHours(succLf, -lagHours)
+          const predLs = calendar.addWorkingHours(myLf, -lagHours)
           impliedPredLf = calendar.addWorkingHours(predLs, predDur)
           break
         }
@@ -301,11 +371,8 @@ export function computeFloat(
       const cur = lateFinish.get(pred.id)
       if (!cur || impliedPredLf.getTime() < cur.getTime()) {
         lateFinish.set(pred.id, impliedPredLf)
-        changed = true
       }
     }
-
-    if (!changed) break
   }
 
   // Compute slack values
@@ -362,7 +429,7 @@ export function computeFloat(
 
         if (free < minFree) minFree = free
       }
-      freeSlackHours = Math.min(totalSlackHours, Math.max(0, minFree))
+      freeSlackHours = Math.min(totalSlackHours, minFree)
     }
 
     result.set(t.id, { totalSlackHours, freeSlackHours })
@@ -380,9 +447,33 @@ export function applyFloatToTasks(
   tasks: readonly Task[],
   floatMap: Map<TaskId, FloatResult>,
 ): Task[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]))
+  const childrenOf = new Map<TaskId, Task[]>()
+  for (const t of tasks) {
+    if (!t.parentId) continue
+    const list = childrenOf.get(t.parentId) ?? []
+    list.push(t)
+    childrenOf.set(t.parentId, list)
+  }
+
+  const summaryCritical = (taskId: TaskId): boolean => {
+    const children = childrenOf.get(taskId)
+    if (!children || children.length === 0) return false
+    const leafChildren = children.filter((c) => !c.summary)
+    if (leafChildren.length === 0) return false
+    return leafChildren.every((c) => {
+      const f = floatMap.get(c.id)
+      return f ? f.totalSlackHours <= 0 : false
+    })
+  }
+
   return tasks.map((t) => {
     if (t.summary) {
-      return t.with({ totalSlackHours: null, freeSlackHours: null, critical: false })
+      return t.with({
+        totalSlackHours: null,
+        freeSlackHours: null,
+        critical: summaryCritical(t.id),
+      })
     }
     const f = floatMap.get(t.id)
     if (!f) {
