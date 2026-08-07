@@ -41,6 +41,8 @@ class SeqIds implements IdGenerator {
 
 class MemoryRepo implements ProjectRepository {
   draft: Project | null = null
+  autoSnapshot: Project | null = null
+  autoMeta: import('../../application/ports/ProjectRepository').AutoSnapshotMetadata | null = null
   async saveDraft(project: Project) {
     this.draft = project
   }
@@ -49,6 +51,20 @@ class MemoryRepo implements ProjectRepository {
   }
   async clearDraft() {
     this.draft = null
+  }
+  async saveAutoSnapshot(project: Project, meta: import('../../application/ports/ProjectRepository').AutoSnapshotMetadata) {
+    this.autoSnapshot = project
+    this.autoMeta = meta
+  }
+  async getAutoSnapshotMetadata() {
+    return this.autoMeta
+  }
+  async loadAutoSnapshot() {
+    return this.autoSnapshot
+  }
+  async clearAutoSnapshot() {
+    this.autoSnapshot = null
+    this.autoMeta = null
   }
 }
 

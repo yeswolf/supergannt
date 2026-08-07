@@ -57,6 +57,20 @@ interface UndoEntry {
   label: string
 }
 
+export interface AutoSaveState {
+  /** 'idle' | 'saving' | 'saved' — shown in the toolbar indicator. */
+  status: 'idle' | 'saving' | 'saved'
+  /** True when there are unsaved changes since the last explicit save. */
+  dirty: boolean
+  /** True when auto-save skipped because localStorage is near quota. */
+  quotaWarning: boolean
+  /** Non-null when a recovery snapshot exists on app open. */
+  recoverySnapshot: {
+    savedAt: string
+    fileName: string | null
+  } | null
+}
+
 export interface WorkspaceState {
   project: Project
   view: AppView
@@ -76,6 +90,15 @@ export interface WorkspaceState {
   undoStack: UndoEntry[]
   /** Redo stack — most recently undone at the end. */
   redoStack: UndoEntry[]
+  /** Auto-save state for the toolbar indicator and recovery. */
+  autoSave: AutoSaveState
+}
+
+const INITIAL_AUTO_SAVE: AutoSaveState = {
+  status: 'idle',
+  dirty: false,
+  quotaWarning: false,
+  recoverySnapshot: null,
 }
 
 export function createInitialState(services = createAppServices()): WorkspaceState {
@@ -93,6 +116,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     services,
     undoStack: [],
     redoStack: [],
+    autoSave: { ...INITIAL_AUTO_SAVE },
   }
 }
 
@@ -172,6 +196,12 @@ export type WorkspaceAction =
     }
   | { type: 'undo' }
   | { type: 'redo' }
+  | { type: 'autoSaveSaving' }
+  | { type: 'autoSaveSaved'; quotaWarning?: boolean }
+  | { type: 'autoSaveIdle' }
+  | { type: 'setDirty'; dirty: boolean }
+  | { type: 'setRecoverySnapshot'; snapshot: AutoSaveState['recoverySnapshot'] }
+  | { type: 'dismissRecoverySnapshot' }
 
 /** Push a snapshot onto the undo stack, capping at MAX_UNDO_DEPTH. */
 function pushUndo(stack: UndoEntry[], entry: UndoEntry): UndoEntry[] {
@@ -273,6 +303,7 @@ export function undoableReducer(
       }),
       project: prev,
       statusMessage: `Undo: ${entry.label}`,
+      autoSave: { ...state.autoSave, dirty: true },
     }
   }
 
@@ -289,6 +320,7 @@ export function undoableReducer(
       }),
       project: next,
       statusMessage: `Redo: ${entry.label}`,
+      autoSave: { ...state.autoSave, dirty: true },
     }
   }
 
@@ -299,7 +331,7 @@ export function undoableReducer(
     action.type === 'loadDemo'
   ) {
     const result = workspaceReducer(state, action)
-    return { ...result, undoStack: [], redoStack: [] }
+    return { ...result, undoStack: [], redoStack: [], autoSave: { ...result.autoSave, dirty: false } }
   }
 
   // --- Project-mutating actions: snapshot before, clear redo after -------
@@ -316,6 +348,7 @@ export function undoableReducer(
           label: ACTION_LABELS[action.type] ?? action.type,
         }),
         redoStack: [],
+        autoSave: { ...result.autoSave, dirty: true },
       }
     }
     return result
@@ -733,6 +766,26 @@ export function workspaceReducer(
         ...state,
         project: ProjectUseCases.updateProjectInfo(state.project, action.patch),
       }
+    // --- Auto-save --------------------------------------------------------
+    case 'autoSaveSaving':
+      return { ...state, autoSave: { ...state.autoSave, status: 'saving' } }
+    case 'autoSaveSaved':
+      return {
+        ...state,
+        autoSave: {
+          ...state.autoSave,
+          status: 'saved',
+          quotaWarning: action.quotaWarning ?? false,
+        },
+      }
+    case 'autoSaveIdle':
+      return { ...state, autoSave: { ...state.autoSave, status: 'idle' } }
+    case 'setDirty':
+      return { ...state, autoSave: { ...state.autoSave, dirty: action.dirty } }
+    case 'setRecoverySnapshot':
+      return { ...state, autoSave: { ...state.autoSave, recoverySnapshot: action.snapshot } }
+    case 'dismissRecoverySnapshot':
+      return { ...state, autoSave: { ...state.autoSave, recoverySnapshot: null } }
     default:
       return state
   }

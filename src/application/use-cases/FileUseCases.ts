@@ -1,4 +1,5 @@
 import type { Project } from '../../domain/entities/Project'
+import type { AutoSnapshotMetadata } from '../ports/ProjectRepository'
 import type { ProjectFileCodec } from '../ports/ProjectFileCodec'
 import type { ProjectRepository } from '../ports/ProjectRepository'
 import { refreshProject } from '../services/ProjectRefresh'
@@ -68,5 +69,27 @@ export class FileUseCases {
   async loadDraft(): Promise<Project | null> {
     const draft = await this.repository.loadDraft()
     return draft ? refreshProject(draft) : null
+  }
+
+  // --- Auto-save (crash recovery) ----------------------------------------
+
+  async saveAutoSnapshot(project: Project, metadata: AutoSnapshotMetadata): Promise<boolean> {
+    await this.repository.saveAutoSnapshot(project, metadata)
+    // Return true if snapshot was persisted (we trust the repo to handle quota checks).
+    const stored = await this.repository.getAutoSnapshotMetadata()
+    return stored != null && stored.savedAt === metadata.savedAt
+  }
+
+  async getAutoSnapshotMetadata(): Promise<AutoSnapshotMetadata | null> {
+    return this.repository.getAutoSnapshotMetadata()
+  }
+
+  async loadAutoSnapshot(): Promise<Project | null> {
+    const snap = await this.repository.loadAutoSnapshot()
+    return snap ? refreshProject(snap) : null
+  }
+
+  async clearAutoSnapshot(): Promise<void> {
+    await this.repository.clearAutoSnapshot()
   }
 }

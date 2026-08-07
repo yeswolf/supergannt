@@ -1,4 +1,5 @@
 import type { DragEvent } from 'react'
+import { useEffect } from 'react'
 import { AppChrome } from './components/AppChrome'
 import { GanttView } from './components/GanttView'
 import { TaskSheetView } from './components/TaskSheetView'
@@ -12,6 +13,8 @@ import { CalendarView } from './components/CalendarView'
 import { ResourceCalendarView } from './components/ResourceCalendarView'
 import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
+import { RecoveryBanner } from './components/RecoveryBanner'
+import { useAutoSave } from './hooks/useAutoSave'
 import { openPlanFile } from './openPlanFile'
 import { viewLabel } from './components/nav/views'
 import { useWorkspaceDispatch, useWorkspaceState } from './state/WorkspaceContext'
@@ -24,6 +27,22 @@ function isFileDrag(e: DragEvent): boolean {
 export function AppShell() {
   const { view, project, statusMessage, busyMessage, services } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
+
+  // Activate auto-save polling.
+  useAutoSave()
+
+  // On mount, check for a crash-recovery snapshot.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const meta = await services.files.getAutoSnapshotMetadata()
+      if (cancelled || !meta) return
+      dispatch({ type: 'setRecoverySnapshot', snapshot: meta })
+    })()
+    return () => { cancelled = true }
+  }, [services.files, dispatch])
+
+  const { autoSave } = useWorkspaceState()
 
   return (
     <div
@@ -43,6 +62,7 @@ export function AppShell() {
       }}
     >
       <AppChrome />
+      <RecoveryBanner />
       <main className={styles.main}>
         {view === 'gantt' ? <GanttView /> : null}
         {view === 'tasks' ? <TaskSheetView /> : null}
@@ -70,7 +90,17 @@ export function AppShell() {
           <span>
             View <strong>{viewLabel(view)}</strong>
           </span>
-          {project.dirty ? <span>Unsaved changes</span> : <span>Saved</span>}
+          {autoSave.quotaWarning ? (
+            <span title="Storage near quota — auto-save skipped">⚠ Storage full</span>
+          ) : autoSave.status === 'saving' ? (
+            <span>Saving…</span>
+          ) : autoSave.status === 'saved' ? (
+            <span>Auto-saved</span>
+          ) : autoSave.dirty ? (
+            <span>Unsaved changes</span>
+          ) : (
+            <span>Saved</span>
+          )}
         </div>
       </footer>
       <TaskInformationDialog />
