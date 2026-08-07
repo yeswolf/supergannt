@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: pm-${{ github.event.issue.number || 'dispatch' }}
+  # Shared with Implement/Fix/Review — only one magic agent globally; queue the rest.
+  group: magic-agent
   cancel-in-progress: false
 
 jobs:
