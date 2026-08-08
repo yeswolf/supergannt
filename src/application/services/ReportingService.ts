@@ -159,34 +159,48 @@ export function computeResourceHistogram(
   project: Project,
   granularity: HistogramGranularity = 'week',
 ): PeriodBucket[] {
-  const calendar = project.getCalendar()
-
   // Intermediate map: resourceId → periodKey → { hours, taskIds }
   const accumulator = new Map<string, Map<string, { hours: number; taskIds: Set<string> }>>()
+
+  // Build assignment lookup once: Map<taskId, Assignment[]>
+  const assignmentsByTask = new Map<string, typeof project.assignments>()
+  for (const a of project.assignments) {
+    let list = assignmentsByTask.get(a.taskId)
+    if (!list) {
+      list = []
+      assignmentsByTask.set(a.taskId, list)
+    }
+    list.push(a)
+  }
 
   for (const task of project.tasks) {
     if (task.summary || task.milestone) continue
 
-    const assignments = project.assignments.filter((a) => a.taskId === task.id)
-    if (assignments.length === 0) continue
-
-    const workingDays: Date[] = []
-    const cursor = new Date(task.start.getTime())
-    cursor.setHours(0, 0, 0, 0)
-    const end = new Date(task.finish.getTime())
-    end.setHours(0, 0, 0, 0)
-    while (cursor.getTime() <= end.getTime()) {
-      if (calendar.isWorkingDay(cursor)) {
-        workingDays.push(new Date(cursor.getTime()))
-      }
-      cursor.setDate(cursor.getDate() + 1)
-    }
-
-    if (workingDays.length === 0) continue
+    const assignments = assignmentsByTask.get(task.id)
+    if (!assignments || assignments.length === 0) continue
 
     for (const assignment of assignments) {
       const resource = project.resources.find((r) => r.id === assignment.resourceId)
       if (!resource) continue
+
+      // Use the resource's calendar so allocation and capacity use the same
+      // calendar — avoids mismatched working-day counts when a resource has
+      // a different calendar (part-time, different holidays, etc.).
+      const resCalendar = project.getResourceCalendar(resource.id)
+
+      const workingDays: Date[] = []
+      const cursor = new Date(task.start.getTime())
+      cursor.setHours(0, 0, 0, 0)
+      const end = new Date(task.finish.getTime())
+      end.setHours(0, 0, 0, 0)
+      while (cursor.getTime() <= end.getTime()) {
+        if (resCalendar.isWorkingDay(cursor)) {
+          workingDays.push(new Date(cursor.getTime()))
+        }
+        cursor.setDate(cursor.getDate() + 1)
+      }
+
+      if (workingDays.length === 0) continue
 
       const hours =
         assignment.workHours > 0

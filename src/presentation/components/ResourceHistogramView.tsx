@@ -4,8 +4,8 @@ import { computeResourceHistogram, type PeriodBucket, type HistogramGranularity 
 import { ViewHeader } from './ViewHeader'
 import styles from './ResourceHistogramView.module.css'
 
-/** Default hours per working day. */
-const HOURS_PER_DAY = 8
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export function ResourceHistogramView() {
   const { project } = useWorkspaceState()
@@ -79,22 +79,27 @@ export function ResourceHistogramView() {
         return `${d.getMonth() + 1}/${d.getDate()}`
       }
       if (granularity === 'month') {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        return `${months[d.getMonth()]} ${d.getFullYear()}`
+        return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`
       }
       // week
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-      return `${months[d.getMonth()]} ${d.getDate()}`
+      return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`
     },
     [granularity],
+  )
+
+  const handleGranularityChange = useCallback(
+    (g: HistogramGranularity) => {
+      setGranularity(g)
+      setScrollOffset(0)
+    },
+    [],
   )
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
+        setScrollOffset(0)
         if (e.deltaY < 0) {
           setGranularity((g) => (g === 'month' ? 'week' : g === 'week' ? 'day' : 'day'))
         } else {
@@ -102,8 +107,12 @@ export function ResourceHistogramView() {
         }
         return
       }
-      setScrollOffset((s) => Math.max(0, s + e.deltaX || e.deltaY))
+      setScrollOffset((s) => Math.max(0, s + (e.deltaX !== 0 ? e.deltaX : e.deltaY)))
     },
+    // Dependency array intentionally empty — both setGranularity and
+    // setScrollOffset are state updaters with stable identity (React
+    // guarantees this for useState setters), so this callback never
+    // needs to be recreated.
     [],
   )
 
@@ -141,7 +150,7 @@ export function ResourceHistogramView() {
               key={g}
               type="button"
               className={granularity === g ? styles.scaleActive : styles.scaleBtn}
-              onClick={() => setGranularity(g)}
+              onClick={() => handleGranularityChange(g)}
             >
               {g.charAt(0).toUpperCase() + g.slice(1)}
             </button>
