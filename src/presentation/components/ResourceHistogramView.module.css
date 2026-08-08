@@ -156,9 +156,9 @@
 .capacityLine {
   position: absolute;
   left: 1px;
-  height: 1px;
+  height: 2px;
   background: var(--histogram-capacity-line);
-  opacity: 0.5;
+  opacity: 0.8;
   pointer-events: none;
 }
 

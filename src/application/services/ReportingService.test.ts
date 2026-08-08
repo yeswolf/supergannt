@@ -22,10 +22,6 @@ class SeqIds implements IdGenerator {
   calendarId() { return this.next('c') }
 }
 
-function day(s: string): Date {
-  return new Date(s + 'T00:00:00')
-}
-
 describe('computeResourceHistogram', () => {
   it('returns empty array for an empty project', () => {
     const ids = new SeqIds()
@@ -78,10 +74,11 @@ describe('computeResourceHistogram', () => {
     const ids = new SeqIds()
     let project = createEmptyProject(ids)
     project = ResourceUseCases.addResource(project, ids, { name: 'Dev' })
+    const resourceId = project.resources[0]!.id
     project = TaskUseCases.addTask(project, ids, { name: 'Milestone', durationHours: 0 })
     const task = project.tasks[0]!
     expect(task.milestone).toBe(true)
-    project = ResourceUseCases.assignResource(project, ids, task.id, '1', 1)
+    project = ResourceUseCases.assignResource(project, ids, task.id, resourceId, 1)
     const result = computeResourceHistogram(project)
     expect(result).toEqual([])
   })

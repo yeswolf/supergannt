@@ -116,11 +116,14 @@ export function ResourceHistogramView() {
     [],
   )
 
+  const scrollOffsetRef = useRef(scrollOffset)
+  scrollOffsetRef.current = scrollOffset
+
   const handleDrag = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const container = containerRef.current
     if (!container) return
     const startX = e.clientX
-    const startOffset = scrollOffset
+    const startOffset = scrollOffsetRef.current
 
     const onMove = (ev: MouseEvent) => {
       const dx = startX - ev.clientX
@@ -132,7 +135,7 @@ export function ResourceHistogramView() {
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
-  }, [scrollOffset])
+  }, [])
 
   const COL_WIDTH = granularity === 'day' ? 40 : granularity === 'week' ? 56 : 80
   const ROW_HEIGHT = 36
