@@ -95,39 +95,6 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** Parse a single CSV line respecting RFC 4180 quoted fields. */
-function parseCsvLine(line: string, delimiter: string): string[] {
-  const fields: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]!
-    if (inQuotes) {
-      if (ch === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        current += ch
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true
-      } else if (ch === delimiter) {
-        fields.push(current.trim())
-        current = ''
-      } else {
-        current += ch
-      }
-    }
-  }
-  fields.push(current.trim())
-  return fields
-}
-
 /** Parse full CSV text into rows. Handles multiline quoted fields. */
 function parseCsv(text: string, delimiter?: string): { headers: string[]; rows: string[][]; delimiter: string } {
   // Normalize line endings
@@ -371,6 +338,26 @@ function constraintTypeLabel(ct: TaskConstraintType): string {
   return map[ct]
 }
 
+// ---- Entity type detection -------------------------------------------------
+
+function detectEntityType(headers: string[]): CsvEntityType {
+  const headerSet = new Set(headers.map((h) => normalizeFieldLabel(h)))
+  const hasTaskFields =
+    headerSet.has('start') ||
+    headerSet.has('duration') ||
+    headerSet.has('wbs') ||
+    headerSet.has('percentcomplete') ||
+    headerSet.has('outlinelevel')
+  const hasResourceFields =
+    headerSet.has('maxunits') ||
+    headerSet.has('standardrate') ||
+    headerSet.has('type')
+
+  if (hasTaskFields && !hasResourceFields) return 'task'
+  if (hasResourceFields && !hasTaskFields) return 'resource'
+  return 'task'
+}
+
 // ---- The Codec ------------------------------------------------------------
 
 export class CsvCodec implements ProjectFileCodec {
@@ -410,13 +397,7 @@ export class CsvCodec implements ProjectFileCodec {
     }
 
     // Auto-detect entity type from column headers
-    const headerSet = new Set(headers.map((h) => normalizeFieldLabel(h)))
-    const hasStart = headerSet.has('start')
-    const hasDuration = headerSet.has('duration')
-    const hasMaxUnits = headerSet.has('maxunits') || headerSet.has('max_units') || headerSet.has('max units')
-
-    const detectedType: CsvEntityType =
-      hasStart || hasDuration || (!hasMaxUnits && headers.length > 0) ? 'task' : 'resource'
+    const detectedType = detectEntityType(headers)
 
     // Build default column mappings from headers
     const mappings = this.buildDefaultMappings(headers, detectedType)
@@ -670,7 +651,6 @@ export class CsvCodec implements ProjectFileCodec {
         estimateduration: 'duration',
         fixedcost: 'fixedCost',
         fixed_cost: 'fixedCost',
-        cost: 'fixedCost',
         constrainttype: 'constraintType',
         constraint_type: 'constraintType',
         constraintdate: 'constraintDate',
@@ -925,6 +905,9 @@ export class CsvCodec implements ProjectFileCodec {
     const costPerUse = parseNumber(values.get('costPerUse') ?? '') ?? 0
     const notes = values.get('notes') ?? ''
     const email = values.get('email') ?? ''
+    // NOTE: 'calendar' is exported as a name but we don't resolve it back to
+    // an ID on import because calendar name→ID lookup requires project context
+    // that isn't available during row parsing. The field is left at null.
 
     try {
       return Resource.create({
@@ -970,24 +953,7 @@ export class CsvCodec implements ProjectFileCodec {
     const text = decodeContent(buffer, encoding)
     const { headers, rows, delimiter } = parseCsv(text)
 
-    const headerSet = new Set(headers.map((h) => normalizeFieldLabel(h)))
-    const hasTaskFields =
-      headerSet.has('start') ||
-      headerSet.has('duration') ||
-      headerSet.has('wbs') ||
-      headerSet.has('percentcomplete') ||
-      headerSet.has('outlinelevel')
-    const hasResourceFields =
-      headerSet.has('maxunits') ||
-      headerSet.has('standardrate') ||
-      headerSet.has('type')
-
-    const suggestedEntityType: CsvEntityType =
-      hasTaskFields && !hasResourceFields
-        ? 'task'
-        : hasResourceFields && !hasTaskFields
-          ? 'resource'
-          : 'task'
+    const suggestedEntityType = detectEntityType(headers)
 
     return { headers, rows, delimiter, encoding, suggestedEntityType }
   }

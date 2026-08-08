@@ -382,7 +382,7 @@ describe('CsvCodec', () => {
       'Name,Predecessors',
       'Task A,',
       'Task B,1FS',
-      'Task C,1FS,2',
+      'Task C,"1FS,2FS"',
     ].join('\n')
 
     const ids = new SeqIds()
@@ -398,7 +398,8 @@ describe('CsvCodec', () => {
 
     const result = CsvCodec.importFromCsv(csv, opts, ids)
     expect(result.tasks).toHaveLength(3)
-    expect(result.dependencies.length).toBeGreaterThanOrEqual(2)
+    // Task B: 1 predecessor (1FS). Task C: 2 predecessors (1FS + 2FS) = 3 total.
+    expect(result.dependencies).toHaveLength(3)
   })
 
   it('handles quoted fields with embedded newlines', async () => {
