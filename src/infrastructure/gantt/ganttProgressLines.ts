@@ -24,7 +24,6 @@ export function installProgressLinesOverlay(
       $height?: number
       type?: string
     } | null
-    isTaskExists: (id: string) => boolean
     /** Returns the X pixel position for a given Date on the timeline. */
     posFromDate?: (date: Date) => number
   },
@@ -51,7 +50,6 @@ export function installProgressLinesOverlay(
     if (!dataArea) return
 
     const rowH = gantt.config.row_height
-    const scaleH = gantt.config.scale_height
 
     // Create SVG overlay sized to the data area.
     svgEl = document.createElementNS(SVG_NS, 'svg')
@@ -67,7 +65,6 @@ export function installProgressLinesOverlay(
 
     // Build SVG content.
     let html = ''
-    const statusMs = statusDate.getTime()
 
     for (const pt of points) {
       // Look up the task's pixel coordinates from the gantt API.
@@ -90,10 +87,10 @@ export function installProgressLinesOverlay(
       } else {
         // Fallback: use posFromDate + row index.
         const startX = gantt.posFromDate
-          ? gantt.posFromDate(new Date(statusMs))
+          ? gantt.posFromDate(statusDate)
           : 0
         taskX = startX
-        taskY = scaleH + pt.rowIndex * rowH + 5
+        taskY = gantt.config.scale_height + pt.rowIndex * rowH + 5
         taskW = 1
         taskH = rowH - 10
       }

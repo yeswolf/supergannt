@@ -215,7 +215,7 @@ function useNarrowViewport(): boolean {
 }
 
 export function GanttView() {
-  const { project, selectedTaskId, services, taskFilterSort } = useWorkspaceState()
+  const { project, selectedTaskId, services, taskFilterSort, progressLinesOn, progressDate } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const { columns: taskColumns } = useTaskColumns()
   const [columnsOpen, setColumnsOpen] = useState(false)
@@ -252,12 +252,6 @@ export function GanttView() {
   selectedTaskIdRef.current = selectedTaskId
   const taskColumnsRef = useRef(taskColumns)
   taskColumnsRef.current = taskColumns
-  const [progressLinesOn, setProgressLinesOn] = useState(false)
-  const [statusDate, setStatusDate] = useState(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return fmtDateValue(d)
-  })
   const [showPeak, setShowPeak] = useState(false)
 
   const applyProjectToGantt = useCallback(
@@ -714,10 +708,10 @@ export function GanttView() {
 
   // Compute progress points for the overlay (pure calculation, no DOM).
   const statusDateObj = useMemo(() => {
-    if (!progressLinesOn) return null
-    const d = new Date(statusDate + 'T00:00:00')
+    if (!progressLinesOn || !progressDate) return null
+    const d = new Date(progressDate + 'T00:00:00')
     return isNaN(d.getTime()) ? null : d
-  }, [progressLinesOn, statusDate])
+  }, [progressLinesOn, progressDate])
 
   const progressPoints = useMemo(() => {
     if (!statusDateObj) return []
@@ -730,21 +724,9 @@ export function GanttView() {
   const statusDateObjRef = useRef(statusDateObj)
   statusDateObjRef.current = statusDateObj
 
-  // Install SVG overlay when progress lines are enabled.
+  // Install / re-render SVG overlay when progress lines are enabled.
   useEffect(() => {
     if (!readyRef.current || !progressLinesOn) return
-    const detach = installProgressLinesOverlay(
-      gantt,
-      () => progressPointsRef.current,
-      () => statusDateObjRef.current,
-    )
-    return detach
-  }, [progressLinesOn])
-
-  // Re-render overlay when points or status date change (but only if overlay is active).
-  useEffect(() => {
-    if (!readyRef.current || !progressLinesOn) return
-    // Force a repaint by re-installing the overlay.
     const detach = installProgressLinesOverlay(
       gantt,
       () => progressPointsRef.current,
@@ -850,7 +832,13 @@ export function GanttView() {
               label="Progress lines"
               title="Toggle progress lines on the Gantt chart"
               pressed={progressLinesOn}
-              onClick={() => setProgressLinesOn((v) => !v)}
+              onClick={() => {
+                const next = !progressLinesOn
+                dispatch({ type: 'setProgressLinesOn', on: next })
+                if (next && !progressDate) {
+                  dispatch({ type: 'setProgressDate', date: fmtDateValue(new Date()) })
+                }
+              }}
             />
             {progressLinesOn ? (
               <>
@@ -858,8 +846,8 @@ export function GanttView() {
                   type="date"
                   className={styles.scaleSelect}
                   aria-label="Status date"
-                  value={statusDate}
-                  onChange={(e) => setStatusDate(e.target.value)}
+                  value={progressDate ?? ''}
+                  onChange={(e) => dispatch({ type: 'setProgressDate', date: e.target.value })}
                   style={{ minWidth: '8.5rem', maxWidth: '9rem' }}
                 />
                 <label
