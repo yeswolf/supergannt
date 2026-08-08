@@ -218,6 +218,9 @@ export function GanttView() {
   const taskFilterRef = useRef<GanttTaskFilter>('all')
   const taskFilterSortRef = useRef(taskFilterSort)
   taskFilterSortRef.current = taskFilterSort
+  /** Previous taskFilterSort snapshot — avoids clearAll+parse when the
+   *  reducer spreads a new reference with identical filter/sort/group state. */
+  const prevFilterSortRef = useRef<string>('')
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_GANTT_ZOOM_INDEX)
   const zoomIndexRef = useRef(zoomIndex)
   zoomIndexRef.current = zoomIndex
@@ -693,6 +696,13 @@ export function GanttView() {
   // Data / filter changes: full reload. Selection-only updates use the effect below.
   useEffect(() => {
     if (!readyRef.current) return
+    // Shallow-compare: skip rebuild when the reducer spreads a new reference
+    // with identical filter/sort/group state (e.g. unrelated dispatch).
+    // Fold the project identity into the snapshot — a project change must
+    // always trigger a rebuild regardless of filter-sort state.
+    const snapshot = `${project.tasks.length}:${JSON.stringify(taskFilterSort)}`
+    if (snapshot === prevFilterSortRef.current) return
+    prevFilterSortRef.current = snapshot
     applyProjectToGantt(project, selectedTaskIdRef.current)
   }, [project, taskFilter, taskFilterSort, applyProjectToGantt])
 

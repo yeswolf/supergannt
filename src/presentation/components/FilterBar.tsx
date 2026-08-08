@@ -46,9 +46,10 @@ const BOOLEAN_FILTER_COLUMNS: readonly TaskColumnId[] = [
   'summary',
 ]
 
-/** Columns available for sorting. */
+/** Columns available for sorting.
+ *  'id' is intentionally omitted — it displays WBS and would be a duplicate
+ *  of the 'wbs' sort option (both map to task.wbs in getTaskFieldValue). */
 const SORTABLE_COLUMNS: readonly TaskColumnId[] = [
-  'id',
   'wbs',
   'name',
   'duration',
@@ -67,8 +68,9 @@ const GROUP_FIELDS: { value: TaskGroupField; label: string }[] = [
   { value: 'outlineLevel', label: 'Outline Level' },
 ]
 
+let _filterIdCounter = 0
 function generateFilterId(): string {
-  return crypto.randomUUID()
+  return `f${++_filterIdCounter}`
 }
 
 export function FilterBar({

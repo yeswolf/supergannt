@@ -64,6 +64,9 @@ export interface GroupHeaderRow {
 export interface TaskRow {
   type: 'task'
   task: Task
+  /** Precomputed group key so the render path can check collapse state
+   *  without re-running getGroupKey (which may do resource lookups). */
+  groupKey: string
 }
 
 export type TaskViewRow = GroupHeaderRow | TaskRow
@@ -131,11 +134,13 @@ function dateRange(
   if (from) {
     const [fy, fm, fd] = from.split('-').map(Number) as [number, number, number]
     const fromMs = new Date(fy, fm - 1, fd).getTime()
+    if (isNaN(fromMs)) return false
     if (val < fromMs) return false
   }
   if (to) {
     const [ty, tm, td] = to.split('-').map(Number) as [number, number, number]
     const toMs = new Date(ty, tm - 1, td, 23, 59, 59, 999).getTime()
+    if (isNaN(toMs)) return false
     if (val > toMs) return false
   }
   return true
@@ -236,7 +241,7 @@ export function applyTaskFilterSort(
 
   // 3. Group
   if (state.groupBy === 'none') {
-    return filtered.map((task) => ({ type: 'task' as const, task }))
+    return filtered.map((task) => ({ type: 'task' as const, task, groupKey: '' }))
   }
 
   return groupTasks(project, filtered, state.groupBy)
@@ -330,7 +335,7 @@ function groupTasks(
     const label = getGroupLabel(field, key, groupTasks[0])
     rows.push(makeGroupHeader(label, key, groupTasks))
     for (const task of groupTasks) {
-      rows.push({ type: 'task', task })
+      rows.push({ type: 'task', task, groupKey: key })
     }
   }
   return rows

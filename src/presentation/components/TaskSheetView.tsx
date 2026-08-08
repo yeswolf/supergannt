@@ -8,8 +8,6 @@ import {
 } from 'react'
 import {
   applyTaskFilterSort,
-  getGroupKey,
-  type TaskGroupField,
   type TaskViewRow,
 } from '../../application/services/TaskFilterSortService'
 import { formatPredecessors } from '../../application/services/PredecessorNotation'
@@ -42,7 +40,7 @@ export function TaskSheetView() {
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [draftPreds, setDraftPreds] = useState<Record<string, string>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => new Set(),
+    new Set(),
   )
 
   const rows: TaskViewRow[] = useMemo(
@@ -157,12 +155,7 @@ export function TaskSheetView() {
               // Skip collapsed group tasks
               if (
                 taskFilterSort.groupBy !== 'none' &&
-                isTaskInCollapsedGroup(
-                  project,
-                  row.task,
-                  taskFilterSort.groupBy,
-                  collapsedGroups,
-                )
+                collapsedGroups.has(row.groupKey)
               ) {
                 return null
               }
@@ -219,17 +212,6 @@ export function TaskSheetView() {
       <TaskColumnsDialog open={columnsOpen} onClose={() => setColumnsOpen(false)} />
     </div>
   )
-}
-
-function isTaskInCollapsedGroup(
-  project: Project,
-  task: Task,
-  groupBy: string,
-  collapsedGroups: Set<string>,
-): boolean {
-  if (groupBy === 'none') return false
-  const key = getGroupKey(project, task, groupBy as TaskGroupField)
-  return collapsedGroups.has(key)
 }
 
 function renderTaskSheetCell(opts: {
@@ -394,6 +376,12 @@ function renderTaskSheetCell(opts: {
           }}
         />
       )
+    case 'milestone':
+      return task.milestone ? '✓' : ''
+    case 'critical':
+      return task.critical ? '✓' : ''
+    case 'summary':
+      return task.summary ? '✓' : ''
     default:
       return null
   }
