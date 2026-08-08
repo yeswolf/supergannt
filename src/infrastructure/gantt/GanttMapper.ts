@@ -3,6 +3,10 @@ import type { LinkType } from '../../domain/entities/Dependency'
 import { formatPredecessors } from '../../application/services/PredecessorNotation'
 import { formatTaskResourceNames } from '../../application/use-cases/ResourceUseCases'
 import { formatSlackHours } from '../../presentation/common/formatSlack'
+import {
+  applyTaskFilter,
+  type TaskFilterSortState,
+} from '../../application/services/TaskFilterSortService'
 
 export interface GanttTaskDto {
   id: string
@@ -143,6 +147,37 @@ export function filterGanttData(
     }
   }
 
+  return {
+    data: full.data.filter((d) => keep.has(String(d.id))),
+    links: full.links.filter(
+      (l) => keep.has(String(l.source)) && keep.has(String(l.target)),
+    ),
+  }
+}
+
+/** Filter Gantt data using TaskFilterSortState (workspace-level AutoFilter).
+ *  Includes ancestor summary tasks so the tree structure stays intact.
+ *  Reuses {@link toGanttData} for the DTO mapping so there is a single
+ *  source of truth for the task→Gantt row transformation. */
+export function filterGanttDataByState(
+  project: Project,
+  state: TaskFilterSortState,
+): { data: GanttTaskDto[]; links: GanttLinkDto[] } {
+  const filteredTasks = applyTaskFilter(project, state)
+  const byId = new Map(project.tasks.map((t) => [String(t.id), t]))
+  const keep = new Set(filteredTasks.map((t) => String(t.id)))
+
+  // Walk up each matching task's parent chain to include ancestor summaries
+  for (const task of filteredTasks) {
+    let cur: typeof task | undefined = task
+    while (cur) {
+      keep.add(String(cur.id))
+      cur = cur.parentId ? byId.get(String(cur.parentId)) : undefined
+    }
+  }
+
+  // Reuse toGanttData for the DTO mapping — same pattern as filterGanttData
+  const full = toGanttData(project)
   return {
     data: full.data.filter((d) => keep.has(String(d.id))),
     links: full.links.filter(

@@ -1,10 +1,15 @@
 import {
   useEffect,
+  useMemo,
   useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from 'react'
+import {
+  applyTaskFilterSort,
+  type TaskViewRow,
+} from '../../application/services/TaskFilterSortService'
 import { formatPredecessors } from '../../application/services/PredecessorNotation'
 import { formatTaskResourceNames } from '../../application/use-cases/ResourceUseCases'
 import type { Project } from '../../domain/entities/Project'
@@ -21,22 +26,43 @@ import { useTaskColumns } from '../taskColumns/taskColumnStore'
 import { fromDateInputValue, toDateInputValue } from '../utils/dateInput'
 import { formatSlackHours } from '../common/formatSlack'
 import styles from './DataTable.module.css'
+import fStyles from './FilterBar.module.css'
 import { IconAction } from './IconAction'
 import { ColumnHeader, useResizableColumns } from './useResizableColumns'
 import { ViewHeader } from './ViewHeader'
+import { FilterBar } from './FilterBar'
 
 export function TaskSheetView() {
-  const { project, selectedTaskId, selectedTaskIds } = useWorkspaceState()
+  const { project, selectedTaskId, selectedTaskIds, taskFilterSort } =
+    useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const { columns } = useTaskColumns()
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [draftPreds, setDraftPreds] = useState<Record<string, string>>({})
-  const { tableRef, colgroup, onResizeStart, onResizeAuto } = useResizableColumns(
-    `${project.tasks.length}:${columns.join(',')}`,
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set(),
   )
 
+  const rows: TaskViewRow[] = useMemo(
+    () => applyTaskFilterSort(project, taskFilterSort),
+    [project, taskFilterSort],
+  )
+
+  const taskIds = useMemo(
+    () =>
+      rows
+        .filter((r): r is { type: 'task'; task: Task } => r.type === 'task')
+        .map((r) => r.task.id),
+    [rows],
+  )
+
+  // Key on project.tasks.length (not rows.length) so column widths persist
+  // across filter/sort/group changes — resizing on every keystroke is jarring.
+  const { tableRef, colgroup, onResizeStart, onResizeAuto } =
+    useResizableColumns(`${project.tasks.length}:${columns.join(',')}`)
+
   useArrowRowNavigation({
-    ids: project.tasks.map((t) => t.id),
+    ids: taskIds,
     selectedId: selectedTaskId,
     onSelect: (taskId) => dispatch({ type: 'selectTask', taskId }),
   })
@@ -48,6 +74,15 @@ export function TaskSheetView() {
     }
     setDraftPreds(next)
   }, [project])
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   return (
     <div className={styles.panel}>
@@ -61,6 +96,14 @@ export function TaskSheetView() {
             onClick={() => setColumnsOpen(true)}
           />
         }
+      />
+      <FilterBar
+        state={taskFilterSort}
+        onSetFilter={(f) => dispatch({ type: 'setTaskFilter', filter: f })}
+        onRemoveFilter={(id) => dispatch({ type: 'removeTaskFilter', filterId: id })}
+        onClearFilters={() => dispatch({ type: 'clearTaskFilters' })}
+        onSetSort={(s) => dispatch({ type: 'setTaskSort', sort: s })}
+        onSetGroup={(g) => dispatch({ type: 'setTaskGroup', groupBy: g })}
       />
       <div className={styles.tableWrap}>
         <table ref={tableRef} className={styles.table}>
@@ -80,7 +123,43 @@ export function TaskSheetView() {
             </tr>
           </thead>
           <tbody>
-            {project.tasks.map((task, index) => {
+            {rows.map((row, index) => {
+              if (row.type === 'groupHeader') {
+                const collapsed = collapsedGroups.has(row.groupKey)
+                return (
+                  <tr
+                    key={`gh-${row.groupKey}`}
+                    className={fStyles.groupHeader}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleGroup(row.groupKey)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleGroup(row.groupKey)
+                      }
+                    }}
+                  >
+                    <td colSpan={columns.length}>
+                      <span className={fStyles.groupToggle}>
+                        {collapsed ? '▸' : '▾'}
+                      </span>
+                      {row.groupLabel}
+                      <span className={fStyles.groupSummary}>
+                        ({row.taskCount} tasks, {row.cost}, {row.workHours}h)
+                      </span>
+                    </td>
+                  </tr>
+                )
+              }
+              // Skip collapsed group tasks
+              if (
+                taskFilterSort.groupBy !== 'none' &&
+                collapsedGroups.has(row.groupKey)
+              ) {
+                return null
+              }
+              const task = row.task
               const multiSelected = selectedTaskIds.includes(task.id)
               return (
                 <tr
@@ -297,6 +376,12 @@ function renderTaskSheetCell(opts: {
           }}
         />
       )
+    case 'milestone':
+      return task.milestone ? '✓' : ''
+    case 'critical':
+      return task.critical ? '✓' : ''
+    case 'summary':
+      return task.summary ? '✓' : ''
     default:
       return null
   }

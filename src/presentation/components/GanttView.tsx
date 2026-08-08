@@ -4,6 +4,7 @@ import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import * as DependencyUseCases from '../../application/use-cases/DependencyUseCases'
 import {
   filterGanttData,
+  filterGanttDataByState,
   DHTMLX_TO_LINK,
   orientDraggedLink,
   type GanttTaskFilter,
@@ -24,6 +25,7 @@ import { useTaskColumns } from '../taskColumns/taskColumnStore'
 import type { TaskColumnId } from '../taskColumns/taskColumnDefs'
 import { IconAction, IconActionGroup } from './IconAction'
 import { ViewHeader, ViewHeaderSep } from './ViewHeader'
+import { FilterBar } from './FilterBar'
 import styles from './GanttView.module.css'
 
 const NARROW_MQ = '(max-width: 820px)'
@@ -201,7 +203,7 @@ function useNarrowViewport(): boolean {
 }
 
 export function GanttView() {
-  const { project, selectedTaskId, services } = useWorkspaceState()
+  const { project, selectedTaskId, services, taskFilterSort } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const { columns: taskColumns } = useTaskColumns()
   const [columnsOpen, setColumnsOpen] = useState(false)
@@ -214,6 +216,11 @@ export function GanttView() {
   const idsRef = useRef(services.ids)
   idsRef.current = services.ids
   const taskFilterRef = useRef<GanttTaskFilter>('all')
+  const taskFilterSortRef = useRef(taskFilterSort)
+  taskFilterSortRef.current = taskFilterSort
+  /** Previous taskFilterSort snapshot — avoids clearAll+parse when the
+   *  reducer spreads a new reference with identical filter/sort/group state. */
+  const prevFilterSortRef = useRef<string>('')
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_GANTT_ZOOM_INDEX)
   const zoomIndexRef = useRef(zoomIndex)
   zoomIndexRef.current = zoomIndex
@@ -237,7 +244,13 @@ export function GanttView() {
   const applyProjectToGantt = useCallback(
     (nextProject: typeof project, selectedId: string | null) => {
       if (!readyRef.current) return
-      const { data, links } = filterGanttData(nextProject, taskFilterRef.current)
+      // Use workspace-level AutoFilter when filters/sort/group are active
+      const fss = taskFilterSortRef.current
+      const hasWorkspaceFilters =
+        fss.filters.length > 0 || fss.sort !== null || fss.groupBy !== 'none'
+      const { data, links } = hasWorkspaceFilters
+        ? filterGanttDataByState(nextProject, fss)
+        : filterGanttData(nextProject, taskFilterRef.current)
       syncingFromProjectRef.current = true
       try {
         gantt.clearAll()
@@ -683,8 +696,16 @@ export function GanttView() {
   // Data / filter changes: full reload. Selection-only updates use the effect below.
   useEffect(() => {
     if (!readyRef.current) return
+    // Compare individual fields to avoid JSON.stringify of the entire
+    // filter/sort/group state on every render. Stringify only the filters
+    // array (typically tiny) — sort and groupBy are flat scalar fields.
+    const taskCount = project.tasks.length
+    const fss = taskFilterSort
+    const snapshot = `${taskCount}:${JSON.stringify(fss.filters)}:${fss.sort?.column ?? ''}:${fss.sort?.direction ?? ''}:${fss.groupBy}`
+    if (snapshot === prevFilterSortRef.current) return
+    prevFilterSortRef.current = snapshot
     applyProjectToGantt(project, selectedTaskIdRef.current)
-  }, [project, taskFilter, applyProjectToGantt])
+  }, [project, taskFilter, taskFilterSort, applyProjectToGantt])
 
   useEffect(() => {
     if (!readyRef.current) return
@@ -766,6 +787,14 @@ export function GanttView() {
             <ViewHeaderSep />
           </>
         }
+      />
+      <FilterBar
+        state={taskFilterSort}
+        onSetFilter={(f) => dispatch({ type: 'setTaskFilter', filter: f })}
+        onRemoveFilter={(id) => dispatch({ type: 'removeTaskFilter', filterId: id })}
+        onClearFilters={() => dispatch({ type: 'clearTaskFilters' })}
+        onSetSort={(s) => dispatch({ type: 'setTaskSort', sort: s })}
+        onSetGroup={(g) => dispatch({ type: 'setTaskGroup', groupBy: g })}
       />
       <div
         ref={containerRef}

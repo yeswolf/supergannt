@@ -13,6 +13,9 @@ export const TASK_COLUMN_IDS = [
   'cost',
   'resources',
   'predecessors',
+  'milestone',
+  'critical',
+  'summary',
 ] as const
 
 export type TaskColumnId = (typeof TASK_COLUMN_IDS)[number]
@@ -110,6 +113,27 @@ export const TASK_COLUMN_DEFS: Record<TaskColumnId, TaskColumnDef> = {
     ganttWidth: 120,
     ganttMinWidth: 72,
   },
+  milestone: {
+    id: 'milestone',
+    label: 'Milestone',
+    ganttWidth: 72,
+    ganttMinWidth: 56,
+    align: 'center',
+  },
+  critical: {
+    id: 'critical',
+    label: 'Critical',
+    ganttWidth: 64,
+    ganttMinWidth: 48,
+    align: 'center',
+  },
+  summary: {
+    id: 'summary',
+    label: 'Summary',
+    ganttWidth: 64,
+    ganttMinWidth: 48,
+    align: 'center',
+  },
 }
 
 /** Sheet header labels (Duration (h) etc.). */
@@ -126,6 +150,9 @@ export const TASK_SHEET_LABELS: Record<TaskColumnId, string> = {
   cost: 'Cost',
   resources: 'Resource Names',
   predecessors: 'Predecessors',
+  milestone: 'Milestone',
+  critical: 'Critical',
+  summary: 'Summary',
 }
 
 /**

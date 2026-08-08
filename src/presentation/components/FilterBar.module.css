@@ -1,0 +1,139 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+  min-height: 2.25rem;
+  flex-wrap: wrap;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+/* Shared base for filter input controls */
+.controlBase {
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-sm);
+  background: var(--msp-input-bg, var(--msp-surface));
+  color: var(--msp-text);
+  border: 1px solid var(--msp-border);
+  border-radius: 3px;
+  padding: 0.2rem 0.35rem;
+  height: 1.75rem;
+}
+
+.select {
+  max-width: 130px;
+}
+
+.filterInput {
+  padding: 0.15rem 0.35rem;
+  width: 130px;
+}
+
+.numInput {
+  padding: 0.15rem 0.35rem;
+  width: 60px;
+}
+
+.booleanLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  border: none;
+  padding: 0.15rem 0.35rem;
+  height: auto;
+  width: auto;
+}
+
+.rangeSep {
+  color: var(--msp-text-muted);
+  font-size: var(--msp-text-sm);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-xs);
+  background: var(--msp-accent, #3b82f6);
+  color: #fff;
+  border-radius: 10px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.chipCol {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.chipVal {
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chipRemove {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+  margin-left: 0.1rem;
+  opacity: 0.7;
+  border-radius: 50%;
+}
+
+.chipRemove:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.summary {
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-xs);
+  color: var(--msp-text-muted);
+  white-space: nowrap;
+  padding-right: 0.25rem;
+}
+
+.groupHeader {
+  background: var(--msp-surface-alt);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.groupHeader td {
+  padding: 0.3rem 0.4rem;
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-sm);
+  color: var(--msp-text);
+}
+
+.groupToggle {
+  display: inline-block;
+  width: 1rem;
+  margin-right: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.groupSummary {
+  font-weight: 400;
+  color: var(--msp-text-muted);
+  font-size: var(--msp-text-xs);
+  margin-left: 0.5rem;
+}
