@@ -45,7 +45,7 @@ export function formatPredecessors(
 export function parsePredecessorToken(
   token: string,
   tasks: readonly Task[],
-  wbsTasks?: readonly Task[],
+  wbsTasks?: readonly Task[] | Map<string, Task>,
 ): ParsedPredecessor | null {
   const trimmed = token.trim()
   if (!trimmed) return null
@@ -68,8 +68,14 @@ export function parsePredecessorToken(
 
   // Prefer WBS match against the full task set (existing + new), then 1-based index
   // against the new-tasks-only set so imported predecessor indices stay CSV-scoped.
-  const allForWbs = wbsTasks ?? tasks
-  const byWbs = allForWbs.find((t) => t.wbs === ref)
+  // Accept a pre-built Map to avoid O(n) scans when the caller already has one.
+  let byWbs: Task | undefined
+  if (wbsTasks instanceof Map) {
+    byWbs = wbsTasks.get(ref)
+  } else {
+    const allForWbs = wbsTasks ?? tasks
+    byWbs = allForWbs.find((t) => t.wbs === ref)
+  }
   if (byWbs) {
     return { taskId: byWbs.id, type, lagHours }
   }
@@ -84,7 +90,7 @@ export function parsePredecessorToken(
 export function parsePredecessorsField(
   value: string,
   tasks: readonly Task[],
-  wbsTasks?: readonly Task[],
+  wbsTasks?: readonly Task[] | Map<string, Task>,
 ): ParsedPredecessor[] {
   if (!value.trim()) return []
   const parts = value.split(/[,;]/).map((p) => p.trim()).filter(Boolean)

@@ -338,6 +338,7 @@ const TASK_FIELD_NAMES = [
   'duration',
   'percentComplete',
   'milestone',
+  'summary',
   'notes',
   'priority',
   'constraintType',
@@ -452,6 +453,10 @@ export class CsvCodec implements ProjectFileCodec {
 
   canHandle(fileName: string): boolean {
     return fileName.toLowerCase().endsWith('.csv')
+  }
+
+  handlesExportFormat(format: string): boolean {
+    return format === `csv-${this.entityType}s`
   }
 
   /**
@@ -859,6 +864,11 @@ export class CsvCodec implements ProjectFileCodec {
 
     // Resolve predecessors from the predecessor column
     const allTasks = [...existingTasks, ...tasks]
+    // Build a WBS→Task map once to avoid O(n²) scans in parsePredecessorToken.
+    const wbsMap = new Map<string, Task>()
+    for (const t of allTasks) {
+      if (t.wbs) wbsMap.set(t.wbs, t)
+    }
     const predMappings = mappings.filter((m) => m.targetField === 'predecessors')
     if (predMappings.length > 0) {
       // Build a name→row-index map once (O(n)) instead of findIndex per task (O(n²))
@@ -897,7 +907,7 @@ export class CsvCodec implements ProjectFileCodec {
           if (!predValue.trim()) continue
 
           try {
-            const parsed = parsePredecessorsField(predValue, tasks, allTasks)
+            const parsed = parsePredecessorsField(predValue, tasks, wbsMap)
             for (const p of parsed) {
               dependencies.push(
                 Dependency.create({
@@ -919,9 +929,6 @@ export class CsvCodec implements ProjectFileCodec {
         }
       }
     }
-
-    // Count unique predecessors referenced that don't exist yet
-    // (Already handled by parsePredecessorsField throwing on unknown refs)
 
     const rowsImported = entities.length
     const rowsSkipped = skippedCount

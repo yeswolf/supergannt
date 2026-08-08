@@ -4,7 +4,7 @@ import type { ProjectFileCodec } from '../ports/ProjectFileCodec'
 import type { ProjectRepository } from '../ports/ProjectRepository'
 import { refreshProject } from '../services/ProjectRefresh'
 
-export type ExportFormat = 'mspdi' | 'mpx' | 'mpp' | 'csv'
+export type ExportFormat = 'mspdi' | 'mpx' | 'mpp' | 'csv' | 'csv-tasks' | 'csv-resources'
 
 function exportFileName(project: Project, format: ExportFormat, preferred?: string): string {
   const base = (preferred ?? project.fileName ?? project.name)
@@ -12,7 +12,7 @@ function exportFileName(project: Project, format: ExportFormat, preferred?: stri
     .trim() || project.name
   if (format === 'mpx') return `${base}.mpx`
   if (format === 'mpp') return `${base}.mpp`
-  if (format === 'csv') return `${base}.csv`
+  if (format === 'csv' || format === 'csv-tasks' || format === 'csv-resources') return `${base}.csv`
   return `${base}.xml`
 }
 
@@ -43,6 +43,9 @@ export class FileUseCases {
    * - mspdi → .xml (MS Project / ProjectLibre interchange)
    * - mpx → .mpx
    * - mpp → binary .mpp (MS Project OLE, via template writer)
+   * - csv-tasks → .csv (tasks export)
+   * - csv-resources → .csv (resources export)
+   * - csv → .csv (auto-detect: first codec found)
    */
   async saveFile(
     project: Project,
@@ -50,7 +53,7 @@ export class FileUseCases {
     format: ExportFormat = 'mspdi',
   ): Promise<{ project: Project; blob: Blob; fileName: string }> {
     const targetName = exportFileName(project, format, preferredName)
-    const writer = this.codecFor(targetName)
+    const writer = this.codecForExport(targetName, format)
     const { content, mimeType } = await writer.serialize(project)
     const saved = project.with({ fileName: targetName }).markClean()
     await this.repository.saveDraft(saved)
@@ -61,6 +64,19 @@ export class FileUseCases {
       blob: new Blob(blobParts, { type: mimeType }),
       fileName: targetName,
     }
+  }
+
+  private codecForExport(fileName: string, format: ExportFormat): ProjectFileCodec {
+    const candidates = this.codecs.filter((c) => c.canHandle(fileName))
+    if (candidates.length === 0) {
+      throw new Error(`Unsupported file type: ${fileName}`)
+    }
+    // When multiple codecs claim the same extension, disambiguate by format.
+    if (candidates.length > 1) {
+      const match = candidates.find((c) => c.handlesExportFormat?.(format))
+      if (match) return match
+    }
+    return candidates[0]!
   }
 
   async persistDraft(project: Project): Promise<void> {

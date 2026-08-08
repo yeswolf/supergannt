@@ -51,7 +51,7 @@ export function createAppServices(): AppServices {
   const mppConverter = new PreferTauriMppToXmlConverter(new HttpMppToXmlConverter())
   const mppWriter = new PreferTauriXmlToMppConverter(new HttpXmlToMppConverter())
   const files = new FileUseCases(
-    [new MppCodec(ids, mppConverter, mppWriter), new MspdiCodec(ids), new MpxCodec(), new CsvCodec(ids)],
+    [new MppCodec(ids, mppConverter, mppWriter), new MspdiCodec(ids), new MpxCodec(), new CsvCodec(ids, 'task'), new CsvCodec(ids, 'resource')],
     new LocalStorageProjectRepository(),
   )
   return { ids, files }
