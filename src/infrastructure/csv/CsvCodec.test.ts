@@ -318,6 +318,10 @@ describe('CsvCodec', () => {
         constraintdate: 'constraintDate',
         fixedcost: 'fixedCost',
         predecessors: 'predecessors',
+        summary: 'summary',
+        workhours: 'workHours',
+        // cost and resourcenames are export-only (computed from assignments);
+        // they are intentionally absent from the import mapping.
       }
       const targetField = fieldMap[normalized]
       return targetField ? { sourceColumn: h, targetField } : null
@@ -334,13 +338,45 @@ describe('CsvCodec', () => {
     expect(result.errors).toHaveLength(0)
     expect(result.tasks.length).toBe(project.tasks.length)
 
-    // Verify each task
+    // Verify each task across every field the export produces.
+    // The fieldMap above already covers all round-trippable columns.
+    // cost and resourceNames are export-only (computed from assignments).
     for (let i = 0; i < project.tasks.length; i++) {
       const original = project.tasks[i]!
       const imported = result.tasks[i]!
       expect(imported.name).toBe(original.name)
       expect(imported.outlineLevel).toBe(original.outlineLevel)
+      expect(imported.wbs).toBe(original.wbs)
+      expect(imported.percentComplete).toBe(original.percentComplete)
+      expect(imported.milestone).toBe(original.milestone)
+      expect(imported.summary).toBe(original.summary)
+      expect(imported.notes).toBe(original.notes)
+      expect(imported.priority).toBe(original.priority)
+      expect(imported.constraintType).toBe(original.constraintType)
+      expect(imported.fixedCost.amount).toBe(original.fixedCost.amount)
+      // Dates round-trip as YYYY-MM-DD only; allow up to 24 h offset for
+      // timezone differences in `new Date(year, month-1, day)`.
+      expect(Math.abs(imported.start.getTime() - original.start.getTime())).toBeLessThan(86_400_000)
+      expect(Math.abs(imported.finish.getTime() - original.finish.getTime())).toBeLessThan(86_400_000)
+      // Duration: exported as fractional days with 'd' suffix.
+      // Summary tasks (0 h) get a default 8 h on import — skip those.
+      if (original.workHours > 0) {
+        expect(Math.abs(imported.duration.toHours() - original.duration.toHours())).toBeLessThan(0.04)
+        expect(imported.workHours).toBe(original.workHours)
+      }
+      // Constraint date is nullable — check only when original has one
+      if (original.constraintDate) {
+        expect(imported.constraintDate).not.toBeNull()
+        expect(
+          Math.abs(imported.constraintDate!.getTime() - original.constraintDate.getTime()),
+        ).toBeLessThan(86_400_000)
+      } else {
+        expect(imported.constraintDate).toBeNull()
+      }
     }
+
+    // Predecessors round-trip: dependency count should match
+    expect(result.dependencies.length).toBe(project.dependencies.length)
   })
 
   it('handles UTF-16 LE encoded CSV', async () => {

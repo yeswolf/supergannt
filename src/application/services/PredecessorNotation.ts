@@ -15,12 +15,21 @@ const TOKEN =
 /**
  * Format predecessors like ProjectLibre: `2FS+8h, 1.1SS`.
  * Uses 1-based row index (task order) which matches ProjectLibre ID column.
+ *
+ * Provide an optional `taskIndex` Map (taskId → 0-based position) to avoid
+ * O(n) lookups per dependency — use when calling inside a task loop.
  */
-export function formatPredecessors(project: Project, successorId: string): string {
+export function formatPredecessors(
+  project: Project,
+  successorId: string,
+  taskIndex?: Map<string, number>,
+): string {
   return project.dependencies
     .filter((d) => d.successorId === successorId)
     .map((d) => {
-      const index = project.tasks.findIndex((t) => t.id === d.predecessorId)
+      const index = taskIndex
+        ? taskIndex.get(d.predecessorId) ?? -1
+        : project.tasks.findIndex((t) => t.id === d.predecessorId)
       if (index < 0) return null
       const id = String(index + 1)
       const type = d.type === 'FS' ? '' : d.type

@@ -144,9 +144,11 @@ function parseCsv(text: string, delimiter?: string): { headers: string[]; rows: 
       }
     } else {
       if (ch === '"') {
-        if (currentField === '') {
+        if (currentField.trim() === '') {
           // Field starts with a quote — it is a quoted field.
-          // RFC 4180: leading/trailing spaces in quoted fields are significant.
+          // Leading whitespace before the opening quote is discarded
+          // (matching spreadsheet behaviour).
+          currentField = ''
           fieldWasQuoted = true
         }
         inQuotes = true
@@ -364,7 +366,8 @@ function formatDateCsv(date: Date): string {
 function formatDurationCsv(duration: Duration): string {
   const days = duration.toDays()
   if (days === 0) return '0'
-  return String(Math.round(days * 100) / 100)
+  // Suffix 'd' so parseDurationValue reinterprets it as days, not hours.
+  return days.toFixed(2) + 'd'
 }
 
 function constraintTypeLabel(ct: TaskConstraintType): string {
@@ -506,18 +509,24 @@ export class CsvCodec implements ProjectFileCodec {
       'Work Hours',
     ]
 
+    // Pre-build lookup Maps to avoid O(n²) scans inside the task loop.
+    const taskIndex = new Map<string, number>()
+    project.tasks.forEach((t, i) => taskIndex.set(t.id, i))
+
+    const taskResourceNames = new Map<string, string>()
+    for (const a of project.assignments) {
+      const r = project.resources.find((res) => res.id === a.resourceId)
+      const name = r?.name ?? ''
+      if (!name) continue
+      const prev = taskResourceNames.get(a.taskId)
+      taskResourceNames.set(a.taskId, prev ? `${prev}; ${name}` : name)
+    }
+
     const lines: string[] = [headers.join(',')]
 
     for (const task of project.tasks) {
-      const predecessors = formatPredecessors(project, task.id)
-      const resourceNames = project.assignments
-        .filter((a) => a.taskId === task.id)
-        .map((a) => {
-          const r = project.resources.find((res) => res.id === a.resourceId)
-          return r?.name ?? ''
-        })
-        .filter(Boolean)
-        .join('; ')
+      const predecessors = formatPredecessors(project, task.id, taskIndex)
+      const resourceNames = taskResourceNames.get(task.id) ?? ''
 
       const row = [
         task.wbs,
@@ -776,8 +785,8 @@ export class CsvCodec implements ProjectFileCodec {
           } else {
             skippedCount++
           }
-        } catch {
-          errors.push({ row: rowIdx + 2, column: null, message: 'Failed to parse task row' })
+        } catch (err) {
+          errors.push({ row: rowIdx + 2, column: null, message: `Failed to parse task row: ${(err as Error).message ?? String(err)}` })
           skippedCount++
         }
       } else {
@@ -788,8 +797,8 @@ export class CsvCodec implements ProjectFileCodec {
           } else {
             skippedCount++
           }
-        } catch {
-          errors.push({ row: rowIdx + 2, column: null, message: 'Failed to parse resource row' })
+        } catch (err) {
+          errors.push({ row: rowIdx + 2, column: null, message: `Failed to parse resource row: ${(err as Error).message ?? String(err)}` })
           skippedCount++
         }
       }
@@ -907,6 +916,8 @@ export class CsvCodec implements ProjectFileCodec {
     const constraintDate = constraintDateRaw ? parseDateWithFormat(constraintDateRaw, dateFormat) : null
     const fixedCost = parseNumber(values.get('fixedCost') ?? '') ?? 0
 
+    const summary = parseBoolean(values.get('summary') ?? '') ?? false
+
     try {
       return Task.create({
         id: asTaskId(this.ids.taskId()),
@@ -918,7 +929,7 @@ export class CsvCodec implements ProjectFileCodec {
         duration: (typeof duration !== 'string' && duration.toHours() > 0) ? duration : Duration.hours(8),
         percentComplete: Math.max(0, Math.min(100, percentComplete)),
         milestone: milestone || (typeof duration !== 'string' && duration.toHours() === 0),
-        summary: false,
+        summary,
         critical: false,
         totalSlackHours: null,
         freeSlackHours: null,
