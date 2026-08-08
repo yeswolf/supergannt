@@ -178,6 +178,35 @@ describe('CsvCodec', () => {
     expect(result.errors[0]!.message).toContain('name')
   })
 
+  it('handles unparseable duration gracefully instead of crashing', async () => {
+    const csv = [
+      'Name,Duration',
+      'Task A,abc',
+      'Task B,5',
+    ].join('\n')
+
+    const ids = new SeqIds()
+    const options: CsvImportOptions = {
+      entityType: 'task',
+      dateFormat: 'iso',
+      hasHeader: true,
+      columnMappings: [
+        { sourceColumn: 'Name', targetField: 'name' },
+        { sourceColumn: 'Duration', targetField: 'duration' },
+      ],
+    }
+
+    const result = CsvCodec.importFromCsv(csv, options, ids)
+    // Both tasks should import; the unparseable duration should emit a
+    // warning but not discard the row.
+    expect(result.tasks).toHaveLength(2)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]!.message).toContain('Duration')
+    expect(result.tasks[0]!.name).toBe('Task A')
+    // Default duration of 8h (1 day) should be used for the invalid row
+    expect(result.tasks[0]!.workHours).toBeGreaterThan(0)
+  })
+
   it('detects CSV structure', () => {
     const csv = 'Name,Start,Duration,WBS\nTask A,2026-01-01,5,1'
     const structure = CsvCodec.detectStructure(csv)

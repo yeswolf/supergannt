@@ -188,9 +188,20 @@ function parseCsv(text: string, delimiter?: string): { headers: string[]; rows: 
  * Uses `new Date(value)` which parses ISO strings consistently across runtimes;
  * slashed dates like "01/05/2026" will NOT reach this function — they are
  * dispatched to {@link parseDateUs} or {@link parseDateEu} instead.
+ *
+ * A regex pre-filter rejects non-ISO formats (including slashed dates) before
+ * they reach `new Date()`, so that a wrong `dateFormat` value cannot silently
+ * produce a valid-but-wrong Date from a US/EU-formatted string.
  */
 function parseDateIso(value: string): Date | null {
-  const d = new Date(value)
+  // Accept YYYY-MM-DD or YYYY/MM/DD only; reject ambiguous M/D/Y or D/M/Y forms.
+  const match = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/.exec(value.trim())
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  const d = new Date(year, month - 1, day)
   return Number.isNaN(d.getTime()) ? null : d
 }
 
@@ -906,7 +917,7 @@ export class CsvCodec implements ProjectFileCodec {
         finish,
         duration: (typeof duration !== 'string' && duration.toHours() > 0) ? duration : Duration.hours(8),
         percentComplete: Math.max(0, Math.min(100, percentComplete)),
-        milestone: milestone || (duration.toHours() === 0),
+        milestone: milestone || (typeof duration !== 'string' && duration.toHours() === 0),
         summary: false,
         critical: false,
         totalSlackHours: null,
@@ -917,7 +928,7 @@ export class CsvCodec implements ProjectFileCodec {
         constraintDate,
         fixedCost: Money.of(fixedCost, currency),
         cost: Money.of(fixedCost, currency),
-        workHours: duration.toHours(),
+        workHours: typeof duration !== 'string' ? duration.toHours() : 0,
         schedulingType: 'fixedUnits',
         effortDriven: true,
         parentId: null,
