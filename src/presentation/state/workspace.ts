@@ -13,6 +13,7 @@ import { LocalStorageProjectRepository } from '../../infrastructure/persistence/
 import { MspdiCodec } from '../../infrastructure/mspdi/MspdiCodec'
 import { MppCodec } from '../../infrastructure/mpp/MppCodec'
 import { MpxCodec } from '../../infrastructure/mpx/MpxCodec'
+import { CsvCodec } from '../../infrastructure/csv/CsvCodec'
 import { HttpMppToXmlConverter } from '../../infrastructure/mpp/HttpMppToXmlConverter'
 import { HttpXmlToMppConverter } from '../../infrastructure/mpp/HttpXmlToMppConverter'
 import { PreferTauriMppToXmlConverter } from '../../infrastructure/mpp/PreferTauriMppToXmlConverter'
@@ -50,7 +51,7 @@ export function createAppServices(): AppServices {
   const mppConverter = new PreferTauriMppToXmlConverter(new HttpMppToXmlConverter())
   const mppWriter = new PreferTauriXmlToMppConverter(new HttpXmlToMppConverter())
   const files = new FileUseCases(
-    [new MppCodec(ids, mppConverter, mppWriter), new MspdiCodec(ids), new MpxCodec()],
+    [new MppCodec(ids, mppConverter, mppWriter), new MspdiCodec(ids), new MpxCodec(), new CsvCodec(ids, 'task'), new CsvCodec(ids, 'resource')],
     new LocalStorageProjectRepository(),
   )
   return { ids, files }

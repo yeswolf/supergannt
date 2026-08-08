@@ -15,12 +15,21 @@ const TOKEN =
 /**
  * Format predecessors like ProjectLibre: `2FS+8h, 1.1SS`.
  * Uses 1-based row index (task order) which matches ProjectLibre ID column.
+ *
+ * Provide an optional `taskIndex` Map (taskId → 0-based position) to avoid
+ * O(n) lookups per dependency — use when calling inside a task loop.
  */
-export function formatPredecessors(project: Project, successorId: string): string {
+export function formatPredecessors(
+  project: Project,
+  successorId: string,
+  taskIndex?: Map<string, number>,
+): string {
   return project.dependencies
     .filter((d) => d.successorId === successorId)
     .map((d) => {
-      const index = project.tasks.findIndex((t) => t.id === d.predecessorId)
+      const index = taskIndex
+        ? taskIndex.get(d.predecessorId) ?? -1
+        : project.tasks.findIndex((t) => t.id === d.predecessorId)
       if (index < 0) return null
       const id = String(index + 1)
       const type = d.type === 'FS' ? '' : d.type
@@ -36,6 +45,7 @@ export function formatPredecessors(project: Project, successorId: string): strin
 export function parsePredecessorToken(
   token: string,
   tasks: readonly Task[],
+  wbsTasks?: readonly Task[] | Map<string, Task>,
 ): ParsedPredecessor | null {
   const trimmed = token.trim()
   if (!trimmed) return null
@@ -56,8 +66,16 @@ export function parsePredecessorToken(
       unit === 'd' ? amount * 8 : unit === 'w' ? amount * 40 : amount
   }
 
-  // Prefer WBS match, then 1-based index
-  const byWbs = tasks.find((t) => t.wbs === ref)
+  // Prefer WBS match against the full task set (existing + new), then 1-based index
+  // against the new-tasks-only set so imported predecessor indices stay CSV-scoped.
+  // Accept a pre-built Map to avoid O(n) scans when the caller already has one.
+  let byWbs: Task | undefined
+  if (wbsTasks instanceof Map) {
+    byWbs = wbsTasks.get(ref)
+  } else {
+    const allForWbs = wbsTasks ?? tasks
+    byWbs = allForWbs.find((t) => t.wbs === ref)
+  }
   if (byWbs) {
     return { taskId: byWbs.id, type, lagHours }
   }
@@ -72,9 +90,10 @@ export function parsePredecessorToken(
 export function parsePredecessorsField(
   value: string,
   tasks: readonly Task[],
+  wbsTasks?: readonly Task[] | Map<string, Task>,
 ): ParsedPredecessor[] {
   if (!value.trim()) return []
   const parts = value.split(/[,;]/).map((p) => p.trim()).filter(Boolean)
-  const parsed = parts.map((p) => parsePredecessorToken(p, tasks))
+  const parsed = parts.map((p) => parsePredecessorToken(p, tasks, wbsTasks))
   return parsed.filter((p): p is ParsedPredecessor => p != null)
 }
