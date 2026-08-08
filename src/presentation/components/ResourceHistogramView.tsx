@@ -97,8 +97,8 @@ export function ResourceHistogramView() {
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
+      e.preventDefault()
       if (e.ctrlKey || e.metaKey) {
-        e.preventDefault()
         setScrollOffset(0)
         if (e.deltaY < 0) {
           setGranularity((g) => (g === 'month' ? 'week' : g === 'week' ? 'day' : 'day'))

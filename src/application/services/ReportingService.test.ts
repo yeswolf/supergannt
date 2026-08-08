@@ -40,17 +40,6 @@ describe('computeResourceHistogram', () => {
   })
 
   it('skips summary tasks', () => {
-    const ids = new SeqIds()
-    let project = createEmptyProject(ids)
-    project = ResourceUseCases.addResource(project, ids, { name: 'Dev' })
-    project = TaskUseCases.addTask(project, ids, { name: 'Summary', durationHours: 0 })
-    // Mark as summary by setting a child
-    const parentId = project.tasks[0]!.id
-    project = TaskUseCases.addTask(project, ids, { name: 'Child', durationHours: 16, afterTaskId: parentId })
-    // Assign resource to the summary parent — should be skipped
-    // Actually the parent becomes a summary in the MS Project model via outline level
-    // Let's use a different approach: create a task with summary:true in the domain
-    // We'll use the demo project pattern instead for reliable summary skipping
     const ids2 = new SeqIds()
     let p2 = refreshProject(createDemoProject(ids2))
     const task = p2.tasks.find((t) => !t.summary && !t.milestone)!
