@@ -346,6 +346,11 @@ export const Icons = {
       <path d="M3 7h6v4H3zM9 13H3v4h6zM15 7h6v4h-6zM9 7h6v10H9z" />
     </Svg>
   ),
+  progress: (p?: IconProps) => (
+    <Svg {...p}>
+      <path d="M2 2v20M10 10V6l4 2-4 2zM10 14v4l4-2-4-2zM22 2v20" />
+    </Svg>
+  ),
 } as const
 
 export type RibbonIconName = keyof typeof Icons

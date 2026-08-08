@@ -131,6 +131,8 @@ export function AppChrome() {
     taskInfoOpen,
     assignDialogOpen,
     autoSave,
+    progressLinesOn,
+    progressDate,
   } = useWorkspaceState()
   const dispatch = useWorkspaceDispatch()
   const { theme, setTheme, themes } = useTheme()
@@ -184,7 +186,10 @@ export function AppChrome() {
     try {
       const { exportProjectPdf } = await import('../../infrastructure/pdf/exportProjectPdf')
       const fileName = `${project.name || 'project'}.pdf`
-      const blob = await exportProjectPdf(project)
+      const blob = await exportProjectPdf(
+        project,
+        progressLinesOn && progressDate ? new Date(progressDate + 'T00:00:00') : null,
+      )
       const savedPath = await saveBlobToDisk(blob, fileName)
       if (savedPath == null) {
         dispatch({ type: 'setStatus', message: 'Export cancelled' })

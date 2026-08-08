@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Project } from '../../domain/entities/Project'
 import type { Task } from '../../domain/entities/Task'
+import { computeProgressPoints } from '../../application/services/ComputeProgressPoints'
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
@@ -104,7 +105,12 @@ function drawTaskTable(doc: jsPDF, project: Project, title: string): void {
 }
 
 /** Simple landscape Gantt chart drawn from domain dates (no UI dependency). */
-function drawGanttChart(doc: jsPDF, project: Project, title: string): void {
+function drawGanttChart(
+  doc: jsPDF,
+  project: Project,
+  title: string,
+  statusDate?: Date | null,
+): void {
   doc.addPage('a4', 'landscape')
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
@@ -207,6 +213,51 @@ function drawGanttChart(doc: jsPDF, project: Project, title: string): void {
     y += rowH
   }
 
+  // Progress lines — drawn after bars so they sit on top.
+  if (statusDate) {
+    const points = computeProgressPoints(project, statusDate)
+    for (const pt of points) {
+      const task = project.tasks[pt.rowIndex]
+      if (!task) continue
+      if (pt.rowIndex >= rowsPerPage) continue
+
+      const taskX1 = xAt(task.start.getTime())
+      const taskX2 = xAt(Math.max(task.finish.getTime(), task.start.getTime()))
+      const barY = top + 4 + pt.rowIndex * rowH + 4
+      const barH = 8
+      const barCenterY = barY + barH / 2
+      const statusX = xAt(statusDate.getTime())
+      const expectedX = taskX1 + pt.expectedRatio * Math.max(2, taskX2 - taskX1)
+      const actualX = taskX1 + pt.actualRatio * Math.max(2, taskX2 - taskX1)
+      const rowTop = top + 4 + pt.rowIndex * rowH
+
+      const isBehind = pt.variance < 0
+      if (isBehind) {
+        doc.setDrawColor(209, 52, 56) // red
+      } else {
+        doc.setDrawColor(22, 163, 74) // green
+      }
+      doc.setLineWidth(1)
+
+      // Vertical dashed line (approximate dashes for PDF).
+      doc.setLineDashPattern([3, 2], 0)
+      doc.line(statusX, rowTop, statusX, barCenterY)
+
+      // Solid connector.
+      doc.setLineDashPattern([], 0)
+      doc.line(statusX, barCenterY, actualX, barCenterY)
+
+      // Dots.
+      doc.setLineDashPattern([], 0)
+      doc.setFillColor(isBehind ? 209 : 22, isBehind ? 52 : 163, isBehind ? 56 : 74)
+      doc.circle(statusX, barCenterY, 1.5, 'F')
+      doc.circle(actualX, barCenterY, 1.5, 'F')
+    }
+    doc.setDrawColor(0)
+    doc.setLineWidth(0.5)
+    doc.setLineDashPattern([], 0)
+  }
+
   // Dependency stubs (FS only, light) — keep sparse so PDF stays readable
   doc.setDrawColor(120)
   doc.setLineWidth(0.5)
@@ -237,12 +288,15 @@ function drawGanttChart(doc: jsPDF, project: Project, title: string): void {
  * Cross-platform PDF export: task table + Gantt chart.
  * Uses Helvetica only (no Unicode symbols that become mojibake).
  */
-export async function exportProjectPdf(project: Project): Promise<Blob> {
+export async function exportProjectPdf(
+  project: Project,
+  statusDate?: Date | null,
+): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const title = project.name || 'Untitled project'
 
   drawTaskTable(doc, project, title)
-  drawGanttChart(doc, project, title)
+  drawGanttChart(doc, project, title, statusDate)
 
   return doc.output('blob')
 }

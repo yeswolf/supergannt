@@ -108,6 +108,10 @@ export interface WorkspaceState {
   inspections: InspectionFinding[]
   /** AutoFilter state — filtering, sorting, and grouping for task views. */
   taskFilterSort: TaskFilterSortState
+  /** Whether progress lines are toggled on in the Gantt chart. */
+  progressLinesOn: boolean
+  /** Status date for progress-line calculation (YYYY-MM-DD). null when disabled. */
+  progressDate: string | null
 }
 
 const INITIAL_AUTO_SAVE: AutoSaveState = {
@@ -137,6 +141,8 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     autoSave: { ...INITIAL_AUTO_SAVE },
     inspections: inspectProject(project),
     taskFilterSort: createInitialFilterSortState(),
+    progressLinesOn: false,
+    progressDate: null,
   }
 }
 
@@ -226,6 +232,8 @@ export type WorkspaceAction =
   | { type: 'clearTaskFilters' }
   | { type: 'setTaskSort'; sort: TaskSort | null }
   | { type: 'setTaskGroup'; groupBy: TaskGroupField }
+  | { type: 'setProgressLinesOn'; on: boolean }
+  | { type: 'setProgressDate'; date: string | null }
 
 /** Push a snapshot onto the undo stack, capping at MAX_UNDO_DEPTH. */
 function pushUndo(stack: UndoEntry[], entry: UndoEntry): UndoEntry[] {
@@ -857,9 +865,21 @@ export function workspaceReducer(
         ...state,
         taskFilterSort: { ...state.taskFilterSort, groupBy: action.groupBy },
       }
+    case 'setProgressLinesOn':
+      return {
+        ...state,
+        progressLinesOn: action.on,
+        progressDate: action.on ? state.progressDate : null,
+      }
+    case 'setProgressDate':
+      return {
+        ...state,
+        progressDate: action.date,
+      }
     default:
       return state
   }
 }
 
 export type { ResourceType }
+
