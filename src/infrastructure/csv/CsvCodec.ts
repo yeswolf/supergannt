@@ -346,8 +346,6 @@ const TASK_FIELD_NAMES = [
   'predecessors',
 ] as const
 
-type TaskFieldName = (typeof TASK_FIELD_NAMES)[number]
-
 const RESOURCE_FIELD_NAMES = [
   'name',
   'type',
@@ -360,8 +358,6 @@ const RESOURCE_FIELD_NAMES = [
   'calendar',
   'email',
 ] as const
-
-type ResourceFieldName = (typeof RESOURCE_FIELD_NAMES)[number]
 
 function normalizeFieldLabel(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, '')
@@ -833,7 +829,7 @@ export class CsvCodec implements ProjectFileCodec {
 
       if (entityType === 'task') {
         try {
-          const task = this.parseTaskRow(values, rowIdx, dateFormat, currency, errors, existingTasks)
+          const task = this.parseTaskRow(values, rowIdx, dateFormat, currency, errors)
           if (task) {
             entities.push(task)
           } else {
@@ -893,7 +889,7 @@ export class CsvCodec implements ProjectFileCodec {
 
         for (let i = 0; i < tasks.length; i++) {
           const task = tasks[i]!
-          const rowIdx = nameToRowIdx.get(task.name)
+          const rowIdx = nameToRowIdx.get(task.name.trim())
           if (rowIdx === undefined) continue
 
           const row = rows[rowIdx]!
@@ -901,7 +897,7 @@ export class CsvCodec implements ProjectFileCodec {
           if (!predValue.trim()) continue
 
           try {
-            const parsed = parsePredecessorsField(predValue, allTasks)
+            const parsed = parsePredecessorsField(predValue, tasks, allTasks)
             for (const p of parsed) {
               dependencies.push(
                 Dependency.create({
@@ -939,7 +935,6 @@ export class CsvCodec implements ProjectFileCodec {
     dateFormat: DateFormat,
     currency: string,
     errors: CsvImportError[],
-    _existingTasks: Task[],
   ): Task | null {
     const name = values.get('name') ?? ''
     if (!name.trim()) {
