@@ -71,7 +71,14 @@ function detectEncoding(buffer: ArrayBuffer): string {
 
 function decodeContent(buffer: ArrayBuffer, encoding: string): string {
   try {
-    return new TextDecoder(encoding).decode(buffer)
+    let text = new TextDecoder(encoding).decode(buffer)
+    // Strip UTF-8 BOM if present — it is only a signature, not content.
+    // The exporter adds a BOM (for Excel compatibility) so round-trips
+    // must strip it on import to avoid corrupting the first header field.
+    if (text.charCodeAt(0) === 0xfeff) {
+      text = text.slice(1)
+    }
+    return text
   } catch {
     return new TextDecoder('utf-8').decode(buffer)
   }
@@ -208,8 +215,8 @@ function parseDateIso(value: string): Date | null {
 }
 
 function parseDateUs(value: string): Date | null {
-  // MM/DD/YYYY or M/D/YYYY
-  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim())
+  // MM/DD/YYYY or M/D/YYYY — accepts dash or slash separator
+  const match = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/.exec(value.trim())
   if (!match) return null
   const month = Number(match[1])
   const day = Number(match[2])
@@ -220,8 +227,8 @@ function parseDateUs(value: string): Date | null {
 }
 
 function parseDateEu(value: string): Date | null {
-  // DD/MM/YYYY or D/M/YYYY
-  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim())
+  // DD/MM/YYYY or D/M/YYYY — accepts dash or slash separator
+  const match = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/.exec(value.trim())
   if (!match) return null
   const day = Number(match[1])
   const month = Number(match[2])
@@ -288,14 +295,22 @@ function parseResourceType(value: string): ResourceType {
   return 'work'
 }
 
+// ---- Duration helpers -----------------------------------------------------
+
+/** Fallback unit for plain-number duration values.  The exporter always
+ *  appends a `d` suffix, and the importer treats a bare number (no suffix)
+ *  as days.  Keep these two constants in sync with {@link formatDurationCsv}. */
+const FALLBACK_DURATION_UNIT = 'd' as const
+
 /** Parse a duration value from a CSV cell.
  *
  *  Accepts any format {@link Duration.parse} understands plus a plain numeric
  *  fallback (treated as days for backwards compatibility).  Coupled with
- *  {@link formatDurationCsv} via the `d`-suffix convention — a bare number
- *  without a unit suffix is ambiguous (hours vs days), so the exporter
- *  always appends `d`.  If you change the fallback unit here you must also
- *  update the exporter. */
+ *  {@link formatDurationCsv} via {@link FALLBACK_DURATION_UNIT} — a bare
+ *  number without a unit suffix is ambiguous (hours vs days), so the
+ *  exporter always appends `d`.  If you change the fallback unit here you
+ *  must also update the exporter.
+ */
 function parseDurationValue(value: string): Duration | 'invalid' {
   const trimmed = value.trim()
   if (!trimmed) return Duration.zero()
@@ -306,7 +321,7 @@ function parseDurationValue(value: string): Duration | 'invalid' {
     // Fallback: plain number = days
     const n = Number(trimmed.replace(/,/g, ''))
     if (Number.isFinite(n)) {
-      return Duration.of(n, 'd')
+      return Duration.of(n, FALLBACK_DURATION_UNIT)
     }
     return 'invalid'
   }
@@ -386,7 +401,7 @@ function formatDurationCsv(duration: Duration): string {
   const days = duration.toDays()
   if (days === 0) return '0'
   // Suffix 'd' so parseDurationValue reinterprets it as days, not hours.
-  return days.toFixed(2) + 'd'
+  return days.toFixed(2) + FALLBACK_DURATION_UNIT
 }
 
 function constraintTypeLabel(ct: TaskConstraintType): string {
@@ -652,6 +667,12 @@ export class CsvCodec implements ProjectFileCodec {
     let text: string
     if (typeof content === 'string') {
       text = content
+      // Strip BOM from string content too — the exporter prepends one,
+      // and round-trip tests feed string content directly without going
+      // through decodeContent().
+      if (text.charCodeAt(0) === 0xfeff) {
+        text = text.slice(1)
+      }
     } else {
       const buffer =
         content instanceof ArrayBuffer
