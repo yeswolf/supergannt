@@ -320,6 +320,39 @@ describe('ResourceLevelingService', () => {
     expect(result.leveled.length).toBe(2)
   })
 
+  it('delays multi-day tasks correctly when overallocated', () => {
+    const cal = calendar()
+    // Two multi-day tasks, same resource, same dates = overallocated
+    const t1 = task('1', 'Multi-day A', '2026-01-05', 24, { priority: 800 }) // 3 days
+    const t2 = task('2', 'Multi-day B', '2026-01-05', 24, { priority: 200 }) // 3 days
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [t1, t2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    expect(result.overallocationsBefore).toBeGreaterThan(0)
+    expect(result.overallocationsAfter).toBe(0)
+    // Lower priority task (t2) should be delayed
+    const delayed = result.leveled.find((l) => l.taskId === '2')
+    expect(delayed).toBeDefined()
+    // The delayed task should start after the high-priority task finishes
+    const t1After = result.tasks.find((t: Task) => t.id === '1')
+    const t2After = result.tasks.find((t: Task) => t.id === '2')
+    if (t1After && t2After) {
+      expect(t2After.start.getTime()).toBeGreaterThanOrEqual(
+        t1After.finish.getTime(),
+      )
+    }
+  })
+
   it('reports before/after finish dates', () => {
     const cal = calendar()
     const t1 = task('1', 'Task 1', '2026-01-05', 8, { priority: 800 })

@@ -40,7 +40,17 @@ export interface LevelingResult {
  * where assignedUnits > maxUnits, and delay lower-priority /
  * higher-slack tasks until allocation fits.
  *
- * Does NOT: split tasks, change assignments, or modify resource max units.
+ * Resource-availability checking: on each working day, tasks are grouped
+ * by resource and per-resource load (sum of assignment units) is compared
+ * against that resource's maxUnits. When load exceeds capacity,
+ * lower-priority tasks are delayed until the resource is free.
+ *
+ * Known limitations (by design):
+ * - Does NOT split tasks, change assignments, or modify resource max units.
+ * - Uses a greedy heuristic — optimal packing is not guaranteed.
+ * - Multi-resource tasks are only delayed when ALL their resources are
+ *   overallocated on the same day.
+ *
  * Does respect: task priorities, dependency chains (via successor cascade),
  * and Must Start On / Must Finish On hard constraints.
  */
