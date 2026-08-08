@@ -1,0 +1,718 @@
+import { describe, expect, it } from 'vitest'
+import { Task } from '../entities/Task'
+import { Dependency } from '../entities/Dependency'
+import { Resource } from '../entities/Resource'
+import { Assignment } from '../entities/Assignment'
+import { WorkCalendar } from '../entities/WorkCalendar'
+import { Duration } from '../value-objects/Duration'
+import { Money } from '../value-objects/Money'
+import {
+  asTaskId,
+  asDependencyId,
+  asResourceId,
+  asAssignmentId,
+  asCalendarId,
+} from '../value-objects/Ids'
+import { levelResources, countOverallocatedResourceDays, computeFinish } from './ResourceLevelingService'
+
+const day = (iso: string, hour = 8) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y!, m - 1, d!, hour, 0, 0, 0)
+}
+
+function finishDate(start: Date, durationHours: number, cal: WorkCalendar): Date {
+  return cal.addWorkingHours(start, durationHours)
+}
+
+function task(
+  id: string,
+  name: string,
+  startIso: string,
+  durationHours: number,
+  extras: Partial<ReturnType<Task['toProps']>> = {},
+  cal: WorkCalendar = calendar(),
+) {
+  const s = day(startIso)
+  return Task.create({
+    id: asTaskId(id),
+    name,
+    outlineLevel: 0,
+    wbs: id,
+    start: s,
+    finish: finishDate(s, durationHours, cal),
+    duration: Duration.hours(durationHours),
+    percentComplete: 0,
+    milestone: durationHours === 0,
+    summary: false,
+    critical: false,
+    notes: '',
+    priority: 500,
+    constraintType: 'asSoonAsPossible',
+    constraintDate: null,
+    fixedCost: Money.zero(),
+    cost: Money.zero(),
+    workHours: durationHours,
+    schedulingType: 'fixedUnits',
+    effortDriven: true,
+    parentId: null,
+    baseline: null,
+    collapsed: false,
+    totalSlackHours: null,
+    freeSlackHours: null,
+    ...extras,
+  })
+}
+
+function calendar() {
+  return WorkCalendar.standard(asCalendarId('cal-standard'), 'Standard')
+}
+
+function makeResource(id: string, name: string, maxUnits: number) {
+  return Resource.create({
+    id: asResourceId(id),
+    name,
+    type: 'work',
+    email: '',
+    group: '',
+    maxUnits,
+    standardRate: Money.zero(),
+    overtimeRate: Money.zero(),
+    costPerUse: Money.zero(),
+    calendarId: null,
+    notes: '',
+  })
+}
+
+function makeAssignment(
+  id: string,
+  taskId: string,
+  resourceId: string,
+  units: number,
+) {
+  return Assignment.create({
+    id: asAssignmentId(id),
+    taskId: asTaskId(taskId),
+    resourceId: asResourceId(resourceId),
+    units,
+    workHours: 0,
+    cost: Money.zero(),
+  })
+}
+
+describe('ResourceLevelingService', () => {
+  it('is no-op when nothing is overallocated', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8) // Mon 1 day
+    const t2 = task('2', 'Task 2', '2026-01-06', 8) // Tue 1 day
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 0.5)
+    const assign2 = makeAssignment('a2', '2', 'R1', 0.5)
+
+    const result = levelResources(
+      [t1, t2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+    )
+
+    expect(result.overallocationsBefore).toBe(0)
+    expect(result.overallocationsAfter).toBe(0)
+    expect(result.leveled).toHaveLength(0)
+  })
+
+  it('resolves single-resource overallocation by delaying lower-priority task', () => {
+    const cal = calendar()
+    // Both tasks start same day, same resource assigned at 100% each = 200% load
+    const t1 = task('1', 'High priority', '2026-01-05', 8, { priority: 800 })
+    const t2 = task('2', 'Low priority', '2026-01-05', 8, { priority: 200 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [t1, t2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    expect(result.overallocationsBefore).toBeGreaterThan(0)
+    expect(result.overallocationsAfter).toBe(0)
+    expect(result.leveled).toHaveLength(1)
+    // The lower priority task (t2) should be delayed
+    expect(result.leveled[0]!.taskId).toBe('2')
+    expect(result.leveled[0]!.oldStart.toISOString().slice(0, 10)).toBe(
+      '2026-01-05',
+    )
+    // Delayed past Jan 5
+    expect(result.leveled[0]!.newStart.getTime()).toBeGreaterThan(
+      result.leveled[0]!.oldStart.getTime(),
+    )
+  })
+
+  it('cascades delays to successor tasks via dependency chain', () => {
+    const cal = calendar()
+    // Three sequential tasks, all assigned to same resource at 100%
+    const t1 = task('1', 'First', '2026-01-05', 8, { priority: 300 })
+    const t2 = task('2', 'Second', '2026-01-05', 8, { priority: 500 })
+    const t3 = task('3', 'Third', '2026-01-06', 8, { priority: 700 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+    const assign3 = makeAssignment('a3', '3', 'R1', 1.0)
+
+    // t3 depends on t2
+    const dep = Dependency.create({
+      id: asDependencyId('d1'),
+      predecessorId: asTaskId('2'),
+      successorId: asTaskId('3'),
+      type: 'FS',
+      lag: Duration.zero(),
+    })
+
+    const result = levelResources(
+      [t1, t2, t3],
+      [dep],
+      [res],
+      [assign1, assign2, assign3],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2'), asTaskId('3')], order: 'priority' },
+    )
+
+    expect(result.overallocationsBefore).toBeGreaterThan(0)
+    expect(result.overallocationsAfter).toBe(0)
+    // t1 (priority 300) should be delayed, and t2/t3 may be affected
+    // or t2 (priority 500) delayed depending on load
+    expect(result.leveled.length).toBeGreaterThan(0)
+
+    // Verify that dependency constraints are preserved: successor starts
+    // at or after predecessor finishes post-leveling.
+    const leveledTasks = new Map(result.tasks.map((t: Task) => [t.id, t]))
+    const t2After = leveledTasks.get('2')
+    const t3After = leveledTasks.get('3')
+    if (t2After && t3After) {
+      expect(t3After.start.getTime()).toBeGreaterThanOrEqual(
+        t2After.finish.getTime(),
+      )
+    }
+  })
+
+  it('respects task priority ordering', () => {
+    const cal = calendar()
+    const high = task('H', 'High', '2026-01-05', 8, { priority: 900 })
+    const med = task('M', 'Medium', '2026-01-05', 8, { priority: 500 })
+    const low = task('L', 'Low', '2026-01-05', 8, { priority: 100 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assignH = makeAssignment('ah', 'H', 'R1', 1.0)
+    const assignM = makeAssignment('am', 'M', 'R1', 1.0)
+    const assignL = makeAssignment('al', 'L', 'R1', 1.0)
+
+    const result = levelResources(
+      [high, med, low],
+      [],
+      [res],
+      [assignH, assignM, assignL],
+      cal,
+      { scope: [asTaskId('H'), asTaskId('M'), asTaskId('L')], order: 'priority' },
+    )
+
+    expect(result.overallocationsAfter).toBe(0)
+    // The lowest priority task (L) should be delayed first
+    const leveledIds = result.leveled.map((l) => l.taskId)
+    // Low-priority L (100) should be delayed; M (500) also delayed if still over
+    expect(leveledIds).toContain('L')
+    // High priority task should NOT be delayed
+    expect(leveledIds).not.toContain('H')
+  })
+
+  it('skips tasks with Must Start On constraint', () => {
+    const cal = calendar()
+    const hardTask = task('1', 'Hard MSO', '2026-01-05', 8, {
+      constraintType: 'mustStartOn',
+      constraintDate: day('2026-01-05'),
+      priority: 100,
+    })
+    const flexTask = task('2', 'Flexible', '2026-01-05', 8, { priority: 900 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [hardTask, flexTask],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    // Hard MSO task should NOT be delayed even though it has low priority
+    const hardLeveled = result.leveled.find((l) => l.taskId === '1')
+    expect(hardLeveled).toBeUndefined()
+    // Flexible task is delayed to resolve the over
+    const flexLeveled = result.leveled.find((l) => l.taskId === '2')
+    expect(flexLeveled).toBeDefined()
+  })
+
+  it('skips tasks with Must Finish On constraint', () => {
+    const cal = calendar()
+    const hardTask = task('1', 'Hard MFO', '2026-01-05', 8, {
+      constraintType: 'mustFinishOn',
+      constraintDate: day('2026-01-05'),
+      priority: 100,
+    })
+    const flexTask = task('2', 'Flexible', '2026-01-05', 8, { priority: 900 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [hardTask, flexTask],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    const hardLeveled = result.leveled.find((l) => l.taskId === '1')
+    expect(hardLeveled).toBeUndefined()
+    const flexLeveled = result.leveled.find((l) => l.taskId === '2')
+    expect(flexLeveled).toBeDefined()
+  })
+
+  it('handles multi-resource cascade', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8, { priority: 300 })
+    const t2 = task('2', 'Task 2', '2026-01-05', 8, { priority: 300 })
+    const t3 = task('3', 'Task 3', '2026-01-05', 8, { priority: 300 })
+    const res1 = makeResource('R1', 'Alice', 1.0)
+    const res2 = makeResource('R2', 'Bob', 1.0)
+
+    // All assigned to both resources
+    const assignments = [
+      makeAssignment('a1r1', '1', 'R1', 1.0),
+      makeAssignment('a1r2', '1', 'R2', 1.0),
+      makeAssignment('a2r1', '2', 'R1', 1.0),
+      makeAssignment('a2r2', '2', 'R2', 1.0),
+      makeAssignment('a3r1', '3', 'R1', 1.0),
+      makeAssignment('a3r2', '3', 'R2', 1.0),
+    ]
+
+    const result = levelResources(
+      [t1, t2, t3],
+      [],
+      [res1, res2],
+      assignments,
+      cal,
+      {
+        scope: [asTaskId('1'), asTaskId('2'), asTaskId('3')],
+        order: 'priority',
+      },
+    )
+
+    expect(result.overallocationsAfter).toBe(0)
+    // With 3 tasks at 100% on a 100% resource, 2 tasks should be delayed
+    expect(result.leveled.length).toBe(2)
+  })
+
+  it('delays multi-day tasks correctly when overallocated', () => {
+    const cal = calendar()
+    // Two multi-day tasks, same resource, same dates = overallocated
+    const t1 = task('1', 'Multi-day A', '2026-01-05', 24, { priority: 800 }) // 3 days
+    const t2 = task('2', 'Multi-day B', '2026-01-05', 24, { priority: 200 }) // 3 days
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [t1, t2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    expect(result.overallocationsBefore).toBeGreaterThan(0)
+    expect(result.overallocationsAfter).toBe(0)
+    // Lower priority task (t2) should be delayed
+    const delayed = result.leveled.find((l) => l.taskId === '2')
+    expect(delayed).toBeDefined()
+    // The delayed task should start after the high-priority task finishes
+    const t1After = result.tasks.find((t: Task) => t.id === '1')
+    const t2After = result.tasks.find((t: Task) => t.id === '2')
+    if (t1After && t2After) {
+      expect(t2After.start.getTime()).toBeGreaterThanOrEqual(
+        t1After.finish.getTime(),
+      )
+    }
+  })
+
+  it('reports before/after finish dates', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8, { priority: 800 })
+    const t2 = task('2', 'Task 2', '2026-01-05', 8, { priority: 200 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [t1, t2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    expect(result.finishBefore).toBeDefined()
+    expect(result.finishAfter).toBeDefined()
+    expect(result.finishAfter.getTime()).toBeGreaterThanOrEqual(
+      result.finishBefore.getTime(),
+    )
+  })
+
+  it('reports residual overallocations when hard constraints block resolution', () => {
+    const cal = calendar()
+    // Two Must-Start-On tasks on the same day, same resource, both at 100%
+    // = unresolvable without violating one of the constraints
+    const mso1 = task('1', 'MSO Task A', '2026-01-05', 8, {
+      constraintType: 'mustStartOn',
+      constraintDate: day('2026-01-05'),
+      priority: 500,
+    })
+    const mso2 = task('2', 'MSO Task B', '2026-01-05', 8, {
+      constraintType: 'mustStartOn',
+      constraintDate: day('2026-01-05'),
+      priority: 500,
+    })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [mso1, mso2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    expect(result.overallocationsBefore).toBeGreaterThan(0)
+    // Both are MSO — neither can be moved, so overallocation should persist
+    expect(result.overallocationsAfter).toBeGreaterThan(0)
+    expect(result.leveled).toHaveLength(0)
+  })
+
+  it('returns zero-leveled no-op for an empty project', () => {
+    const cal = calendar()
+    const res = makeResource('R1', 'Alice', 1.0)
+
+    const result = levelResources(
+      [],
+      [],
+      [res],
+      [],
+      cal,
+    )
+
+    // No tasks → no overallocations, nothing to level
+    expect(result.overallocationsBefore).toBe(0)
+    expect(result.overallocationsAfter).toBe(0)
+    expect(result.leveled).toHaveLength(0)
+    expect(result.tasks).toHaveLength(0)
+  })
+
+  it('respects maxIterationDays option and returns truncated results', () => {
+    const cal = calendar()
+    // Two tasks spanning many days will hit a tight cap
+    const t1 = task('1', 'Task 1', '2026-01-05', 800, { priority: 800 }) // ~100 working days
+    const t2 = task('2', 'Task 2', '2026-01-05', 800, { priority: 200 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    // With maxIterationDays=1, the leveling should only process ~1 day
+    const result = levelResources(
+      [t1, t2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority', maxIterationDays: 1 },
+    )
+
+    // Should still produce a result (possibly incomplete)
+    expect(result.finishAfter).toBeDefined()
+  })
+
+  it('strengthened: delayed task is placed on a day with no overallocation', () => {
+    const cal = calendar()
+    // Two 1-day tasks on same resource at 100% each
+    const high = task('H', 'High', '2026-01-05', 8, { priority: 900 })
+    const low = task('L', 'Low', '2026-01-05', 8, { priority: 100 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assignH = makeAssignment('ah', 'H', 'R1', 1.0)
+    const assignL = makeAssignment('al', 'L', 'R1', 1.0)
+
+    const result = levelResources(
+      [high, low],
+      [],
+      [res],
+      [assignH, assignL],
+      cal,
+      { scope: [asTaskId('H'), asTaskId('L')], order: 'priority' },
+    )
+
+    expect(result.overallocationsAfter).toBe(0)
+    expect(result.leveled.length).toBeGreaterThan(0)
+  })
+})
+
+describe('countOverallocatedResourceDays', () => {
+  function makeAssignmentsByTask(
+    assignments: Assignment[],
+  ): Map<string, Assignment[]> {
+    const map = new Map<string, Assignment[]>()
+    for (const a of assignments) {
+      const list = map.get(a.taskId) ?? []
+      list.push(a)
+      map.set(a.taskId, list)
+    }
+    return map
+  }
+
+  it('returns zero for non-overlapping tasks on different days', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8)
+    const t2 = task('2', 'Task 2', '2026-01-06', 8)
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 0.5)
+    const assign2 = makeAssignment('a2', '2', 'R1', 0.5)
+    const abt = makeAssignmentsByTask([assign1, assign2])
+
+    const result = countOverallocatedResourceDays(
+      [t1, t2],
+      [res],
+      abt,
+      cal,
+    )
+
+    expect(result.count).toBe(0)
+    expect(result.truncated).toBe(false)
+  })
+
+  it('counts a day where one resource is overallocated', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8)
+    const t2 = task('2', 'Task 2', '2026-01-05', 8)
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+    const abt = makeAssignmentsByTask([assign1, assign2])
+
+    const result = countOverallocatedResourceDays(
+      [t1, t2],
+      [res],
+      abt,
+      cal,
+    )
+
+    expect(result.count).toBeGreaterThan(0)
+  })
+
+  it('returns zero when resources have high enough maxUnits', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8)
+    const t2 = task('2', 'Task 2', '2026-01-05', 8)
+    const res = makeResource('R1', 'Alice', 3.0) // capacity 300%
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+    const abt = makeAssignmentsByTask([assign1, assign2])
+
+    const result = countOverallocatedResourceDays(
+      [t1, t2],
+      [res],
+      abt,
+      cal,
+    )
+
+    expect(result.count).toBe(0)
+  })
+
+  it('respects scope filter', () => {
+    const cal = calendar()
+    const t1 = task('1', 'In scope', '2026-01-05', 8)
+    const t2 = task('2', 'Out of scope', '2026-01-05', 8)
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+    const abt = makeAssignmentsByTask([assign1, assign2])
+
+    // Only t1 is in scope — t2's load is ignored
+    const result = countOverallocatedResourceDays(
+      [t1, t2],
+      [res],
+      abt,
+      cal,
+      new Set([asTaskId('1')]),
+    )
+
+    expect(result.count).toBe(0) // t1 alone at 100% is fine
+  })
+
+  it('counts days correctly when tasks span multiple weeks', () => {
+    const cal = calendar()
+    // Two overlapping tasks each at 100% for 5 working days (Mon-Fri)
+    const t1 = task('1', 'Task 1', '2026-01-05', 40) // Mon-Fri
+    const t2 = task('2', 'Task 2', '2026-01-05', 40) // Mon-Fri
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+    const abt = makeAssignmentsByTask([assign1, assign2])
+
+    const result = countOverallocatedResourceDays(
+      [t1, t2],
+      [res],
+      abt,
+      cal,
+    )
+
+    // Both tasks overlap all 5 working days → 5 overallocated days
+    expect(result.count).toBe(5)
+  })
+
+  it('handles edge case: maxUnits of 0', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8)
+    const res = makeResource('R1', 'Alice', 0) // zero capacity
+    const assign1 = makeAssignment('a1', '1', 'R1', 0.1)
+    const abt = makeAssignmentsByTask([assign1])
+
+    const result = countOverallocatedResourceDays(
+      [t1],
+      [res],
+      abt,
+      cal,
+    )
+
+    // Any assignment on a 0-maxUnits resource is overallocated
+    expect(result.count).toBeGreaterThan(0)
+  })
+
+  it('handles edge case: assignments with units > maxUnits', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8)
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.5) // 150%
+    const abt = makeAssignmentsByTask([assign1])
+
+    const result = countOverallocatedResourceDays(
+      [t1],
+      [res],
+      abt,
+      cal,
+    )
+
+    // Single task at 150% on a 100% resource → overallocated
+    expect(result.count).toBe(1)
+  })
+
+  it('skips weekends in standard calendar', () => {
+    const cal = calendar()
+    // Overlapping tasks Fri-Mon
+    const t1 = task('1', 'Task 1', '2026-01-09', 16) // Fri + Mon
+    const t2 = task('2', 'Task 2', '2026-01-09', 16)
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+    const abt = makeAssignmentsByTask([assign1, assign2])
+
+    const result = countOverallocatedResourceDays(
+      [t1, t2],
+      [res],
+      abt,
+      cal,
+    )
+
+    // Only Fri and Mon are working days → 2 overallocated days
+    expect(result.count).toBe(2)
+  })
+
+  it('returns truncated=true when cap is hit', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 800, { priority: 500 })
+    const t2 = task('2', 'Task 2', '2026-01-05', 800, { priority: 500 })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+    const abt = makeAssignmentsByTask([assign1, assign2])
+
+    const result = countOverallocatedResourceDays(
+      [t1, t2],
+      [res],
+      abt,
+      cal,
+      undefined, // no scope
+      2, // very tight cap
+    )
+
+    expect(result.truncated).toBe(true)
+  })
+
+  it('returns zero when there are no non-summary tasks', () => {
+    const cal = calendar()
+    const res = makeResource('R1', 'Alice', 1.0)
+    const abt = new Map()
+
+    const result = countOverallocatedResourceDays(
+      [],
+      [res],
+      abt,
+      cal,
+    )
+
+    expect(result.count).toBe(0)
+    expect(result.truncated).toBe(false)
+  })
+
+  it('warns about missing resources (smoke test — no throw)', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Task 1', '2026-01-05', 8)
+    const assign1 = makeAssignment('a1', '1', 'R-missing', 1.0)
+    const abt = makeAssignmentsByTask([assign1])
+
+    // Should not throw even though R-missing is not in resources list
+    const result = countOverallocatedResourceDays(
+      [t1],
+      [],
+      abt,
+      cal,
+    )
+
+    // Load is counted but never capped (no resource to check maxUnits against)
+    expect(result.count).toBe(0)
+  })
+})
+
+describe('computeFinish', () => {
+  it('returns the max finish date across tasks', () => {
+    const cal = calendar()
+    const t1 = task('1', 'Early', '2026-01-05', 8)
+    const t2 = task('2', 'Late', '2026-01-10', 8)
+
+    const finish = computeFinish([t1, t2])
+
+    // Late task finishes on Jan 12 (Mon) if addWorkingHours respects the weekend
+    expect(finish.getTime()).toBeGreaterThan(t1.finish.getTime())
+  })
+
+  it('throws on empty array', () => {
+    expect(() => computeFinish([])).toThrow('computeFinish: empty task array')
+  })
+})

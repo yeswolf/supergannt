@@ -1,0 +1,651 @@
+import type { Task } from '../entities/Task'
+import type { Dependency } from '../entities/Dependency'
+import type { Resource } from '../entities/Resource'
+import type { Assignment } from '../entities/Assignment'
+import type { WorkCalendar } from '../entities/WorkCalendar'
+import type { TaskId } from '../value-objects/Ids'
+
+// TODO: add 'standard' order support with UI dropdown
+export type LevelingOrder = 'priority'
+
+export interface LevelingOptions {
+  /** Which tasks to consider for leveling (subset of all task IDs). */
+  scope: TaskId[]
+  /** Leveling order strategy. Currently only 'priority' is supported. */
+  order?: LevelingOrder
+  /**
+   * Maximum working days to iterate in a single pass.
+   * Safety backstop against infinite loops on pathological schedules.
+   * @default 3650
+   */
+  maxIterationDays?: number
+}
+
+export interface LeveledTask {
+  taskId: TaskId
+  name: string
+  oldStart: Date
+  newStart: Date
+  delayHours: number
+}
+
+export interface LevelingResult {
+  tasks: Task[]
+  leveled: LeveledTask[]
+  overallocationsBefore: number
+  overallocationsAfter: number
+  finishBefore: Date
+  finishAfter: Date
+}
+
+/**
+ * Run resource leveling on a set of scheduled tasks.
+ *
+ * Greedy forward-pass algorithm with multiple refinement passes:
+ * iterate day-by-day across the project date range, detect periods
+ * where assignedUnits > maxUnits, and delay lower-priority /
+ * higher-slack tasks until allocation fits.
+ *
+ * Resource-availability checking: on each working day, tasks are grouped
+ * by resource and per-resource load (sum of assignment units) is compared
+ * against that resource's maxUnits. When load exceeds capacity,
+ * lower-priority tasks are delayed until the resource is free.
+ *
+ * Known limitations (by design):
+ * - Does NOT split tasks, change assignments, or modify resource max units.
+ * - Uses a greedy heuristic — optimal packing is not guaranteed.
+ * - Multi-resource tasks are delayed when ANY of their resources are
+ *   overallocated on the same day.
+ *
+ * Does respect: task priorities, dependency chains (via successor cascade),
+ * and Must Start On / Must Finish On hard constraints.
+ *
+ * Contract: this function does NOT mutate any of its inputs. `tasks`,
+ * `dependencies`, `resources`, and `assignments` are read-only; the returned
+ * `Result.tasks` array contains new Task objects (Task.with() is immutable)
+ * — callers can safely iterate the original input after leveling.
+ */
+/** Default maximum working days iterated in a single pass — infinite-loop backstop. */
+const DEFAULT_MAX_ITERATION_DAYS = 3650
+
+export function levelResources(
+  tasks: readonly Task[],
+  dependencies: readonly Dependency[],
+  resources: readonly Resource[],
+  assignments: readonly Assignment[],
+  calendar: WorkCalendar,
+  options: LevelingOptions = { scope: tasks.map((t) => t.id), order: 'priority' },
+): LevelingResult {
+  const scopeSet = new Set(options.scope)
+  const maxIterationDays = options.maxIterationDays ?? DEFAULT_MAX_ITERATION_DAYS
+
+  // Empty project: nothing to level
+  if (tasks.length === 0) {
+    return {
+      tasks: [],
+      leveled: [],
+      overallocationsBefore: 0,
+      overallocationsAfter: 0,
+      finishBefore: new Date(0),
+      finishAfter: new Date(0),
+    }
+  }
+
+  // Build assignments-by-task once — threaded through all helpers
+  const assignmentsByTask = new Map<TaskId, Assignment[]>()
+  for (const a of assignments) {
+    const list = assignmentsByTask.get(a.taskId) ?? []
+    list.push(a)
+    assignmentsByTask.set(a.taskId, list)
+  }
+
+  // Count overallocations before (respects scope for accurate counts)
+  const beforeResult = countOverallocatedResourceDays(tasks, resources, assignmentsByTask, calendar, scopeSet, maxIterationDays)
+  if (beforeResult.count === 0) {
+    return {
+      tasks: [...tasks],
+      leveled: [],
+      overallocationsBefore: 0,
+      overallocationsAfter: 0,
+      finishBefore: computeFinish(tasks),
+      finishAfter: computeFinish(tasks),
+    }
+  }
+  const beforeCount = beforeResult.count
+
+  // Build working copy
+  let working = [...tasks]
+  const leveledMap = new Map<TaskId, LeveledTask>()
+
+  // Precompute successor map for cascade
+  const successors = new Map<TaskId, TaskId[]>()
+  // Precompute predecessor map so delayed tasks respect their own FS dependencies
+  const predecessors = new Map<TaskId, TaskId[]>()
+  for (const dep of dependencies) {
+    const succList = successors.get(dep.predecessorId) ?? []
+    succList.push(dep.successorId)
+    successors.set(dep.predecessorId, succList)
+    const predList = predecessors.get(dep.successorId) ?? []
+    predList.push(dep.predecessorId)
+    predecessors.set(dep.successorId, predList)
+  }
+
+  const resourceById = new Map(resources.map((r) => [r.id, r]))
+
+  // Multiple refinement passes — each pass resolves what it can, and subsequent
+  // passes clean up cascaded overallocations. Up to 10 passes.
+  const MAX_PASSES = 10
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const result = levelingPass(
+      working,
+      calendar,
+      resourceById,
+      assignmentsByTask,
+      scopeSet,
+      successors,
+      predecessors,
+      leveledMap,
+      maxIterationDays,
+    )
+    working = result.tasks
+
+    // Check if all overallocations resolved
+    const afterResult = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet, maxIterationDays)
+    if (afterResult.count === 0) break
+
+    // If no progress, stop
+    if (!result.anyProgress) break
+  }
+
+  const finalResult = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet, maxIterationDays)
+
+  // Sort leveled list by delay (most delayed first) for display
+  const leveledList = [...leveledMap.values()].sort(
+    (a, b) => b.delayHours - a.delayHours,
+  )
+
+  return {
+    tasks: working,
+    leveled: leveledList,
+    overallocationsBefore: beforeCount,
+    overallocationsAfter: finalResult.count,
+    finishBefore: computeFinish(tasks),
+    finishAfter: computeFinish(working),
+  }
+}
+
+interface PassResult {
+  tasks: Task[]
+  anyProgress: boolean
+}
+
+function levelingPass(
+  tasks: Task[],
+  calendar: WorkCalendar,
+  resourceById: Map<string, Resource>,
+  assignmentsByTask: Map<TaskId, Assignment[]>,
+  scope: Set<TaskId>,
+  successors: Map<TaskId, TaskId[]>,
+  predecessors: Map<TaskId, TaskId[]>,
+  leveledMap: Map<TaskId, LeveledTask>,
+  maxDays: number,
+): PassResult {
+  const nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0 && scope.has(t.id))
+  if (nonSummary.length === 0) return { tasks, anyProgress: false }
+
+  const startDate = new Date(Math.min(...nonSummary.map((t) => t.start.getTime())))
+  let endDate = new Date(Math.max(...nonSummary.map((t) => t.finish.getTime())))
+
+  startDate.setHours(0, 0, 0, 0)
+  endDate.setHours(0, 0, 0, 0)
+
+  const working = [...tasks]
+  let anyProgress = false
+
+  // Sort all levelable tasks by priority (for determining who gets delayed)
+  const sortKey = (t: Task): number => t.priority
+
+  // Build byId once — updated in-place as tasks are delayed so cascadeDelay
+  // and predecessor lookups always see current state without rebuilding.
+  const byId = new Map(working.map((t) => [t.id, t]))
+
+  const cursor = new Date(startDate.getTime())
+  let daysIterated = 0
+
+  while (cursor.getTime() <= endDate.getTime() && daysIterated < maxDays) {
+    daysIterated += 1
+    const dayStart = new Date(cursor.getTime())
+    const dayEnd = new Date(cursor.getTime())
+    dayEnd.setDate(dayEnd.getDate() + 1)
+
+    if (!calendar.isWorkingDay(dayStart)) {
+      cursor.setDate(cursor.getDate() + 1)
+      continue
+    }
+
+    // Find all active tasks on this day
+    const active = working.filter(
+      (t) =>
+        !t.summary &&
+        t.duration.toHours() > 0 &&
+        scope.has(t.id) &&
+        t.start.getTime() < dayEnd.getTime() &&
+        t.finish.getTime() > dayStart.getTime(),
+    )
+
+    if (active.length === 0) {
+      cursor.setDate(cursor.getDate() + 1)
+      continue
+    }
+
+    // Group by resource
+    const resourceTasks = new Map<string, Task[]>()
+    for (const task of active) {
+      const taskAssignments = assignmentsByTask.get(task.id) ?? []
+      for (const a of taskAssignments) {
+        const resource = resourceById.get(a.resourceId)
+        if (!resource) continue
+        if (resource.maxUnits <= 0) {
+          console.warn(
+            `ResourceLevelingService: resource "${resource.name}" (${resource.id}) has maxUnits=${resource.maxUnits} ` +
+              `but has assignments. Skipping — this may indicate a data integrity issue.`,
+          )
+          continue
+        }
+        let list = resourceTasks.get(a.resourceId)
+        if (!list) {
+          list = []
+          resourceTasks.set(a.resourceId, list)
+        }
+        list.push(task)
+      }
+    }
+
+    for (const [resourceId, resTasks] of resourceTasks) {
+      const resource = resourceById.get(resourceId)
+      if (!resource) continue
+
+      // Deduplicate tasks and compute per-task units
+      const uniqueTasks = [...new Map(resTasks.map((t) => [t.id, t])).values()]
+      const taskUnits = new Map<TaskId, number>()
+      for (const task of uniqueTasks) {
+        const taskAssignments = assignmentsByTask.get(task.id) ?? []
+        const total = taskAssignments
+          .filter((a) => a.resourceId === resourceId)
+          .reduce((s, a) => s + a.units, 0)
+        taskUnits.set(task.id, total)
+      }
+
+      const totalUnits = [...taskUnits.values()].reduce((s, u) => s + u, 0)
+      if (totalUnits <= resource.maxUnits) continue
+
+      // Sort tasks: lower sortKey first = delayed first
+      // Uses task priority as the sort key.
+      const sorted = [...uniqueTasks].sort((a, b) => {
+        const ka = sortKey(a)
+        const kb = sortKey(b)
+        if (ka !== kb) return ka - kb
+        // Tie-break by task ID
+        return a.id.localeCompare(b.id)
+      })
+
+      // Reverse traversal: keep the HIGHEST-priority tasks (end of sorted list)
+      // and delay the lowest-priority ones (start of sorted list).
+      // Hard-constrained tasks are automatically kept since they cannot be delayed.
+      const hardConstrained = new Set<TaskId>()
+      for (const task of sorted) {
+        if (task.constraintType === 'mustStartOn' || task.constraintType === 'mustFinishOn') {
+          hardConstrained.add(task.id)
+        }
+      }
+
+      let currentLoad = 0
+      const keepTasks = new Set<TaskId>(hardConstrained)
+      // Count hard-constrained unit load already committed
+      for (const id of hardConstrained) {
+        currentLoad += taskUnits.get(id) ?? 0
+      }
+      // Then add highest-priority flex tasks until at capacity
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const task = sorted[i]!
+        if (hardConstrained.has(task.id)) continue
+        const units = taskUnits.get(task.id) ?? 0
+        if (currentLoad + units > resource.maxUnits) break
+        keepTasks.add(task.id)
+        currentLoad += units
+      }
+
+      // Delay all tasks not in the keep set that overlap this day
+      const toDelay = sorted.filter((t) => !keepTasks.has(t.id))
+
+      // Compute the base target: the latest finish among kept tasks on this
+      // resource that are active on this day (or next day if none).
+      const keptActive = sorted.filter(
+        (t) =>
+          keepTasks.has(t.id) &&
+          t.start.getTime() < dayEnd.getTime() &&
+          t.finish.getTime() > dayStart.getTime(),
+      )
+      let slotStart = dayEnd
+      if (keptActive.length > 0) {
+        const latestKeptFinish = new Date(
+          Math.max(...keptActive.map((t) => t.finish.getTime())),
+        )
+        slotStart =
+          latestKeptFinish.getTime() > slotStart.getTime()
+            ? latestKeptFinish
+            : slotStart
+      }
+
+      // Serialize delayed tasks so they don't overlap each other.
+      for (const task of toDelay) {
+        const currentTask = byId.get(task.id)
+        if (!currentTask) continue
+
+        let newStart = calendar.snapToWorkStart(new Date(slotStart.getTime()))
+        if (newStart.getTime() <= currentTask.start.getTime()) {
+          // Force past the current day end
+          const nextDay = new Date(dayEnd.getTime())
+          newStart = calendar.snapToWorkStart(nextDay)
+          // If still not ahead, advance one more working day
+          if (newStart.getTime() <= currentTask.start.getTime()) {
+            newStart = calendar.snapToWorkStart(
+              calendar.addWorkingHours(currentTask.start, 8),
+            )
+          }
+        }
+
+        // Ensure newStart respects predecessors on other resources
+        // (delaying a task on one resource must not break its FS dependencies)
+        const predIds = predecessors.get(task.id)
+        if (predIds) {
+          for (const predId of predIds) {
+            const predTask = byId.get(predId)
+            if (predTask && predTask.finish.getTime() > newStart.getTime()) {
+              newStart = calendar.snapToWorkStart(
+                new Date(predTask.finish.getTime()),
+              )
+            }
+          }
+        }
+
+        if (newStart.getTime() <= currentTask.start.getTime()) continue
+
+        const oldStart = currentTask.start
+        const durationHours = currentTask.milestone
+          ? 0
+          : Math.max(0, currentTask.duration.toHours())
+        const newFinish =
+          durationHours === 0
+            ? newStart
+            : calendar.addWorkingHours(newStart, durationHours)
+
+        const updatedTask = currentTask.with({
+          start: newStart,
+          finish: newFinish,
+        })
+
+        const idx = working.findIndex((t) => t.id === task.id)
+        if (idx >= 0) working[idx] = updatedTask
+        byId.set(task.id, updatedTask)
+
+        // Update slotStart for next delayed task
+        slotStart = newFinish
+
+        const delayHours =
+          (newStart.getTime() - oldStart.getTime()) / 3_600_000
+
+        // Update or create leveled entry
+        const existing = leveledMap.get(task.id)
+        leveledMap.set(task.id, {
+          taskId: task.id,
+          name: task.name,
+          oldStart: existing?.oldStart ?? oldStart,
+          newStart,
+          delayHours: existing ? existing.delayHours + delayHours : delayHours,
+        })
+
+        anyProgress = true
+
+        // Cascade to successors
+        cascadeDelay(
+          task.id,
+          newFinish,
+          working,
+          successors,
+          predecessors,
+          calendar,
+          leveledMap,
+          byId,
+        )
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1)
+
+    // Refresh endDate if tasks were pushed out
+    const newEnd = computeFinish(working)
+    if (newEnd.getTime() > endDate.getTime()) {
+      endDate = newEnd
+    }
+  }
+
+  // If we hit the day cap, surface it — silent truncation is a time bomb.
+  if (daysIterated >= maxDays) {
+    console.warn(
+      `ResourceLevelingService: levelingPass hit the maxDays cap (${maxDays} working days). ` +
+        `Leveling may be incomplete for this project.`,
+    )
+  }
+
+  return { tasks: working, anyProgress }
+}
+
+function cascadeDelay(
+  predecessorId: TaskId,
+  predFinish: Date,
+  working: Task[],
+  successors: Map<TaskId, TaskId[]>,
+  predecessors: Map<TaskId, TaskId[]>,
+  calendar: WorkCalendar,
+  leveledMap: Map<TaskId, LeveledTask>,
+  byId: Map<TaskId, Task>,
+): void {
+  const succIds = successors.get(predecessorId)
+  if (!succIds || succIds.length === 0) return
+
+  // Iterative BFS queue — handles arbitrarily deep dependency chains
+  // without blowing the call stack.
+  const queue: Array<{ id: TaskId; earliestStart: Date }> = []
+  const snapped = calendar.snapToWorkStart(predFinish)
+  for (const succId of succIds) {
+    queue.push({ id: succId, earliestStart: new Date(snapped.getTime()) })
+  }
+
+  while (queue.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const { id, earliestStart } = queue.shift()!
+    const task = byId.get(id)
+    if (!task || task.summary) continue
+
+    if (task.constraintType === 'mustStartOn' || task.constraintType === 'mustFinishOn') continue
+
+    // Ensure earliestStart respects ALL predecessors, not just the
+    // one that triggered this cascade step.
+    let effectiveStart = new Date(earliestStart.getTime())
+    const predIds = predecessors.get(id)
+    if (predIds) {
+      for (const predId of predIds) {
+        const pred = byId.get(predId)
+        if (pred && pred.finish.getTime() > effectiveStart.getTime()) {
+          effectiveStart = new Date(pred.finish.getTime())
+        }
+      }
+    }
+
+    if (effectiveStart.getTime() > task.start.getTime()) {
+      const oldStart = task.start
+      const durationHours = task.milestone ? 0 : Math.max(0, task.duration.toHours())
+      const newFinish =
+        durationHours === 0
+          ? effectiveStart
+          : calendar.addWorkingHours(effectiveStart, durationHours)
+
+      const updated = task.with({
+        start: effectiveStart,
+        finish: newFinish,
+      })
+
+      const idx = working.findIndex((t) => t.id === id)
+      if (idx >= 0) working[idx] = updated
+      byId.set(id, updated)
+
+      const delayHours =
+        (effectiveStart.getTime() - oldStart.getTime()) / 3_600_000
+
+      const existing = leveledMap.get(id)
+      leveledMap.set(id, {
+        taskId: id,
+        name: task.name,
+        oldStart: existing?.oldStart ?? oldStart,
+        newStart: effectiveStart,
+        delayHours: existing ? existing.delayHours + delayHours : delayHours,
+      })
+
+      // Enqueue successors instead of recursing
+      const nextSuccs = successors.get(id)
+      if (nextSuccs) {
+        const snappedStart = calendar.snapToWorkStart(newFinish)
+        for (const nextId of nextSuccs) {
+          queue.push({ id: nextId, earliestStart: new Date(snappedStart.getTime()) })
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Count the number of resource-period overallocations across the project.
+ *
+ * Each resource-day where assigned units > maxUnits counts as one overallocation.
+ * When scope is provided, only tasks within scope are counted.
+ *
+ * ## Boundary semantics
+ *
+ * A day is counted when the half-open task interval `[start, finish)` overlaps
+ * with the calendar day interval `[dayStart, dayEnd)`:
+ *
+ *   taskStart < dayEnd  &&  taskFinish > dayStart
+ *
+ * This means a task finishing at midnight (00:00) on day D is NOT active on
+ * day D (since midnight === dayStart → finish > dayStart is false), but IS
+ * active on day D-1 (where it finishes at 24:00 / D's midnight → finish > dayStart).
+ * A task finishing at 17:00 on day D IS active on day D (17:00 > 00:00).
+ *
+ * @returns An object with `count` (number of overallocated days) and
+ *          `truncated` (true when the day cap was hit and the count is
+ *          incomplete).
+ */
+export function countOverallocatedResourceDays(
+  tasks: readonly Task[],
+  resources: readonly Resource[],
+  assignmentsByTask: Map<TaskId, Assignment[]>,
+  calendar: WorkCalendar,
+  scope?: Set<TaskId>,
+  maxIterationDays?: number,
+): { count: number; truncated: boolean } {
+  const effectiveMaxDays = maxIterationDays ?? DEFAULT_MAX_ITERATION_DAYS
+  let nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0)
+  if (scope) {
+    nonSummary = nonSummary.filter((t) => scope.has(t.id))
+  }
+  if (nonSummary.length === 0) return { count: 0, truncated: false }
+
+  const startDate = new Date(
+    Math.min(...nonSummary.map((t) => t.start.getTime())),
+  )
+  const endDate = new Date(
+    Math.max(...nonSummary.map((t) => t.finish.getTime())),
+  )
+
+  const resourceById = new Map(resources.map((r) => [r.id, r]))
+
+  // Track resources referenced by assignments but missing from the resource list
+  const unknownResources = new Set<string>()
+
+  let count = 0
+  const cursor = new Date(startDate.getTime())
+  cursor.setHours(0, 0, 0, 0)
+  const end = new Date(endDate.getTime())
+  end.setHours(0, 0, 0, 0)
+
+  let daysIterated = 0
+  while (cursor.getTime() <= end.getTime() && daysIterated < effectiveMaxDays) {
+    daysIterated += 1
+    const dayStart = new Date(cursor.getTime())
+    const dayEnd = new Date(cursor.getTime())
+    dayEnd.setDate(dayEnd.getDate() + 1)
+
+    if (!calendar.isWorkingDay(dayStart)) {
+      cursor.setDate(cursor.getDate() + 1)
+      continue
+    }
+
+    const active = nonSummary.filter(
+      (t) =>
+        t.start.getTime() < dayEnd.getTime() &&
+        t.finish.getTime() > dayStart.getTime(),
+    )
+
+    const perResource = new Map<string, number>()
+    for (const task of active) {
+      const taskAssignments = assignmentsByTask.get(task.id) ?? []
+      for (const a of taskAssignments) {
+        if (!resourceById.has(a.resourceId)) {
+          unknownResources.add(a.resourceId)
+        }
+        const current = perResource.get(a.resourceId) ?? 0
+        perResource.set(a.resourceId, current + a.units)
+      }
+    }
+
+    for (const [resId, units] of perResource) {
+      const resource = resourceById.get(resId)
+      if (resource && units > resource.maxUnits) {
+        count += 1
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  const truncated = daysIterated >= effectiveMaxDays
+
+  if (unknownResources.size > 0) {
+    console.warn(
+      `ResourceLevelingService: countOverallocatedResourceDays found assignments ` +
+        `referencing ${unknownResources.size} missing resource(s): ` +
+        `${[...unknownResources].map((id) => `"${id}"`).join(', ')}. ` +
+        `These assignments are counted toward overallocation load but are not ` +
+        `validated against any resource's maxUnits.`,
+    )
+  }
+
+  if (truncated) {
+    console.warn(
+      `ResourceLevelingService: countOverallocatedResourceDays hit the cap ` +
+        `(${effectiveMaxDays} working days). Overallocation count may be incomplete.`,
+    )
+  }
+
+  return { count, truncated }
+}
+
+export function computeFinish(tasks: readonly Task[]): Date {
+  if (tasks.length === 0) throw new Error('computeFinish: empty task array')
+  const maxTime = tasks.reduce(
+    (max, t) => Math.max(max, t.finish.getTime()),
+    0,
+  )
+  return new Date(maxTime)
+}

@@ -13,6 +13,7 @@ import { CalendarView } from './components/CalendarView'
 import { ResourceCalendarView } from './components/ResourceCalendarView'
 import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
+import { ResourceLevelingDialog } from './components/ResourceLevelingDialog'
 import { RecoveryBanner } from './components/RecoveryBanner'
 import { useAutoSave } from './hooks/useAutoSave'
 import { InspectionPane } from './components/InspectionPane'
@@ -113,6 +114,7 @@ export function AppShell() {
       </footer>
       <TaskInformationDialog />
       <AssignResourcesDialog />
+      <ResourceLevelingDialog />
       <InspectionPane />
       {busyMessage ? (
         <div className={styles.busyOverlay} role="alertdialog" aria-live="assertive" aria-busy="true">

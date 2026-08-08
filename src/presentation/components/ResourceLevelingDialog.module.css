@@ -1,0 +1,62 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.dialog {
+  width: min(680px, 100%);
+  max-height: min(90vh, 740px);
+  display: flex;
+  flex-direction: column;
+  background: var(--msp-surface);
+  border: 1px solid var(--msp-border-strong);
+  border-radius: var(--msp-radius);
+  box-shadow: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--msp-titlebar);
+  color: var(--msp-titlebar-text);
+  border-bottom: 1px solid var(--msp-titlebar-border);
+  min-width: 0;
+}
+
+.header h2 {
+  margin: 0;
+  font-family: var(--msp-font);
+  font-size: var(--msp-text-xl);
+  font-weight: 400;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.body {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  background: var(--msp-surface);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.35rem 0.9rem;
+  min-height: var(--msp-row-h);
+  align-items: center;
+  border-top: 1px solid var(--msp-border);
+  background: var(--msp-surface-alt);
+}
