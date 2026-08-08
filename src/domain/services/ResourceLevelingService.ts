@@ -5,7 +5,8 @@ import type { Assignment } from '../entities/Assignment'
 import type { WorkCalendar } from '../entities/WorkCalendar'
 import type { TaskId } from '../value-objects/Ids'
 
-export type LevelingOrder = 'priority' | 'standard'
+// TODO: add 'standard' order support with UI dropdown
+export type LevelingOrder = 'priority'
 
 export interface LevelingOptions {
   /** Which tasks to consider for leveling (subset of all task IDs). */
@@ -49,13 +50,20 @@ export function levelResources(
   resources: readonly Resource[],
   assignments: readonly Assignment[],
   calendar: WorkCalendar,
-  projectStart: Date,
   options: LevelingOptions = { scope: tasks.map((t) => t.id), order: 'priority' },
 ): LevelingResult {
   const scopeSet = new Set(options.scope)
 
+  // Build assignments-by-task once — threaded through all helpers
+  const assignmentsByTask = new Map<TaskId, Assignment[]>()
+  for (const a of assignments) {
+    const list = assignmentsByTask.get(a.taskId) ?? []
+    list.push(a)
+    assignmentsByTask.set(a.taskId, list)
+  }
+
   // Count overallocations before
-  const beforeCount = countOverallocations(tasks, resources, assignments, calendar)
+  const beforeCount = countOverallocations(tasks, resources, assignmentsByTask, calendar)
   if (beforeCount === 0) {
     return {
       tasks: [...tasks],
@@ -79,14 +87,6 @@ export function levelResources(
     successors.set(dep.predecessorId, list)
   }
 
-  // Assignments by task
-  const assignmentsByTask = new Map<TaskId, Assignment[]>()
-  for (const a of assignments) {
-    const list = assignmentsByTask.get(a.taskId) ?? []
-    list.push(a)
-    assignmentsByTask.set(a.taskId, list)
-  }
-
   const resourceById = new Map(resources.map((r) => [r.id, r]))
 
   // Multiple refinement passes — each pass resolves what it can, and subsequent
@@ -106,14 +106,14 @@ export function levelResources(
     working = result.tasks
 
     // Check if all overallocations resolved
-    const afterCount = countOverallocations(working, resources, assignments, calendar)
+    const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar)
     if (afterCount === 0) break
 
     // If no progress, stop
     if (!result.anyProgress) break
   }
 
-  const afterCount = countOverallocations(working, resources, assignments, calendar)
+  const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar)
 
   // Sort leveled list by delay (most delayed first) for display
   const leveledList = [...leveledMap.values()].sort(
@@ -359,7 +359,6 @@ function levelingPass(
           successors,
           calendar,
           leveledMap,
-          scope,
         )
       }
     }
@@ -383,7 +382,6 @@ function cascadeDelay(
   successors: Map<TaskId, TaskId[]>,
   calendar: WorkCalendar,
   leveledMap: Map<TaskId, LeveledTask>,
-  scope: Set<TaskId>,
 ): void {
   const succIds = successors.get(predecessorId)
   if (!succIds || succIds.length === 0) return
@@ -448,7 +446,7 @@ function cascadeDelay(
 function countOverallocations(
   tasks: readonly Task[],
   resources: readonly Resource[],
-  assignments: readonly Assignment[],
+  assignmentsByTask: Map<TaskId, Assignment[]>,
   calendar: WorkCalendar,
 ): number {
   const nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0)
@@ -462,12 +460,6 @@ function countOverallocations(
   )
 
   const resourceById = new Map(resources.map((r) => [r.id, r]))
-  const assignmentsByTask = new Map<TaskId, Assignment[]>()
-  for (const a of assignments) {
-    const list = assignmentsByTask.get(a.taskId) ?? []
-    list.push(a)
-    assignmentsByTask.set(a.taskId, list)
-  }
 
   let count = 0
   const cursor = new Date(startDate.getTime())

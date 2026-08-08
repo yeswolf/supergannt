@@ -27,7 +27,6 @@ export function ResourceLevelingDialog() {
       project.resources,
       project.assignments,
       calendar,
-      project.startDate,
       {
         scope: project.tasks.map((t) => t.id),
         order: 'priority',

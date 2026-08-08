@@ -13,7 +13,7 @@ import {
   asAssignmentId,
   asCalendarId,
 } from '../value-objects/Ids'
-import { levelResources, type LevelingOrder } from './ResourceLevelingService'
+import { levelResources } from './ResourceLevelingService'
 
 const day = (iso: string, hour = 8) => {
   const [y, m, d] = iso.split('-').map(Number)
@@ -24,13 +24,6 @@ function finishDate(start: Date, durationHours: number): Date {
   const f = new Date(start.getTime())
   f.setHours(f.getHours() + durationHours)
   return f
-}
-
-const localIso = (date: Date) => {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
 }
 
 function task(
@@ -122,7 +115,6 @@ describe('ResourceLevelingService', () => {
       [res],
       [assign1, assign2],
       cal,
-      day('2026-01-05'),
     )
 
     expect(result.overallocationsBefore).toBe(0)
@@ -145,7 +137,6 @@ describe('ResourceLevelingService', () => {
       [res],
       [assign1, assign2],
       cal,
-      day('2026-01-05'),
       { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
     )
 
@@ -189,7 +180,6 @@ describe('ResourceLevelingService', () => {
       [res],
       [assign1, assign2, assign3],
       cal,
-      day('2026-01-05'),
       { scope: [asTaskId('1'), asTaskId('2'), asTaskId('3')], order: 'priority' },
     )
 
@@ -216,7 +206,6 @@ describe('ResourceLevelingService', () => {
       [res],
       [assignH, assignM, assignL],
       cal,
-      day('2026-01-05'),
       { scope: [asTaskId('H'), asTaskId('M'), asTaskId('L')], order: 'priority' },
     )
 
@@ -247,7 +236,6 @@ describe('ResourceLevelingService', () => {
       [res],
       [assign1, assign2],
       cal,
-      day('2026-01-05'),
       { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
     )
 
@@ -277,7 +265,6 @@ describe('ResourceLevelingService', () => {
       [res],
       [assign1, assign2],
       cal,
-      day('2026-01-05'),
       { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
     )
 
@@ -311,7 +298,6 @@ describe('ResourceLevelingService', () => {
       [res1, res2],
       assignments,
       cal,
-      day('2026-01-05'),
       {
         scope: [asTaskId('1'), asTaskId('2'), asTaskId('3')],
         order: 'priority',
@@ -337,7 +323,6 @@ describe('ResourceLevelingService', () => {
       [res],
       [assign1, assign2],
       cal,
-      day('2026-01-05'),
       { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
     )
 
