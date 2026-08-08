@@ -11,6 +11,7 @@ import { RbsView } from './components/RbsView'
 import { TaskUsageView, ResourceUsageView } from './components/UsageViews'
 import { CalendarView } from './components/CalendarView'
 import { ResourceCalendarView } from './components/ResourceCalendarView'
+import { ResourceHistogramView } from './components/ResourceHistogramView'
 import { TaskInformationDialog } from './components/TaskInformationDialog'
 import { AssignResourcesDialog } from './components/AssignResourcesDialog'
 import { RecoveryBanner } from './components/RecoveryBanner'
@@ -82,6 +83,7 @@ export function AppShell() {
         {view === 'resourceUsage' ? <ResourceUsageView /> : null}
         {view === 'calendar' ? <CalendarView /> : null}
         {view === 'resourceCalendar' ? <ResourceCalendarView /> : null}
+        {view === 'histogram' ? <ResourceHistogramView /> : null}
         {view === 'reports' ? <ReportsView /> : null}
       </main>
       <footer className={styles.statusBar} role="status">

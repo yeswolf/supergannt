@@ -29,6 +29,9 @@
   --msp-gantt-bar-progress: #2563eb;
   --msp-gantt-critical: #ef4444;
   --msp-on-accent: #ffffff;
+  --histogram-ok: #60a5fa;
+  --histogram-overallocated: #ef4444;
+  --histogram-capacity-line: #ef4444;
 }
 
 [data-theme='dark'] {
@@ -59,6 +62,9 @@
   --msp-gantt-bar-progress: #60a5fa;
   --msp-gantt-critical: #f87171;
   --msp-on-accent: #ffffff;
+  --histogram-ok: #3b82f6;
+  --histogram-overallocated: #f87171;
+  --histogram-capacity-line: #f87171;
 }
 
 /* WCAG-oriented high contrast: black / white / yellow / blue */
@@ -90,6 +96,9 @@
   --msp-gantt-bar-progress: #000000;
   --msp-gantt-critical: #cc0000;
   --msp-on-accent: #ffffff;
+  --histogram-ok: #0000ee;
+  --histogram-overallocated: #cc0000;
+  --histogram-capacity-line: #cc0000;
 }
 
 [data-theme='contrast-dark'] {
@@ -120,6 +129,9 @@
   --msp-gantt-bar-progress: #ffffff;
   --msp-gantt-critical: #ff6666;
   --msp-on-accent: #000000;
+  --histogram-ok: #ffff00;
+  --histogram-overallocated: #ff6666;
+  --histogram-capacity-line: #ff6666;
 }
 
 /*
@@ -154,6 +166,9 @@
   --msp-gantt-bar-progress: #3592c4;
   --msp-gantt-critical: #ff6b68;
   --msp-on-accent: #ffffff;
+  --histogram-ok: #6897bb;
+  --histogram-overallocated: #ff6b68;
+  --histogram-capacity-line: #ff6b68;
 }
 
 /* Solarized (Ethan Schoonover) */
@@ -185,6 +200,9 @@
   --msp-gantt-bar-progress: #268bd2;
   --msp-gantt-critical: #dc322f;
   --msp-on-accent: #fdf6e3;
+  --histogram-ok: #2aa198;
+  --histogram-overallocated: #dc322f;
+  --histogram-capacity-line: #dc322f;
 }
 
 [data-theme='solarized-dark'] {
@@ -215,4 +233,7 @@
   --msp-gantt-bar-progress: #2aa198;
   --msp-gantt-critical: #dc322f;
   --msp-on-accent: #002b36;
+  --histogram-ok: #268bd2;
+  --histogram-overallocated: #dc322f;
+  --histogram-capacity-line: #dc322f;
 }
