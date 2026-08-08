@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import gantt from 'dhtmlx-gantt'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import * as DependencyUseCases from '../../application/use-cases/DependencyUseCases'
@@ -17,6 +17,12 @@ import {
 import { installGanttColumnResize } from '../../infrastructure/gantt/ganttColumnResize'
 import { adjacentVisibleTaskId } from '../../infrastructure/gantt/ganttArrowNav'
 import { taskIdFromTimelineEmptyClick } from '../../infrastructure/gantt/timelineRowSelect'
+import { installProgressLinesOverlay } from '../../infrastructure/gantt/ganttProgressLines'
+import {
+  computeProgressPoints,
+  filterPeakPoints,
+  type ProgressPoint,
+} from '../../application/services/ComputeProgressPoints'
 import { isEditableKeyboardTarget } from '../projectShortcuts'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { buildGanttTaskColumns } from '../taskColumns/buildGanttTaskColumns'
@@ -81,6 +87,12 @@ function applyZoomLevel(index: number): void {
 
 function isAndroidUa(): boolean {
   return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+}
+
+/** Format a Date as YYYY-MM-DD for the date input value. */
+function fmtDateValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function applyGridLayout(opts: {
@@ -240,6 +252,13 @@ export function GanttView() {
   selectedTaskIdRef.current = selectedTaskId
   const taskColumnsRef = useRef(taskColumns)
   taskColumnsRef.current = taskColumns
+  const [progressLinesOn, setProgressLinesOn] = useState(false)
+  const [statusDate, setStatusDate] = useState(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return fmtDateValue(d)
+  })
+  const [showPeak, setShowPeak] = useState(false)
 
   const applyProjectToGantt = useCallback(
     (nextProject: typeof project, selectedId: string | null) => {
@@ -693,6 +712,47 @@ export function GanttView() {
     }
   }, [dispatch, zoomIn, zoomOut])
 
+  // Compute progress points for the overlay (pure calculation, no DOM).
+  const statusDateObj = useMemo(() => {
+    if (!progressLinesOn) return null
+    const d = new Date(statusDate + 'T00:00:00')
+    return isNaN(d.getTime()) ? null : d
+  }, [progressLinesOn, statusDate])
+
+  const progressPoints = useMemo(() => {
+    if (!statusDateObj) return []
+    const all = computeProgressPoints(project, statusDateObj)
+    return showPeak ? filterPeakPoints(all) : all
+  }, [project, statusDateObj, showPeak])
+
+  const progressPointsRef = useRef(progressPoints)
+  progressPointsRef.current = progressPoints
+  const statusDateObjRef = useRef(statusDateObj)
+  statusDateObjRef.current = statusDateObj
+
+  // Install SVG overlay when progress lines are enabled.
+  useEffect(() => {
+    if (!readyRef.current || !progressLinesOn) return
+    const detach = installProgressLinesOverlay(
+      gantt,
+      () => progressPointsRef.current,
+      () => statusDateObjRef.current,
+    )
+    return detach
+  }, [progressLinesOn])
+
+  // Re-render overlay when points or status date change (but only if overlay is active).
+  useEffect(() => {
+    if (!readyRef.current || !progressLinesOn) return
+    // Force a repaint by re-installing the overlay.
+    const detach = installProgressLinesOverlay(
+      gantt,
+      () => progressPointsRef.current,
+      () => statusDateObjRef.current,
+    )
+    return detach
+  }, [progressLinesOn, progressPoints, statusDateObj])
+
   // Data / filter changes: full reload. Selection-only updates use the effect below.
   useEffect(() => {
     if (!readyRef.current) return
@@ -784,6 +844,46 @@ export function GanttView() {
               title="Configure task columns"
               onClick={() => setColumnsOpen(true)}
             />
+            <ViewHeaderSep />
+            <IconAction
+              icon="progress"
+              label="Progress lines"
+              title="Toggle progress lines on the Gantt chart"
+              pressed={progressLinesOn}
+              onClick={() => setProgressLinesOn((v) => !v)}
+            />
+            {progressLinesOn ? (
+              <>
+                <input
+                  type="date"
+                  className={styles.scaleSelect}
+                  aria-label="Status date"
+                  value={statusDate}
+                  onChange={(e) => setStatusDate(e.target.value)}
+                  style={{ minWidth: '8.5rem', maxWidth: '9rem' }}
+                />
+                <label
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: 'var(--msp-text-sm)',
+                    color: 'var(--msp-text)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    padding: '0 4px',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showPeak}
+                    onChange={(e) => setShowPeak(e.target.checked)}
+                    aria-label="Show peak"
+                  />
+                  Peak
+                </label>
+              </>
+            ) : null}
             <ViewHeaderSep />
           </>
         }

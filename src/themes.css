@@ -28,6 +28,8 @@
   --msp-gantt-bar: #60a5fa;
   --msp-gantt-bar-progress: #2563eb;
   --msp-gantt-critical: #ef4444;
+  --progress-line-behind: #ef4444;
+  --progress-line-ahead: #16a34a;
   --msp-on-accent: #ffffff;
 }
 
@@ -58,6 +60,8 @@
   --msp-gantt-bar: #3b82f6;
   --msp-gantt-bar-progress: #60a5fa;
   --msp-gantt-critical: #f87171;
+  --progress-line-behind: #f87171;
+  --progress-line-ahead: #4ade80;
   --msp-on-accent: #ffffff;
 }
 
@@ -89,6 +93,8 @@
   --msp-gantt-bar: #0000ee;
   --msp-gantt-bar-progress: #000000;
   --msp-gantt-critical: #cc0000;
+  --progress-line-behind: #cc0000;
+  --progress-line-ahead: #007700;
   --msp-on-accent: #ffffff;
 }
 
@@ -119,6 +125,8 @@
   --msp-gantt-bar: #ffff00;
   --msp-gantt-bar-progress: #ffffff;
   --msp-gantt-critical: #ff6666;
+  --progress-line-behind: #ff6666;
+  --progress-line-ahead: #66ff66;
   --msp-on-accent: #000000;
 }
 
@@ -153,6 +161,8 @@
   --msp-gantt-bar: #6897bb;
   --msp-gantt-bar-progress: #3592c4;
   --msp-gantt-critical: #ff6b68;
+  --progress-line-behind: #ff6b68;
+  --progress-line-ahead: #6a8759;
   --msp-on-accent: #ffffff;
 }
 
@@ -184,6 +194,8 @@
   --msp-gantt-bar: #2aa198;
   --msp-gantt-bar-progress: #268bd2;
   --msp-gantt-critical: #dc322f;
+  --progress-line-behind: #dc322f;
+  --progress-line-ahead: #859900;
   --msp-on-accent: #fdf6e3;
 }
 
@@ -214,5 +226,7 @@
   --msp-gantt-bar: #268bd2;
   --msp-gantt-bar-progress: #2aa198;
   --msp-gantt-critical: #dc322f;
+  --progress-line-behind: #dc322f;
+  --progress-line-ahead: #859900;
   --msp-on-accent: #002b36;
 }

@@ -440,3 +440,46 @@
   background-color: var(--msp-text-muted) !important;
   border-color: var(--msp-text-muted) !important;
 }
+
+/* Progress lines SVG overlay */
+:global(.supergantt-progress-lines) .pl-vertical {
+  stroke-dasharray: 4 3;
+  stroke-width: 1.5;
+  fill: none;
+}
+
+:global(.supergantt-progress-lines) .pl-connector {
+  stroke-width: 2;
+  fill: none;
+}
+
+:global(.supergantt-progress-lines) .pl-dot,
+:global(.supergantt-progress-lines) .pl-actual-dot {
+  stroke-width: 1;
+}
+
+:global(.supergantt-progress-lines) .progress-line-behind {
+  stroke: var(--progress-line-behind);
+}
+
+:global(.supergantt-progress-lines) .pl-dot.progress-line-behind {
+  fill: var(--progress-line-behind);
+}
+
+:global(.supergantt-progress-lines) .pl-actual-dot.progress-line-behind {
+  fill: var(--msp-surface);
+  stroke: var(--progress-line-behind);
+}
+
+:global(.supergantt-progress-lines) .progress-line-ahead {
+  stroke: var(--progress-line-ahead);
+}
+
+:global(.supergantt-progress-lines) .pl-dot.progress-line-ahead {
+  fill: var(--progress-line-ahead);
+}
+
+:global(.supergantt-progress-lines) .pl-actual-dot.progress-line-ahead {
+  fill: var(--msp-surface);
+  stroke: var(--progress-line-ahead);
+}
