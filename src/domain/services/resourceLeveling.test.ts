@@ -408,4 +408,23 @@ describe('ResourceLevelingService', () => {
     expect(result.overallocationsAfter).toBeGreaterThan(0)
     expect(result.leveled).toHaveLength(0)
   })
+
+  it('returns zero-leveled no-op for an empty project', () => {
+    const cal = calendar()
+    const res = makeResource('R1', 'Alice', 1.0)
+
+    const result = levelResources(
+      [],
+      [],
+      [res],
+      [],
+      cal,
+    )
+
+    // No tasks → no overallocations, nothing to level
+    expect(result.overallocationsBefore).toBe(0)
+    expect(result.overallocationsAfter).toBe(0)
+    expect(result.leveled).toHaveLength(0)
+    expect(result.tasks).toHaveLength(0)
+  })
 })

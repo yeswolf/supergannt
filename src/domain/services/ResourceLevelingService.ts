@@ -11,8 +11,8 @@ export type LevelingOrder = 'priority'
 export interface LevelingOptions {
   /** Which tasks to consider for leveling (subset of all task IDs). */
   scope: TaskId[]
-  /** Leveling order strategy. */
-  order: LevelingOrder
+  /** Leveling order strategy. Currently only 'priority' is supported. */
+  order?: LevelingOrder
 }
 
 export interface LeveledTask {
@@ -53,6 +53,11 @@ export interface LevelingResult {
  *
  * Does respect: task priorities, dependency chains (via successor cascade),
  * and Must Start On / Must Finish On hard constraints.
+ *
+ * Contract: this function does NOT mutate any of its inputs. `tasks`,
+ * `dependencies`, `resources`, and `assignments` are read-only; the returned
+ * `Result.tasks` array contains new Task objects (Task.with() is immutable)
+ * — callers can safely iterate the original input after leveling.
  */
 export function levelResources(
   tasks: readonly Task[],
@@ -64,6 +69,18 @@ export function levelResources(
 ): LevelingResult {
   const scopeSet = new Set(options.scope)
 
+  // Empty project: nothing to level
+  if (tasks.length === 0) {
+    return {
+      tasks: [],
+      leveled: [],
+      overallocationsBefore: 0,
+      overallocationsAfter: 0,
+      finishBefore: new Date(0),
+      finishAfter: new Date(0),
+    }
+  }
+
   // Build assignments-by-task once — threaded through all helpers
   const assignmentsByTask = new Map<TaskId, Assignment[]>()
   for (const a of assignments) {
@@ -73,7 +90,7 @@ export function levelResources(
   }
 
   // Count overallocations before (respects scope for accurate counts)
-  const beforeCount = countOverallocations(tasks, resources, assignmentsByTask, calendar, scopeSet)
+  const beforeCount = countOverallocatedResourceDays(tasks, resources, assignmentsByTask, calendar, scopeSet)
   if (beforeCount === 0) {
     return {
       tasks: [...tasks],
@@ -117,19 +134,18 @@ export function levelResources(
       successors,
       predecessors,
       leveledMap,
-      options.order,
     )
     working = result.tasks
 
     // Check if all overallocations resolved
-    const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar, scopeSet)
+    const afterCount = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet)
     if (afterCount === 0) break
 
     // If no progress, stop
     if (!result.anyProgress) break
   }
 
-  const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar, scopeSet)
+  const afterCount = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet)
 
   // Sort leveled list by delay (most delayed first) for display
   const leveledList = [...leveledMap.values()].sort(
@@ -160,7 +176,6 @@ function levelingPass(
   successors: Map<TaskId, TaskId[]>,
   predecessors: Map<TaskId, TaskId[]>,
   leveledMap: Map<TaskId, LeveledTask>,
-  order: LevelingOrder,
 ): PassResult {
   const nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0 && scope.has(t.id))
   if (nonSummary.length === 0) return { tasks, anyProgress: false }
@@ -243,8 +258,7 @@ function levelingPass(
       if (totalUnits <= resource.maxUnits) continue
 
       // Sort tasks: lower sortKey first = delayed first
-      // For priority order: lower priority first
-      // For standard order: higher slack first (negative slack means sortKey is positive, so delayed later)
+      // Uses task priority as the sort key.
       const sorted = [...uniqueTasks].sort((a, b) => {
         const ka = sortKey(a)
         const kb = sortKey(b)
@@ -490,7 +504,7 @@ function cascadeDelay(
  * Each resource-day where assigned > max counts as one overallocation.
  * When scope is provided, only tasks within scope are counted.
  */
-function countOverallocations(
+function countOverallocatedResourceDays(
   tasks: readonly Task[],
   resources: readonly Resource[],
   assignmentsByTask: Map<TaskId, Assignment[]>,
@@ -559,6 +573,6 @@ function countOverallocations(
 }
 
 function computeFinish(tasks: readonly Task[]): Date {
-  if (tasks.length === 0) return new Date()
+  if (tasks.length === 0) throw new Error('computeFinish: empty task array')
   return new Date(Math.max(...tasks.map((t) => t.finish.getTime())))
 }
