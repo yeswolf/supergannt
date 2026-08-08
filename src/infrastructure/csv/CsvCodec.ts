@@ -77,12 +77,22 @@ function decodeContent(buffer: ArrayBuffer, encoding: string): string {
   }
 }
 
-function detectDelimiter(headerLine: string): string {
+function detectDelimiter(headerLine: string, dataLine?: string): string {
   const candidates = [',', '\t', ';']
   let best = ','
   let bestCount = 0
   for (const c of candidates) {
-    const count = (headerLine.match(new RegExp(escapeRegex(c), 'g')) || []).length
+    let count = (headerLine.match(new RegExp(escapeRegex(c), 'g')) || []).length
+    // Cross-validate against the first data row: if the header-detected
+    // delimiter appears zero times in the data row, heavily discount it.
+    // This catches the common case of a semicolon-separated header
+    // concatenated with comma-separated data rows.
+    if (dataLine !== undefined) {
+      const dataCount = (dataLine.match(new RegExp(escapeRegex(c), 'g')) || []).length
+      if (dataCount === 0 && count > 0) {
+        count = 0
+      }
+    }
     if (count > bestCount) {
       bestCount = count
       best = c
@@ -100,16 +110,24 @@ function parseCsv(text: string, delimiter?: string): { headers: string[]; rows: 
   // Normalize line endings
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 
-  // Detect delimiter from first line if not provided
+  // Detect delimiter from first line if not provided.
+  // Cross-validate against the first data row to catch header/data
+  // delimiter mismatches (e.g. semicolon header + comma data rows).
   const firstNewline = normalized.indexOf('\n')
   const firstLine = firstNewline >= 0 ? normalized.slice(0, firstNewline) : normalized
-  const delim = delimiter ?? detectDelimiter(firstLine)
+  let secondLine: string | undefined
+  if (firstNewline >= 0) {
+    const secondNewline = normalized.indexOf('\n', firstNewline + 1)
+    secondLine = secondNewline >= 0 ? normalized.slice(firstNewline + 1, secondNewline) : normalized.slice(firstNewline + 1)
+  }
+  const delim = delimiter ?? detectDelimiter(firstLine, secondLine)
 
   // Parse with multiline quoted field support
   const allFields: string[][] = []
   let currentFields: string[] = []
   let currentField = ''
   let inQuotes = false
+  let fieldWasQuoted = false
 
   for (let i = 0; i < normalized.length; i++) {
     const ch = normalized[i]!
@@ -126,22 +144,29 @@ function parseCsv(text: string, delimiter?: string): { headers: string[]; rows: 
       }
     } else {
       if (ch === '"') {
+        if (currentField === '') {
+          // Field starts with a quote — it is a quoted field.
+          // RFC 4180: leading/trailing spaces in quoted fields are significant.
+          fieldWasQuoted = true
+        }
         inQuotes = true
       } else if (ch === delim) {
-        currentFields.push(currentField.trim())
+        currentFields.push(fieldWasQuoted ? currentField : currentField.trim())
         currentField = ''
+        fieldWasQuoted = false
       } else if (ch === '\n') {
-        currentFields.push(currentField.trim())
+        currentFields.push(fieldWasQuoted ? currentField : currentField.trim())
         allFields.push(currentFields)
         currentFields = []
         currentField = ''
+        fieldWasQuoted = false
       } else {
         currentField += ch
       }
     }
   }
   // Don't forget the last field and row
-  currentFields.push(currentField.trim())
+  currentFields.push(fieldWasQuoted ? currentField : currentField.trim())
   if (currentFields.length > 0 && currentFields.some((f) => f !== '')) {
     allFields.push(currentFields)
   }
@@ -157,6 +182,13 @@ function parseCsv(text: string, delimiter?: string): { headers: string[]; rows: 
 
 // ---- Date parsing ---------------------------------------------------------
 
+/**
+ * Parse an ISO-8601 date string. Only called from {@link parseDateWithFormat}
+ * when `dateFormat === 'iso'`, so it receives YYYY-MM-DD or similar ISO forms.
+ * Uses `new Date(value)` which parses ISO strings consistently across runtimes;
+ * slashed dates like "01/05/2026" will NOT reach this function — they are
+ * dispatched to {@link parseDateUs} or {@link parseDateEu} instead.
+ */
 function parseDateIso(value: string): Date | null {
   const d = new Date(value)
   return Number.isNaN(d.getTime()) ? null : d
@@ -243,7 +275,7 @@ function parseResourceType(value: string): ResourceType {
   return 'work'
 }
 
-function parseDurationValue(value: string): Duration {
+function parseDurationValue(value: string): Duration | 'invalid' {
   const trimmed = value.trim()
   if (!trimmed) return Duration.zero()
   // Try Duration.parse first
@@ -255,7 +287,7 @@ function parseDurationValue(value: string): Duration {
     if (Number.isFinite(n)) {
       return Duration.of(n, 'd')
     }
-    return Duration.zero()
+    return 'invalid'
   }
 }
 
@@ -561,15 +593,20 @@ export class CsvCodec implements ProjectFileCodec {
     ids: IdGenerator,
     existingTasks: Task[] = [],
   ): CsvImportResult {
-    const buffer =
-      typeof content === 'string'
-        ? new TextEncoder().encode(content).buffer
-        : content instanceof ArrayBuffer
+    // When content is already a string (e.g. from serialize()), skip the
+    // encode → detect → decode round-trip.  Binary input from user file
+    // uploads still goes through full encoding detection.
+    let text: string
+    if (typeof content === 'string') {
+      text = content
+    } else {
+      const buffer =
+        content instanceof ArrayBuffer
           ? content
           : new Uint8Array(content).buffer
-
-    const encoding = detectEncoding(buffer)
-    const text = decodeContent(buffer, encoding)
+      const encoding = detectEncoding(buffer)
+      text = decodeContent(buffer, encoding)
+    }
     const { headers, rows } = parseCsv(text)
 
     if (headers.length === 0) {
@@ -762,7 +799,16 @@ export class CsvCodec implements ProjectFileCodec {
         for (let ri = 0; ri < rows.length; ri++) {
           const row = rows[ri]!
           if (nameColIdx < row.length && row[nameColIdx]!.trim()) {
-            nameToRowIdx.set(row[nameColIdx]!.trim(), ri)
+            const trimmedName = row[nameColIdx]!.trim()
+            if (nameToRowIdx.has(trimmedName)) {
+              errors.push({
+                row: ri + 2,
+                column: nameColSrc,
+                message: `Duplicate task name "${trimmedName}" — predecessor references to this name will resolve to the first occurrence`,
+              })
+            } else {
+              nameToRowIdx.set(trimmedName, ri)
+            }
           }
         }
       }
@@ -835,6 +881,9 @@ export class CsvCodec implements ProjectFileCodec {
 
     const durationRaw = values.get('duration')
     const duration = parseDurationValue(durationRaw ?? '')
+    if (duration === 'invalid') {
+      errors.push({ row: rowIdx + 2, column: 'duration', message: `Duration value "${durationRaw}" is not parseable — using default 1 day` })
+    }
 
     const percentComplete = parseNumber(values.get('percentComplete') ?? '') ?? 0
     const milestone = parseBoolean(values.get('milestone') ?? '') ?? false
@@ -855,7 +904,7 @@ export class CsvCodec implements ProjectFileCodec {
         wbs,
         start,
         finish,
-        duration: duration.toHours() > 0 ? duration : Duration.hours(8),
+        duration: (typeof duration !== 'string' && duration.toHours() > 0) ? duration : Duration.hours(8),
         percentComplete: Math.max(0, Math.min(100, percentComplete)),
         milestone: milestone || (duration.toHours() === 0),
         summary: false,
