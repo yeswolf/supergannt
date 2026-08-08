@@ -27,6 +27,7 @@ export const APP_VIEWS: ViewDef[] = [
     icon: 'calendar',
     group: 'more',
   },
+  { id: 'histogram', label: 'Resource Histogram', short: 'Histogram', icon: 'histogram', group: 'more' },
   { id: 'reports', label: 'Reports', short: 'Reports', icon: 'reports', group: 'more' },
 ]
 

@@ -225,6 +225,14 @@ export const Icons = {
       <path d="M14 18V8M17.5 18v-6M21 18v-9" />
     </Svg>
   ),
+  histogram: (p?: IconProps) => (
+    <Svg {...p}>
+      <rect x="3" y="14" width="3" height="6" rx="0.5" />
+      <rect x="8" y="10" width="3" height="10" rx="0.5" />
+      <rect x="13" y="6" width="3" height="14" rx="0.5" />
+      <rect x="18" y="2" width="3" height="18" rx="0.5" />
+    </Svg>
+  ),
   month: (p?: IconProps) => (
     <Svg {...p}>
       <rect x="3" y="5" width="18" height="16" rx="2" />

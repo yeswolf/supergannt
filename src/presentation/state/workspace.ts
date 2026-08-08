@@ -38,6 +38,7 @@ export type AppView =
   | 'resourceUsage'
   | 'calendar'
   | 'resourceCalendar'
+  | 'histogram'
   | 'reports'
 
 export interface AppServices {

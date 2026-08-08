@@ -1,0 +1,200 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--msp-border);
+  flex-shrink: 0;
+}
+
+.scaleButtons {
+  display: flex;
+  gap: 2px;
+}
+
+.scaleBtn,
+.scaleActive {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid var(--msp-border);
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--msp-surface);
+  color: var(--msp-text);
+}
+
+.scaleActive {
+  background: var(--msp-accent);
+  color: var(--msp-on-accent);
+  border-color: var(--msp-accent);
+}
+
+.filterInput {
+  padding: 3px 8px;
+  font-size: 12px;
+  border: 1px solid var(--msp-border);
+  border-radius: 3px;
+  background: var(--msp-surface);
+  color: var(--msp-text);
+  width: 200px;
+}
+
+.filterInput::placeholder {
+  color: var(--msp-text-muted);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--msp-text-muted);
+  margin-left: auto;
+}
+
+.chartWrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.chart {
+  min-height: 100%;
+}
+
+.headerRow {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--msp-surface-alt);
+  border-bottom: 1px solid var(--msp-border-strong);
+}
+
+.periodLabel {
+  flex-shrink: 0;
+  font-size: 11px;
+  text-align: center;
+  padding: 4px 0;
+  color: var(--msp-text-secondary);
+  border-right: 1px solid var(--msp-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowsWrap {
+  cursor: grab;
+  user-select: none;
+}
+
+.rowsWrap:active {
+  cursor: grabbing;
+}
+
+.resourceRow {
+  display: flex;
+  border-bottom: 1px solid var(--msp-border);
+}
+
+.resourceName {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--msp-text);
+  background: var(--msp-surface-alt);
+  border-right: 1px solid var(--msp-border-strong);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.barRow {
+  display: flex;
+}
+
+.barCell {
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-right: 1px solid var(--msp-border);
+}
+
+.emptyCell {
+  flex-shrink: 0;
+  border-right: 1px solid var(--msp-border);
+}
+
+.bar {
+  background: var(--histogram-ok);
+  border-radius: 2px 2px 0 0;
+  min-height: 4px;
+  transition: height 0.1s;
+}
+
+.barOverallocated {
+  composes: bar;
+  background: var(--histogram-overallocated);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 0, 0, 0.15) 3px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+}
+
+.capacityLine {
+  position: absolute;
+  left: 1px;
+  height: 2px;
+  background: var(--histogram-capacity-line);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.barLabel {
+  position: absolute;
+  top: 2px;
+  font-size: 9px;
+  color: var(--msp-text-muted);
+  pointer-events: none;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--msp-border);
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--msp-text-secondary);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legendSwatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legendLine {
+  display: inline-block;
+  width: 12px;
+  height: 1px;
+}
