@@ -76,6 +76,7 @@ function detectEncoding(buffer: ArrayBuffer): string {
       // Fall back to windows-1252.  TextDecoder may throw in runtimes that
       // don't ship this encoding (e.g. embedded JS engines).
       try {
+        new TextDecoder('windows-1252') // Verify the encoding is actually available
         return 'windows-1252'
       } catch {
         return 'utf-8'
@@ -205,6 +206,31 @@ function parseCsv(text: string, delimiter?: string): { headers: string[]; rows: 
   const headers = allFields[0]!
   const rows = allFields.slice(1)
   return { headers, rows, delimiter: delim }
+}
+
+/**
+ * Convert CSV content (string or binary) to a string.  String inputs are
+ * returned directly (with BOM stripped if present), avoiding an encode →
+ * detect → decode round-trip.  Binary inputs go through full encoding
+ * detection and decoding.
+ */
+function csvContentToString(content: string | ArrayBuffer): string {
+  if (typeof content === 'string') {
+    let text = content
+    // Strip BOM from string content too — the exporter prepends one,
+    // and round-trip tests feed string content directly without going
+    // through decodeContent().
+    if (text.charCodeAt(0) === 0xfeff) {
+      text = text.slice(1)
+    }
+    return text
+  }
+  const buffer =
+    content instanceof ArrayBuffer
+      ? content
+      : new Uint8Array(content).buffer
+  const encoding = detectEncoding(buffer)
+  return decodeContent(buffer, encoding)
 }
 
 // ---- Date parsing ---------------------------------------------------------
@@ -439,7 +465,7 @@ function constraintTypeLabel(ct: TaskConstraintType): string {
 
 // ---- Entity type detection -------------------------------------------------
 
-function detectEntityType(headers: string[]): CsvEntityType {
+function detectEntityType(headers: string[]): CsvEntityType | null {
   const headerSet = new Set(headers.map((h) => normalizeFieldLabel(h)))
   const hasTaskFields =
     headerSet.has('start') ||
@@ -454,7 +480,10 @@ function detectEntityType(headers: string[]): CsvEntityType {
 
   if (hasTaskFields && !hasResourceFields) return 'task'
   if (hasResourceFields && !hasTaskFields) return 'resource'
-  return 'task'
+  // Both or neither matched — ambiguous headers.  Return null so the
+  // caller can decide (e.g. via explicit user choice) instead of silently
+  // defaulting to 'task'.
+  return null
 }
 
 // ---- The Codec ------------------------------------------------------------
@@ -478,7 +507,11 @@ export class CsvCodec implements ProjectFileCodec {
   }
 
   handlesExportFormat(format: string): boolean {
-    return format === `csv-${this.entityType}s`
+    const EXPORT_FORMAT_MAP: Record<CsvEntityType, string> = {
+      task: 'csv-tasks',
+      resource: 'csv-resources',
+    }
+    return format === EXPORT_FORMAT_MAP[this.entityType]
   }
 
   /** Content-aware import disambiguation.  Inspects column headers to
@@ -486,18 +519,10 @@ export class CsvCodec implements ProjectFileCodec {
    *  handle the file.  Called by {@link FileUseCases.codecFor} when
    *  multiple codecs claim the same extension. */
   canHandleImport(content: string | ArrayBuffer, _fileName: string): boolean {
-    const buffer =
-      typeof content === 'string'
-        ? new TextEncoder().encode(content).buffer
-        : content instanceof ArrayBuffer
-          ? content
-          : new Uint8Array(content).buffer
-
-    const encoding = detectEncoding(buffer)
-    const text = decodeContent(buffer, encoding)
+    const text = csvContentToString(content)
     const { headers } = parseCsv(text)
     const detectedType = detectEntityType(headers)
-    return detectedType === this.entityType
+    return detectedType !== null && detectedType === this.entityType
   }
 
   /**
@@ -505,15 +530,7 @@ export class CsvCodec implements ProjectFileCodec {
    * For import into an existing project, use {@link importFromCsv} instead.
    */
   async parse(content: string | ArrayBuffer, fileName: string): Promise<Project> {
-    const buffer =
-      typeof content === 'string'
-        ? new TextEncoder().encode(content).buffer
-        : content instanceof ArrayBuffer
-          ? content
-          : new Uint8Array(content).buffer
-
-    const encoding = detectEncoding(buffer)
-    const text = decodeContent(buffer, encoding)
+    const text = csvContentToString(content)
 
     const { headers, rows } = parseCsv(text)
 
@@ -522,18 +539,10 @@ export class CsvCodec implements ProjectFileCodec {
     }
 
     // Auto-detect entity type from column headers.  When the sniffer can't
-    // confidently distinguish (e.g. a resource CSV that only has a "Type"
-    // column but no "Max Units" or "Standard Rate"), trust the
-    // constructor's explicit entityType over the default guess.  The
-    // heuristic: `detectEntityType` only returns 'resource' when it finds
-    // strong resource-only signals, so a disagreement means the sniffer
-    // defaulted to 'task' — if the constructor says otherwise someone
-    // explicitly chose 'resource' and we honour that.
+    // confidently distinguish (e.g. headers without any task- or resource-
+    // specific fields), fall back to the constructor's explicit entityType.
     const detectedType = detectEntityType(headers)
-    const effectiveType =
-      detectedType !== this.entityType && this.entityType === 'resource'
-        ? this.entityType
-        : detectedType
+    const effectiveType = detectedType ?? this.entityType
 
     // Build default column mappings from headers
     const mappings = this.buildDefaultMappings(headers, effectiveType)
@@ -706,26 +715,7 @@ export class CsvCodec implements ProjectFileCodec {
     existingTasks?: Task[],
   ): CsvImportResult {
     const resolvedExistingTasks = existingTasks ?? []
-    // When content is already a string (e.g. from serialize()), skip the
-    // encode → detect → decode round-trip.  Binary input from user file
-    // uploads still goes through full encoding detection.
-    let text: string
-    if (typeof content === 'string') {
-      text = content
-      // Strip BOM from string content too — the exporter prepends one,
-      // and round-trip tests feed string content directly without going
-      // through decodeContent().
-      if (text.charCodeAt(0) === 0xfeff) {
-        text = text.slice(1)
-      }
-    } else {
-      const buffer =
-        content instanceof ArrayBuffer
-          ? content
-          : new Uint8Array(content).buffer
-      const encoding = detectEncoding(buffer)
-      text = decodeContent(buffer, encoding)
-    }
+    const text = csvContentToString(content)
     const { headers, rows } = parseCsv(text)
 
     if (headers.length === 0) {
@@ -1114,17 +1104,25 @@ export class CsvCodec implements ProjectFileCodec {
     rows: string[][]
     delimiter: string
     encoding: string
-    suggestedEntityType: CsvEntityType
+    suggestedEntityType: CsvEntityType | null
   } {
-    const buffer =
-      typeof content === 'string'
-        ? new TextEncoder().encode(content).buffer
-        : content instanceof ArrayBuffer
+    let encoding: string
+    let text: string
+    if (typeof content === 'string') {
+      text = content
+      // Strip BOM from string content — the exporter prepends one.
+      if (text.charCodeAt(0) === 0xfeff) {
+        text = text.slice(1)
+      }
+      encoding = 'utf-8'
+    } else {
+      const buffer =
+        content instanceof ArrayBuffer
           ? content
           : new Uint8Array(content).buffer
-
-    const encoding = detectEncoding(buffer)
-    const text = decodeContent(buffer, encoding)
+      encoding = detectEncoding(buffer)
+      text = decodeContent(buffer, encoding)
+    }
     const { headers, rows, delimiter } = parseCsv(text)
 
     const suggestedEntityType = detectEntityType(headers)
