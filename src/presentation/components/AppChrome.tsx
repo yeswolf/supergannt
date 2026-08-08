@@ -369,6 +369,13 @@ export function AppChrome() {
         run: () => dispatch({ type: 'clearBaseline' }),
       },
       {
+        id: 'level-resources',
+        label: 'Level Resources…',
+        icon: 'resources',
+        keywords: 'resource leveling overallocation',
+        run: () => dispatch({ type: 'openLevelingDialog' }),
+      },
+      {
         id: 'zoom-in',
         label: 'Zoom in (Gantt)',
         icon: 'zoomIn',

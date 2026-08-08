@@ -7,6 +7,7 @@ import * as ResourceUseCases from '../../application/use-cases/ResourceUseCases'
 import * as ProjectUseCases from '../../application/use-cases/ProjectUseCases'
 import type { LinkType } from '../../domain/entities/Dependency'
 import type { ResourceType } from '../../domain/entities/Resource'
+import type { Task } from '../../domain/entities/Task'
 import type { Project } from '../../domain/entities/Project'
 import { UuidIdGenerator } from '../../infrastructure/ids/UuidIdGenerator'
 import { LocalStorageProjectRepository } from '../../infrastructure/persistence/LocalStorageProjectRepository'
@@ -19,6 +20,7 @@ import { PreferTauriMppToXmlConverter } from '../../infrastructure/mpp/PreferTau
 import { PreferTauriXmlToMppConverter } from '../../infrastructure/mpp/PreferTauriXmlToMppConverter'
 import type { InspectionFinding } from '../../application/services/ProjectInspector'
 import { inspectProject } from '../../application/services/ProjectInspector'
+import type { LeveledTask } from '../../domain/services/ResourceLevelingService'
 import {
   createInitialFilterSortState,
   type TaskFilterSortState,
@@ -94,6 +96,7 @@ export interface WorkspaceState {
   /** Initial tab when Task Information opens. */
   taskInfoTab: 'general' | 'predecessors' | 'resources' | 'advanced'
   assignDialogOpen: boolean
+  levelingDialogOpen: boolean
   statusMessage: string | null
   /** Non-null while a plan file is being opened/imported. */
   busyMessage: string | null
@@ -129,6 +132,7 @@ export function createInitialState(services = createAppServices()): WorkspaceSta
     taskInfoOpen: false,
     taskInfoTab: 'general',
     assignDialogOpen: false,
+    levelingDialogOpen: false,
     statusMessage: 'Blank plan — add a task or open a file.',
     busyMessage: null,
     services,
@@ -152,6 +156,9 @@ export type WorkspaceAction =
   | { type: 'closeTaskInfo' }
   | { type: 'openAssignDialog'; taskId?: string }
   | { type: 'closeAssignDialog' }
+  | { type: 'openLevelingDialog' }
+  | { type: 'closeLevelingDialog' }
+  | { type: 'applyLeveling'; tasks: Task[]; leveled: LeveledTask[]; finishAfter: Date }
   | { type: 'setProject'; project: Project; message?: string }
   | { type: 'setStatus'; message: string | null }
   | { type: 'setBusy'; message: string | null }
@@ -263,6 +270,7 @@ const PROJECT_MUTATIONS = new Set<string>([
   'setBaseline',
   'clearBaseline',
   'updateProjectInfo',
+  'applyLeveling',
 ])
 
 /** Human-readable labels for undo/redo entries. */
@@ -292,6 +300,7 @@ const ACTION_LABELS: Record<string, string> = {
   setBaseline: 'Set baseline',
   clearBaseline: 'Clear baseline',
   updateProjectInfo: 'Edit project info',
+  applyLeveling: 'Level resources',
 }
 
 /** Increments the mutation counter and sets dirty — used by every
@@ -455,6 +464,19 @@ export function workspaceReducer(
     }
     case 'closeAssignDialog':
       return { ...state, assignDialogOpen: false }
+    case 'openLevelingDialog':
+      return { ...state, levelingDialogOpen: true }
+    case 'closeLevelingDialog':
+      return { ...state, levelingDialogOpen: false }
+    case 'applyLeveling':
+      return {
+        ...state,
+        project: state.project.with({
+          tasks: action.tasks,
+          finishDate: action.finishAfter,
+        }),
+        statusMessage: `Resource leveling applied — ${action.leveled.length} task(s) delayed.`,
+      }
     case 'setProject':
       return {
         ...state,
