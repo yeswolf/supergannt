@@ -81,10 +81,15 @@ export function levelResources(
 
   // Precompute successor map for cascade
   const successors = new Map<TaskId, TaskId[]>()
+  // Precompute predecessor map so delayed tasks respect their own FS dependencies
+  const predecessors = new Map<TaskId, TaskId[]>()
   for (const dep of dependencies) {
-    const list = successors.get(dep.predecessorId) ?? []
-    list.push(dep.successorId)
-    successors.set(dep.predecessorId, list)
+    const succList = successors.get(dep.predecessorId) ?? []
+    succList.push(dep.successorId)
+    successors.set(dep.predecessorId, succList)
+    const predList = predecessors.get(dep.successorId) ?? []
+    predList.push(dep.predecessorId)
+    predecessors.set(dep.successorId, predList)
   }
 
   const resourceById = new Map(resources.map((r) => [r.id, r]))
@@ -100,6 +105,7 @@ export function levelResources(
       assignmentsByTask,
       scopeSet,
       successors,
+      predecessors,
       leveledMap,
       options.order,
     )
@@ -142,6 +148,7 @@ function levelingPass(
   assignmentsByTask: Map<TaskId, Assignment[]>,
   scope: Set<TaskId>,
   successors: Map<TaskId, TaskId[]>,
+  predecessors: Map<TaskId, TaskId[]>,
   leveledMap: Map<TaskId, LeveledTask>,
   order: LevelingOrder,
 ): PassResult {
@@ -313,6 +320,20 @@ function levelingPass(
           }
         }
 
+        // Ensure newStart respects predecessors on other resources
+        // (delaying a task on one resource must not break its FS dependencies)
+        const predIds = predecessors.get(task.id)
+        if (predIds) {
+          for (const predId of predIds) {
+            const predTask = byId.get(predId)
+            if (predTask && predTask.finish.getTime() > newStart.getTime()) {
+              newStart = calendar.snapToWorkStart(
+                new Date(predTask.finish.getTime()),
+              )
+            }
+          }
+        }
+
         if (newStart.getTime() <= currentTask.start.getTime()) continue
 
         const oldStart = currentTask.start
@@ -357,6 +378,7 @@ function levelingPass(
           newFinish,
           working,
           successors,
+          predecessors,
           calendar,
           leveledMap,
         )
@@ -380,6 +402,7 @@ function cascadeDelay(
   predFinish: Date,
   working: Task[],
   successors: Map<TaskId, TaskId[]>,
+  predecessors: Map<TaskId, TaskId[]>,
   calendar: WorkCalendar,
   leveledMap: Map<TaskId, LeveledTask>,
 ): void {
@@ -393,6 +416,18 @@ function cascadeDelay(
     if (!task || task.summary) return
 
     if (task.constraintType === 'mustStartOn' || task.constraintType === 'mustFinishOn') return
+
+    // Ensure earliestStart respects ALL predecessors, not just the
+    // one that triggered this cascade invocation.
+    const predIds = predecessors.get(id)
+    if (predIds) {
+      for (const predId of predIds) {
+        const pred = byId.get(predId)
+        if (pred && pred.finish.getTime() > earliestStart.getTime()) {
+          earliestStart = new Date(pred.finish.getTime())
+        }
+      }
+    }
 
     if (earliestStart.getTime() > task.start.getTime()) {
       const oldStart = task.start

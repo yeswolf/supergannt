@@ -188,6 +188,17 @@ describe('ResourceLevelingService', () => {
     // t1 (priority 300) should be delayed, and t2/t3 may be affected
     // or t2 (priority 500) delayed depending on load
     expect(result.leveled.length).toBeGreaterThan(0)
+
+    // Verify that dependency constraints are preserved: successor starts
+    // at or after predecessor finishes post-leveling.
+    const leveledTasks = new Map(result.tasks.map((t: Task) => [t.id, t]))
+    const t2After = leveledTasks.get('2')
+    const t3After = leveledTasks.get('3')
+    if (t2After && t3After) {
+      expect(t3After.start.getTime()).toBeGreaterThanOrEqual(
+        t2After.finish.getTime(),
+      )
+    }
   })
 
   it('respects task priority ordering', () => {

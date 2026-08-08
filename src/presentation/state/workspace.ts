@@ -21,6 +21,7 @@ import { PreferTauriXmlToMppConverter } from '../../infrastructure/mpp/PreferTau
 import type { InspectionFinding } from '../../application/services/ProjectInspector'
 import { inspectProject } from '../../application/services/ProjectInspector'
 import type { LeveledTask } from '../../domain/services/ResourceLevelingService'
+import { scheduleProject } from '../../domain/services/SchedulingService'
 import {
   createInitialFilterSortState,
   type TaskFilterSortState,
@@ -468,15 +469,27 @@ export function workspaceReducer(
       return { ...state, levelingDialogOpen: true }
     case 'closeLevelingDialog':
       return { ...state, levelingDialogOpen: false }
-    case 'applyLeveling':
+    case 'applyLeveling': {
+      // Run the leveled tasks through the scheduling engine so that
+      // constraint propagation and summary roll-ups produce consistent dates.
+      const scheduled = scheduleProject(
+        action.tasks,
+        state.project.dependencies,
+        state.project.getCalendar(),
+        state.project.startDate,
+      )
+      const newFinish = scheduled.length > 0
+        ? new Date(Math.max(...scheduled.map((t) => t.finish.getTime())))
+        : action.finishAfter
       return {
         ...state,
         project: state.project.with({
-          tasks: action.tasks,
-          finishDate: action.finishAfter,
+          tasks: scheduled,
+          finishDate: newFinish,
         }),
         statusMessage: `Resource leveling applied — ${action.leveled.length} task(s) delayed.`,
       }
+    }
     case 'setProject':
       return {
         ...state,

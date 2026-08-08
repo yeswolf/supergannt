@@ -1,8 +1,5 @@
-import { useEffect, useRef, useState, useMemo, type KeyboardEvent } from 'react'
-import {
-  levelResources,
-  type LeveledTask,
-} from '../../domain/services/ResourceLevelingService'
+import { useEffect, useRef, useMemo, type KeyboardEvent } from 'react'
+import { levelResources } from '../../domain/services/ResourceLevelingService'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { IconAction, IconActions } from './IconAction'
 import styles from './TaskInformationDialog.module.css'
