@@ -59,6 +59,9 @@ export interface LevelingResult {
  * `Result.tasks` array contains new Task objects (Task.with() is immutable)
  * — callers can safely iterate the original input after leveling.
  */
+/** Maximum working days iterated in a single pass — infinite-loop backstop. */
+const MAX_ITERATION_DAYS = 3650
+
 export function levelResources(
   tasks: readonly Task[],
   dependencies: readonly Dependency[],
@@ -192,9 +195,13 @@ function levelingPass(
   // Sort all levelable tasks by priority (for determining who gets delayed)
   const sortKey = (t: Task): number => t.priority
 
+  // Build byId once — updated in-place as tasks are delayed so cascadeDelay
+  // and predecessor lookups always see current state without rebuilding.
+  const byId = new Map(working.map((t) => [t.id, t]))
+
   const cursor = new Date(startDate.getTime())
   let dayCount = 0
-  const maxDays = 3650
+  const maxDays = MAX_ITERATION_DAYS
 
   while (cursor.getTime() <= endDate.getTime() && dayCount < maxDays) {
     dayCount += 1
@@ -208,7 +215,6 @@ function levelingPass(
     }
 
     // Find all active tasks on this day
-    const byId = new Map(working.map((t) => [t.id, t]))
     const active = working.filter(
       (t) =>
         !t.summary &&
@@ -229,7 +235,14 @@ function levelingPass(
       const taskAssignments = assignmentsByTask.get(task.id) ?? []
       for (const a of taskAssignments) {
         const resource = resourceById.get(a.resourceId)
-        if (!resource || resource.maxUnits <= 0) continue
+        if (!resource) continue
+        if (resource.maxUnits <= 0) {
+          console.warn(
+            `ResourceLevelingService: resource "${resource.name}" (${resource.id}) has maxUnits=${resource.maxUnits} ` +
+              `but has assignments. Skipping — this may indicate a data integrity issue.`,
+          )
+          continue
+        }
         let list = resourceTasks.get(a.resourceId)
         if (!list) {
           list = []
@@ -317,11 +330,6 @@ function levelingPass(
 
       // Serialize delayed tasks so they don't overlap each other.
       for (const task of toDelay) {
-        // Skip hard-constrained tasks
-        if (task.constraintType === 'mustStartOn' || task.constraintType === 'mustFinishOn') {
-          continue
-        }
-
         const currentTask = byId.get(task.id)
         if (!currentTask) continue
 
@@ -399,6 +407,7 @@ function levelingPass(
           predecessors,
           calendar,
           leveledMap,
+          byId,
         )
       }
     }
@@ -412,6 +421,14 @@ function levelingPass(
     }
   }
 
+  // If we hit the day cap, surface it — silent truncation is a time bomb.
+  if (dayCount >= maxDays) {
+    console.warn(
+      `ResourceLevelingService: levelingPass hit the maxDays cap (${maxDays} working days). ` +
+        `Leveling may be incomplete for this project.`,
+    )
+  }
+
   return { tasks: working, anyProgress }
 }
 
@@ -423,11 +440,10 @@ function cascadeDelay(
   predecessors: Map<TaskId, TaskId[]>,
   calendar: WorkCalendar,
   leveledMap: Map<TaskId, LeveledTask>,
+  byId: Map<TaskId, Task>,
 ): void {
   const succIds = successors.get(predecessorId)
   if (!succIds || succIds.length === 0) return
-
-  const byId = new Map(working.map((t) => [t.id, t]))
 
   // Iterative BFS queue — handles arbitrarily deep dependency chains
   // without blowing the call stack.
@@ -533,7 +549,7 @@ function countOverallocatedResourceDays(
   end.setHours(0, 0, 0, 0)
 
   let dayCount = 0
-  while (cursor.getTime() <= end.getTime() && dayCount < 3650) {
+  while (cursor.getTime() <= end.getTime() && dayCount < MAX_ITERATION_DAYS) {
     dayCount += 1
     const dayStart = new Date(cursor.getTime())
     const dayEnd = new Date(cursor.getTime())
@@ -567,6 +583,13 @@ function countOverallocatedResourceDays(
     }
 
     cursor.setDate(cursor.getDate() + 1)
+  }
+
+  if (dayCount >= MAX_ITERATION_DAYS) {
+    console.warn(
+      `ResourceLevelingService: countOverallocatedResourceDays hit the cap (${MAX_ITERATION_DAYS} working days). ` +
+        `Overallocation count may be incomplete.`,
+    )
   }
 
   return count

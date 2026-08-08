@@ -1,4 +1,5 @@
-import { useEffect, useRef, useMemo, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, useMemo, type KeyboardEvent } from 'react'
+import type { LevelingResult } from '../../domain/services/ResourceLevelingService'
 import { levelResources } from '../../domain/services/ResourceLevelingService'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { IconAction, IconActions } from './IconAction'
@@ -15,20 +16,35 @@ export function ResourceLevelingDialog() {
 
   const calendar = project.getCalendar()
 
-  // Compute leveling preview when dialog opens
-  const preview = useMemo(() => {
-    if (!levelingDialogOpen) return null
-    const result = levelResources(
-      project.tasks,
-      project.dependencies,
-      project.resources,
-      project.assignments,
-      calendar,
-      {
-        scope: project.tasks.map((t) => t.id),
-      },
-    )
-    return result
+  // Compute leveling preview asynchronously via useEffect so the dialog
+  // opens immediately with a spinner rather than blocking the render thread.
+  const [preview, setPreview] = useState<LevelingResult | null>(null)
+  const [computing, setComputing] = useState(false)
+
+  useEffect(() => {
+    if (!levelingDialogOpen) {
+      setPreview(null)
+      setComputing(false)
+      return
+    }
+
+    setComputing(true)
+    const id = setTimeout(() => {
+      const result = levelResources(
+        project.tasks,
+        project.dependencies,
+        project.resources,
+        project.assignments,
+        calendar,
+        {
+          scope: project.tasks.map((t) => t.id),
+        },
+      )
+      setPreview(result)
+      setComputing(false)
+    }, 0)
+
+    return () => clearTimeout(id)
   }, [levelingDialogOpen, project])
 
   useEffect(() => {
@@ -50,6 +66,28 @@ export function ResourceLevelingDialog() {
       prev?.focus?.()
     }
   }, [levelingDialogOpen, dispatch])
+
+  // Hoist table cell styles inside the component so they aren't floating
+  // module-scope globals. useMemo keeps them stable across renders.
+  const thStyle = useMemo<React.CSSProperties>(
+    () => ({
+      textAlign: 'left',
+      padding: '0.4rem 0.5rem',
+      borderBottom: '1px solid var(--msp-border)',
+      fontWeight: 600,
+      fontSize: 'var(--msp-text-sm)',
+    }),
+    [],
+  )
+
+  const tdStyle = useMemo<React.CSSProperties>(
+    () => ({
+      padding: '0.35rem 0.5rem',
+      borderBottom: '1px solid var(--msp-border)',
+      fontSize: 'var(--msp-text-sm)',
+    }),
+    [],
+  )
 
   if (!levelingDialogOpen) return null
 
@@ -105,91 +143,99 @@ export function ResourceLevelingDialog() {
           />
         </header>
         <div className={styles.body}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Metric</th>
-                <th style={thStyle}>Before</th>
-                <th style={thStyle}>After</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={tdStyle}>Overallocations</td>
-                <td style={{ ...tdStyle, color: beforeCount > 0 ? 'var(--msp-danger)' : 'inherit' }}>
-                  {beforeCount}
-                </td>
-                <td style={{ ...tdStyle, color: afterCount > 0 ? 'var(--msp-danger)' : 'inherit' }}>
-                  {afterCount}
-                </td>
-              </tr>
-              <tr>
-                <td style={tdStyle}>Tasks delayed</td>
-                <td style={tdStyle}>—</td>
-                <td style={tdStyle}>{taskCount}</td>
-              </tr>
-              <tr>
-                <td style={tdStyle}>Project finish</td>
-                <td style={tdStyle}>
-                  {finishBefore?.toISOString().slice(0, 10)}
-                </td>
-                <td style={tdStyle}>
-                  {finishAfter?.toISOString().slice(0, 10)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          {taskCount > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem' }}>Delayed Tasks</h4>
-              <div
-                style={{
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                }}
-              >
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>Task</th>
-                      <th style={thStyle}>Old Start</th>
-                      <th style={thStyle}>New Start</th>
-                      <th style={thStyle}>Delay</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview?.leveled.slice(0, 50).map((lt) => (
-                      <tr key={lt.taskId}>
-                        <td style={tdStyle}>{lt.name}</td>
-                        <td style={tdStyle}>
-                          {lt.oldStart.toISOString().slice(0, 10)}
-                        </td>
-                        <td style={tdStyle}>
-                          {lt.newStart.toISOString().slice(0, 10)}
-                        </td>
-                        <td style={tdStyle}>
-                          {formatDelayHours(lt.delayHours)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {taskCount > 0 && afterCount > 0 && (
-            <p style={{ marginTop: '1rem', color: 'var(--msp-warning)' }}>
-              {taskCount} task(s) delayed, {afterCount} overallocation(s) remain.
-              Leveling could not fully resolve all conflicts.
+          {computing ? (
+            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--msp-text-muted)' }}>
+              Computing leveling result&hellip;
             </p>
-          )}
+          ) : (
+            <>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Metric</th>
+                    <th style={thStyle}>Before</th>
+                    <th style={thStyle}>After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={tdStyle}>Overallocations</td>
+                    <td style={{ ...tdStyle, color: beforeCount > 0 ? 'var(--msp-danger)' : 'inherit' }}>
+                      {beforeCount}
+                    </td>
+                    <td style={{ ...tdStyle, color: afterCount > 0 ? 'var(--msp-danger)' : 'inherit' }}>
+                      {afterCount}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={tdStyle}>Tasks delayed</td>
+                    <td style={tdStyle}>—</td>
+                    <td style={tdStyle}>{taskCount}</td>
+                  </tr>
+                  <tr>
+                    <td style={tdStyle}>Project finish</td>
+                    <td style={tdStyle}>
+                      {finishBefore?.toISOString().slice(0, 10)}
+                    </td>
+                    <td style={tdStyle}>
+                      {finishAfter?.toISOString().slice(0, 10)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
 
-          {resolved === 0 && beforeCount === 0 && (
-            <p style={{ marginTop: '1rem', color: 'var(--msp-success)' }}>
-              No resource overallocations found. Nothing to level.
-            </p>
+              {taskCount > 0 && (
+                <div style={{ marginTop: '1rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem' }}>Delayed Tasks</h4>
+                  <div
+                    style={{
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Task</th>
+                          <th style={thStyle}>Old Start</th>
+                          <th style={thStyle}>New Start</th>
+                          <th style={thStyle}>Delay</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview?.leveled.slice(0, 50).map((lt) => (
+                          <tr key={lt.taskId}>
+                            <td style={tdStyle}>{lt.name}</td>
+                            <td style={tdStyle}>
+                              {lt.oldStart.toISOString().slice(0, 10)}
+                            </td>
+                            <td style={tdStyle}>
+                              {lt.newStart.toISOString().slice(0, 10)}
+                            </td>
+                            <td style={tdStyle}>
+                              {formatDelayHours(lt.delayHours)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {taskCount > 0 && afterCount > 0 && (
+                <p style={{ marginTop: '1rem', color: 'var(--msp-warning)' }}>
+                  {taskCount} task(s) delayed, {afterCount} overallocation(s) remain.
+                  Leveling could not fully resolve all conflicts.
+                </p>
+              )}
+
+              {resolved === 0 && beforeCount === 0 && (
+                <p style={{ marginTop: '1rem', color: 'var(--msp-success)' }}>
+                  No resource overallocations found. Nothing to level.
+                </p>
+              )}
+            </>
           )}
         </div>
         <footer className={styles.footer}>
@@ -216,18 +262,4 @@ function formatDelayHours(hours: number): string {
   if (hours < 8) return `${hours.toFixed(1)}h`
   if (hours < 40) return `${(hours / 8).toFixed(1)}d`
   return `${(hours / 40).toFixed(1)}w`
-}
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: '0.4rem 0.5rem',
-  borderBottom: '1px solid var(--msp-border)',
-  fontWeight: 600,
-  fontSize: 'var(--msp-text-sm)',
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: '0.35rem 0.5rem',
-  borderBottom: '1px solid var(--msp-border)',
-  fontSize: 'var(--msp-text-sm)',
 }
