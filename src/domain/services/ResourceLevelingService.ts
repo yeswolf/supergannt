@@ -13,6 +13,12 @@ export interface LevelingOptions {
   scope: TaskId[]
   /** Leveling order strategy. Currently only 'priority' is supported. */
   order?: LevelingOrder
+  /**
+   * Maximum working days to iterate in a single pass.
+   * Safety backstop against infinite loops on pathological schedules.
+   * @default 3650
+   */
+  maxIterationDays?: number
 }
 
 export interface LeveledTask {
@@ -59,8 +65,8 @@ export interface LevelingResult {
  * `Result.tasks` array contains new Task objects (Task.with() is immutable)
  * — callers can safely iterate the original input after leveling.
  */
-/** Maximum working days iterated in a single pass — infinite-loop backstop. */
-const MAX_ITERATION_DAYS = 3650
+/** Default maximum working days iterated in a single pass — infinite-loop backstop. */
+const DEFAULT_MAX_ITERATION_DAYS = 3650
 
 export function levelResources(
   tasks: readonly Task[],
@@ -71,6 +77,7 @@ export function levelResources(
   options: LevelingOptions = { scope: tasks.map((t) => t.id), order: 'priority' },
 ): LevelingResult {
   const scopeSet = new Set(options.scope)
+  const maxIterationDays = options.maxIterationDays ?? DEFAULT_MAX_ITERATION_DAYS
 
   // Empty project: nothing to level
   if (tasks.length === 0) {
@@ -93,8 +100,8 @@ export function levelResources(
   }
 
   // Count overallocations before (respects scope for accurate counts)
-  const beforeCount = countOverallocatedResourceDays(tasks, resources, assignmentsByTask, calendar, scopeSet)
-  if (beforeCount === 0) {
+  const beforeResult = countOverallocatedResourceDays(tasks, resources, assignmentsByTask, calendar, scopeSet, maxIterationDays)
+  if (beforeResult.count === 0) {
     return {
       tasks: [...tasks],
       leveled: [],
@@ -104,6 +111,7 @@ export function levelResources(
       finishAfter: computeFinish(tasks),
     }
   }
+  const beforeCount = beforeResult.count
 
   // Build working copy
   let working = [...tasks]
@@ -137,18 +145,19 @@ export function levelResources(
       successors,
       predecessors,
       leveledMap,
+      maxIterationDays,
     )
     working = result.tasks
 
     // Check if all overallocations resolved
-    const afterCount = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet)
-    if (afterCount === 0) break
+    const afterResult = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet, maxIterationDays)
+    if (afterResult.count === 0) break
 
     // If no progress, stop
     if (!result.anyProgress) break
   }
 
-  const afterCount = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet)
+  const finalResult = countOverallocatedResourceDays(working, resources, assignmentsByTask, calendar, scopeSet, maxIterationDays)
 
   // Sort leveled list by delay (most delayed first) for display
   const leveledList = [...leveledMap.values()].sort(
@@ -159,7 +168,7 @@ export function levelResources(
     tasks: working,
     leveled: leveledList,
     overallocationsBefore: beforeCount,
-    overallocationsAfter: afterCount,
+    overallocationsAfter: finalResult.count,
     finishBefore: computeFinish(tasks),
     finishAfter: computeFinish(working),
   }
@@ -179,6 +188,7 @@ function levelingPass(
   successors: Map<TaskId, TaskId[]>,
   predecessors: Map<TaskId, TaskId[]>,
   leveledMap: Map<TaskId, LeveledTask>,
+  maxDays: number,
 ): PassResult {
   const nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0 && scope.has(t.id))
   if (nonSummary.length === 0) return { tasks, anyProgress: false }
@@ -200,11 +210,10 @@ function levelingPass(
   const byId = new Map(working.map((t) => [t.id, t]))
 
   const cursor = new Date(startDate.getTime())
-  let dayCount = 0
-  const maxDays = MAX_ITERATION_DAYS
+  let daysIterated = 0
 
-  while (cursor.getTime() <= endDate.getTime() && dayCount < maxDays) {
-    dayCount += 1
+  while (cursor.getTime() <= endDate.getTime() && daysIterated < maxDays) {
+    daysIterated += 1
     const dayStart = new Date(cursor.getTime())
     const dayEnd = new Date(cursor.getTime())
     dayEnd.setDate(dayEnd.getDate() + 1)
@@ -422,7 +431,7 @@ function levelingPass(
   }
 
   // If we hit the day cap, surface it — silent truncation is a time bomb.
-  if (dayCount >= maxDays) {
+  if (daysIterated >= maxDays) {
     console.warn(
       `ResourceLevelingService: levelingPass hit the maxDays cap (${maxDays} working days). ` +
         `Leveling may be incomplete for this project.`,
@@ -517,21 +526,40 @@ function cascadeDelay(
 
 /**
  * Count the number of resource-period overallocations across the project.
- * Each resource-day where assigned > max counts as one overallocation.
+ *
+ * Each resource-day where assigned units > maxUnits counts as one overallocation.
  * When scope is provided, only tasks within scope are counted.
+ *
+ * ## Boundary semantics
+ *
+ * A day is counted when the half-open task interval `[start, finish)` overlaps
+ * with the calendar day interval `[dayStart, dayEnd)`:
+ *
+ *   taskStart < dayEnd  &&  taskFinish > dayStart
+ *
+ * This means a task finishing at midnight (00:00) on day D is NOT active on
+ * day D (since midnight === dayStart → finish > dayStart is false), but IS
+ * active on day D-1 (where it finishes at 24:00 / D's midnight → finish > dayStart).
+ * A task finishing at 17:00 on day D IS active on day D (17:00 > 00:00).
+ *
+ * @returns An object with `count` (number of overallocated days) and
+ *          `truncated` (true when the day cap was hit and the count is
+ *          incomplete).
  */
-function countOverallocatedResourceDays(
+export function countOverallocatedResourceDays(
   tasks: readonly Task[],
   resources: readonly Resource[],
   assignmentsByTask: Map<TaskId, Assignment[]>,
   calendar: WorkCalendar,
   scope?: Set<TaskId>,
-): number {
+  maxIterationDays?: number,
+): { count: number; truncated: boolean } {
+  const effectiveMaxDays = maxIterationDays ?? DEFAULT_MAX_ITERATION_DAYS
   let nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0)
   if (scope) {
     nonSummary = nonSummary.filter((t) => scope.has(t.id))
   }
-  if (nonSummary.length === 0) return 0
+  if (nonSummary.length === 0) return { count: 0, truncated: false }
 
   const startDate = new Date(
     Math.min(...nonSummary.map((t) => t.start.getTime())),
@@ -542,15 +570,18 @@ function countOverallocatedResourceDays(
 
   const resourceById = new Map(resources.map((r) => [r.id, r]))
 
+  // Track resources referenced by assignments but missing from the resource list
+  const unknownResources = new Set<string>()
+
   let count = 0
   const cursor = new Date(startDate.getTime())
   cursor.setHours(0, 0, 0, 0)
   const end = new Date(endDate.getTime())
   end.setHours(0, 0, 0, 0)
 
-  let dayCount = 0
-  while (cursor.getTime() <= end.getTime() && dayCount < MAX_ITERATION_DAYS) {
-    dayCount += 1
+  let daysIterated = 0
+  while (cursor.getTime() <= end.getTime() && daysIterated < effectiveMaxDays) {
+    daysIterated += 1
     const dayStart = new Date(cursor.getTime())
     const dayEnd = new Date(cursor.getTime())
     dayEnd.setDate(dayEnd.getDate() + 1)
@@ -570,6 +601,9 @@ function countOverallocatedResourceDays(
     for (const task of active) {
       const taskAssignments = assignmentsByTask.get(task.id) ?? []
       for (const a of taskAssignments) {
+        if (!resourceById.has(a.resourceId)) {
+          unknownResources.add(a.resourceId)
+        }
         const current = perResource.get(a.resourceId) ?? 0
         perResource.set(a.resourceId, current + a.units)
       }
@@ -585,17 +619,33 @@ function countOverallocatedResourceDays(
     cursor.setDate(cursor.getDate() + 1)
   }
 
-  if (dayCount >= MAX_ITERATION_DAYS) {
+  const truncated = daysIterated >= effectiveMaxDays
+
+  if (unknownResources.size > 0) {
     console.warn(
-      `ResourceLevelingService: countOverallocatedResourceDays hit the cap (${MAX_ITERATION_DAYS} working days). ` +
-        `Overallocation count may be incomplete.`,
+      `ResourceLevelingService: countOverallocatedResourceDays found assignments ` +
+        `referencing ${unknownResources.size} missing resource(s): ` +
+        `${[...unknownResources].map((id) => `"${id}"`).join(', ')}. ` +
+        `These assignments are counted toward overallocation load but are not ` +
+        `validated against any resource's maxUnits.`,
     )
   }
 
-  return count
+  if (truncated) {
+    console.warn(
+      `ResourceLevelingService: countOverallocatedResourceDays hit the cap ` +
+        `(${effectiveMaxDays} working days). Overallocation count may be incomplete.`,
+    )
+  }
+
+  return { count, truncated }
 }
 
-function computeFinish(tasks: readonly Task[]): Date {
+export function computeFinish(tasks: readonly Task[]): Date {
   if (tasks.length === 0) throw new Error('computeFinish: empty task array')
-  return new Date(Math.max(...tasks.map((t) => t.finish.getTime())))
+  const maxTime = tasks.reduce(
+    (max, t) => Math.max(max, t.finish.getTime()),
+    0,
+  )
+  return new Date(maxTime)
 }
