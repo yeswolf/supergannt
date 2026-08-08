@@ -4,14 +4,15 @@ import type { ProjectFileCodec } from '../ports/ProjectFileCodec'
 import type { ProjectRepository } from '../ports/ProjectRepository'
 import { refreshProject } from '../services/ProjectRefresh'
 
-export type ExportFormat = 'mspdi' | 'mpx' | 'mpp'
+export type ExportFormat = 'mspdi' | 'mpx' | 'mpp' | 'csv'
 
 function exportFileName(project: Project, format: ExportFormat, preferred?: string): string {
   const base = (preferred ?? project.fileName ?? project.name)
-    .replace(/\.(mpp|mpt|xml|mspdi|mpx)$/i, '')
+    .replace(/\.(mpp|mpt|xml|mspdi|mpx|csv)$/i, '')
     .trim() || project.name
   if (format === 'mpx') return `${base}.mpx`
   if (format === 'mpp') return `${base}.mpp`
+  if (format === 'csv') return `${base}.csv`
   return `${base}.xml`
 }
 

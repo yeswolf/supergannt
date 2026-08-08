@@ -288,6 +288,14 @@ function parseResourceType(value: string): ResourceType {
   return 'work'
 }
 
+/** Parse a duration value from a CSV cell.
+ *
+ *  Accepts any format {@link Duration.parse} understands plus a plain numeric
+ *  fallback (treated as days for backwards compatibility).  Coupled with
+ *  {@link formatDurationCsv} via the `d`-suffix convention — a bare number
+ *  without a unit suffix is ambiguous (hours vs days), so the exporter
+ *  always appends `d`.  If you change the fallback unit here you must also
+ *  update the exporter. */
 function parseDurationValue(value: string): Duration | 'invalid' {
   const trimmed = value.trim()
   if (!trimmed) return Duration.zero()
@@ -348,9 +356,13 @@ function normalizeFieldLabel(label: string): string {
 
 const BOM = '﻿'
 
-/** Escape a CSV field for RFC 4180 compliance. Comma-delimited only. */
-function csvEscape(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+/** Escape a CSV field for RFC 4180 compliance.
+ *  @param delimiter  The field delimiter used by the writer (default `,`).
+ *                    When the delimiter is not a comma the value is still quoted
+ *                    if it contains commas — other consumers expect CSV-compatible
+ *                    quoting regardless of the output delimiter. */
+function csvEscape(value: string, delimiter: string = ','): string {
+  if (value.includes(delimiter) || value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
     return `"${value.replace(/"/g, '""')}"`
   }
   return value
@@ -363,6 +375,13 @@ function formatDateCsv(date: Date): string {
   return `${yyyy}-${mm}-${dd}`
 }
 
+/** Format a Duration for CSV export.
+ *
+ *  Writes a day count with an explicit `d` suffix so the round-trip through
+ *  {@link parseDurationValue} is lossless: without the suffix a bare number
+ *  like `"5"` would be reinterpreted as *hours* by `Duration.parse`, not as
+ *  5 days.  The two functions are coupled on this suffix convention — if you
+ *  change one, change the other. */
 function formatDurationCsv(duration: Duration): string {
   const days = duration.toDays()
   if (days === 0) return '0'
@@ -409,12 +428,15 @@ function detectEntityType(headers: string[]): CsvEntityType {
 export class CsvCodec implements ProjectFileCodec {
   readonly supportedExtensions = ['.csv'] as const
   private readonly entityType: CsvEntityType
+  private readonly dateFormat: DateFormat
 
   constructor(
     private readonly ids: IdGenerator,
     entityType: CsvEntityType = 'task',
+    dateFormat: DateFormat = 'iso',
   ) {
     this.entityType = entityType
+    this.dateFormat = dateFormat
   }
 
   canHandle(fileName: string): boolean {
@@ -442,13 +464,24 @@ export class CsvCodec implements ProjectFileCodec {
       throw new Error('CSV file is empty or has no header row')
     }
 
-    // Auto-detect entity type from column headers
+    // Auto-detect entity type from column headers.  When the sniffer can't
+    // confidently distinguish (e.g. a resource CSV that only has a "Type"
+    // column but no "Max Units" or "Standard Rate"), trust the
+    // constructor's explicit entityType over the default guess.  The
+    // heuristic: `detectEntityType` only returns 'resource' when it finds
+    // strong resource-only signals, so a disagreement means the sniffer
+    // defaulted to 'task' — if the constructor says otherwise someone
+    // explicitly chose 'resource' and we honour that.
     const detectedType = detectEntityType(headers)
+    const effectiveType =
+      detectedType !== this.entityType && this.entityType === 'resource'
+        ? this.entityType
+        : detectedType
 
     // Build default column mappings from headers
-    const mappings = this.buildDefaultMappings(headers, detectedType)
+    const mappings = this.buildDefaultMappings(headers, effectiveType)
 
-    const result = this.parseRows(rows, headers, mappings, 'iso', detectedType)
+    const result = this.parseRows(rows, headers, mappings, this.dateFormat, effectiveType)
 
     const now = new Date()
     const calendarId = asCalendarId(this.ids.calendarId())
