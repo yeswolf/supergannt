@@ -198,7 +198,7 @@ function parseDateIso(value: string): Date | null {
 function parseDateUs(value: string): Date | null {
   // MM/DD/YYYY or M/D/YYYY
   const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim())
-  if (!match) return parseDateIso(value)
+  if (!match) return null
   const month = Number(match[1])
   const day = Number(match[2])
   const year = Number(match[3])
@@ -210,7 +210,7 @@ function parseDateUs(value: string): Date | null {
 function parseDateEu(value: string): Date | null {
   // DD/MM/YYYY or D/M/YYYY
   const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim())
-  if (!match) return parseDateIso(value)
+  if (!match) return null
   const day = Number(match[1])
   const month = Number(match[2])
   const year = Number(match[3])
@@ -336,6 +336,7 @@ function normalizeFieldLabel(label: string): string {
 
 const BOM = '﻿'
 
+/** Escape a CSV field for RFC 4180 compliance. Comma-delimited only. */
 function csvEscape(value: string): string {
   if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
     return `"${value.replace(/"/g, '""')}"`
@@ -594,10 +595,22 @@ export class CsvCodec implements ProjectFileCodec {
       return { tasks: [], resources: [], dependencies: [], errors: [], rowsImported: 0, rowsSkipped: 0 }
     }
 
+    // When hasHeader is false, the first row parsed as "headers" is actually
+    // a data row.  Generate synthetic column labels and prepend that row.
+    let effectiveHeaders: string[]
+    let effectiveRows: string[][]
+    if (options.hasHeader) {
+      effectiveHeaders = headers
+      effectiveRows = rows
+    } else {
+      effectiveHeaders = headers.map((_, i) => `Column ${i + 1}`)
+      effectiveRows = [headers, ...rows]
+    }
+
     const mappings = options.columnMappings
     const result = new CsvCodec(ids, options.entityType).parseRows(
-      rows,
-      headers,
+      effectiveRows,
+      effectiveHeaders,
       mappings,
       options.dateFormat,
       options.entityType,
@@ -702,6 +715,7 @@ export class CsvCodec implements ProjectFileCodec {
     const entities: (Task | Resource)[] = []
     const dependencies: Dependency[] = []
     const currency = 'USD'
+    let skippedCount = 0
 
     // Build a lookup from source column name → target field
     const mappingMap = new Map<string, string>()
@@ -731,18 +745,24 @@ export class CsvCodec implements ProjectFileCodec {
           const task = this.parseTaskRow(values, rowIdx, dateFormat, currency, errors, existingTasks)
           if (task) {
             entities.push(task)
+          } else {
+            skippedCount++
           }
         } catch {
           errors.push({ row: rowIdx + 2, column: null, message: 'Failed to parse task row' })
+          skippedCount++
         }
       } else {
         try {
           const resource = this.parseResourceRow(values, rowIdx, currency, errors)
           if (resource) {
             entities.push(resource)
+          } else {
+            skippedCount++
           }
         } catch {
           errors.push({ row: rowIdx + 2, column: null, message: 'Failed to parse resource row' })
+          skippedCount++
         }
       }
     }
@@ -750,54 +770,56 @@ export class CsvCodec implements ProjectFileCodec {
     const tasks = entities.filter((e): e is Task => e instanceof Task)
     const resources = entities.filter((e): e is Resource => e instanceof Resource)
 
-    // Parse predecessors for tasks
-    const allTasks = [...existingTasks, ...tasks]
-    for (const task of tasks) {
-      const predRaw = valuesForTask(task, rows, headers, mappings, existingTasks)
-      // Predecessors come from a column mapping — but we already parsed them above
-      // Re-fetch predecessor values and resolve
-    }
-
     // Resolve predecessors from the predecessor column
+    const allTasks = [...existingTasks, ...tasks]
     const predMappings = mappings.filter((m) => m.targetField === 'predecessors')
-    for (const predMapping of predMappings) {
-      const colIdx = headerIndex.get(predMapping.sourceColumn)
-      if (colIdx === undefined) continue
-
-      // For each imported task, find its predecessor field
-      for (let i = 0; i < tasks.length; i++) {
-        const rowIdx = rows.findIndex((r) => {
-          const nameColIdx = headerIndex.get(
-            mappings.find((m) => m.targetField === 'name')?.sourceColumn ?? '',
-          )
-          if (nameColIdx === undefined) return false
-          return r[nameColIdx] === tasks[i]!.name
-        })
-        if (rowIdx < 0) continue
-
-        const row = rows[rowIdx]!
-        const predValue = colIdx < row.length ? (row[colIdx] ?? '') : ''
-        if (!predValue.trim()) continue
-
-        try {
-          const parsed = parsePredecessorsField(predValue, allTasks)
-          for (const p of parsed) {
-            dependencies.push(
-              Dependency.create({
-                id: asDependencyId(this.ids.dependencyId()),
-                predecessorId: p.taskId,
-                successorId: tasks[i]!.id,
-                type: p.type,
-                lag: Duration.hours(p.lagHours),
-              }),
-            )
+    if (predMappings.length > 0) {
+      // Build a name→row-index map once (O(n)) instead of findIndex per task (O(n²))
+      const nameColSrc = mappings.find((m) => m.targetField === 'name')?.sourceColumn ?? ''
+      const nameColIdx = headerIndex.get(nameColSrc)
+      const nameToRowIdx = new Map<string, number>()
+      if (nameColIdx !== undefined) {
+        for (let ri = 0; ri < rows.length; ri++) {
+          const row = rows[ri]!
+          if (nameColIdx < row.length && row[nameColIdx]!.trim()) {
+            nameToRowIdx.set(row[nameColIdx]!.trim(), ri)
           }
-        } catch (err) {
-          errors.push({
-            row: rowIdx + 2,
-            column: predMapping.sourceColumn,
-            message: `Invalid predecessor: ${(err as Error).message}`,
-          })
+        }
+      }
+
+      for (const predMapping of predMappings) {
+        const colIdx = headerIndex.get(predMapping.sourceColumn)
+        if (colIdx === undefined) continue
+
+        for (let i = 0; i < tasks.length; i++) {
+          const task = tasks[i]!
+          const rowIdx = nameToRowIdx.get(task.name)
+          if (rowIdx === undefined) continue
+
+          const row = rows[rowIdx]!
+          const predValue = colIdx < row.length ? (row[colIdx] ?? '') : ''
+          if (!predValue.trim()) continue
+
+          try {
+            const parsed = parsePredecessorsField(predValue, allTasks)
+            for (const p of parsed) {
+              dependencies.push(
+                Dependency.create({
+                  id: asDependencyId(this.ids.dependencyId()),
+                  predecessorId: p.taskId,
+                  successorId: task.id,
+                  type: p.type,
+                  lag: Duration.hours(p.lagHours),
+                }),
+              )
+            }
+          } catch (err) {
+            errors.push({
+              row: rowIdx + 2,
+              column: predMapping.sourceColumn,
+              message: `Invalid predecessor: ${(err as Error).message ?? String(err)}`,
+            })
+          }
         }
       }
     }
@@ -806,7 +828,7 @@ export class CsvCodec implements ProjectFileCodec {
     // (Already handled by parsePredecessorsField throwing on unknown refs)
 
     const rowsImported = entities.length
-    const rowsSkipped = rows.length - rowsImported
+    const rowsSkipped = skippedCount
 
     return { tasks, resources, dependencies, errors, rowsImported, rowsSkipped }
   }
@@ -969,16 +991,4 @@ export class CsvCodec implements ProjectFileCodec {
 
     return { headers, rows, delimiter, encoding, suggestedEntityType }
   }
-}
-
-/** Helper to extract predecessor values during import. */
-function valuesForTask(
-  _task: Task,
-  _rows: string[][],
-  _headers: string[],
-  _mappings: CsvColumnMapping[],
-  _existingTasks: Task[],
-): Map<string, string> {
-  // Stub — predecessor resolution is handled inline in parseRows
-  return new Map()
 }
