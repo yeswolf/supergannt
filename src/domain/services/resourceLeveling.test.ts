@@ -20,10 +20,8 @@ const day = (iso: string, hour = 8) => {
   return new Date(y!, m - 1, d!, hour, 0, 0, 0)
 }
 
-function finishDate(start: Date, durationHours: number): Date {
-  const f = new Date(start.getTime())
-  f.setHours(f.getHours() + durationHours)
-  return f
+function finishDate(start: Date, durationHours: number, cal: WorkCalendar): Date {
+  return cal.addWorkingHours(start, durationHours)
 }
 
 function task(
@@ -32,6 +30,7 @@ function task(
   startIso: string,
   durationHours: number,
   extras: Partial<ReturnType<Task['toProps']>> = {},
+  cal: WorkCalendar = calendar(),
 ) {
   const s = day(startIso)
   return Task.create({
@@ -40,7 +39,7 @@ function task(
     outlineLevel: 0,
     wbs: id,
     start: s,
-    finish: finishDate(s, durationHours),
+    finish: finishDate(s, durationHours, cal),
     duration: Duration.hours(durationHours),
     percentComplete: 0,
     milestone: durationHours === 0,

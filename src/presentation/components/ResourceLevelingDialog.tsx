@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo, type KeyboardEvent } from 'react'
 import { levelResources } from '../../domain/services/ResourceLevelingService'
 import { useWorkspaceDispatch, useWorkspaceState } from '../state/WorkspaceContext'
 import { IconAction, IconActions } from './IconAction'
-import styles from './TaskInformationDialog.module.css'
+import styles from './ResourceLevelingDialog.module.css'
 
 /**
  * Resource Leveling dialog — shows before/after summary and lets user
@@ -190,7 +190,7 @@ export function ResourceLevelingDialog() {
           <IconActions>
             <IconAction
               label={resolved > 0 ? 'Accept' : 'OK'}
-              icon={resolved > 0 ? 'ok' : 'cancel'}
+              icon="ok"
               primary
               onClick={onAccept}
             />

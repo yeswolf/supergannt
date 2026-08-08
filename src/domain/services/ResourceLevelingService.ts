@@ -175,13 +175,7 @@ function levelingPass(
   let anyProgress = false
 
   // Sort all levelable tasks by priority (for determining who gets delayed)
-  const sortKey = (t: Task): number => {
-    if (order === 'priority') {
-      return t.priority
-    }
-    // standard: higher slack = safer to delay → sort by slack descending
-    return -(t.totalSlackHours ?? Number.MAX_SAFE_INTEGER)
-  }
+  const sortKey = (t: Task): number => t.priority
 
   const cursor = new Date(startDate.getTime())
   let dayCount = 0
@@ -421,34 +415,45 @@ function cascadeDelay(
 
   const byId = new Map(working.map((t) => [t.id, t]))
 
-  const cascadeOne = (id: TaskId, earliestStart: Date) => {
-    const task = byId.get(id)
-    if (!task || task.summary) return
+  // Iterative BFS queue — handles arbitrarily deep dependency chains
+  // without blowing the call stack.
+  const queue: Array<{ id: TaskId; earliestStart: Date }> = []
+  const snapped = calendar.snapToWorkStart(predFinish)
+  for (const succId of succIds) {
+    queue.push({ id: succId, earliestStart: new Date(snapped.getTime()) })
+  }
 
-    if (task.constraintType === 'mustStartOn' || task.constraintType === 'mustFinishOn') return
+  while (queue.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const { id, earliestStart } = queue.shift()!
+    const task = byId.get(id)
+    if (!task || task.summary) continue
+
+    if (task.constraintType === 'mustStartOn' || task.constraintType === 'mustFinishOn') continue
 
     // Ensure earliestStart respects ALL predecessors, not just the
-    // one that triggered this cascade invocation.
+    // one that triggered this cascade step.
+    let effectiveStart = new Date(earliestStart.getTime())
     const predIds = predecessors.get(id)
     if (predIds) {
       for (const predId of predIds) {
         const pred = byId.get(predId)
-        if (pred && pred.finish.getTime() > earliestStart.getTime()) {
-          earliestStart = new Date(pred.finish.getTime())
+        if (pred && pred.finish.getTime() > effectiveStart.getTime()) {
+          effectiveStart = new Date(pred.finish.getTime())
         }
       }
     }
 
-    if (earliestStart.getTime() > task.start.getTime()) {
+    if (effectiveStart.getTime() > task.start.getTime()) {
       const oldStart = task.start
       const durationHours = task.milestone ? 0 : Math.max(0, task.duration.toHours())
       const newFinish =
         durationHours === 0
-          ? earliestStart
-          : calendar.addWorkingHours(earliestStart, durationHours)
+          ? effectiveStart
+          : calendar.addWorkingHours(effectiveStart, durationHours)
 
       const updated = task.with({
-        start: earliestStart,
+        start: effectiveStart,
         finish: newFinish,
       })
 
@@ -457,30 +462,26 @@ function cascadeDelay(
       byId.set(id, updated)
 
       const delayHours =
-        (earliestStart.getTime() - oldStart.getTime()) / 3_600_000
+        (effectiveStart.getTime() - oldStart.getTime()) / 3_600_000
 
       const existing = leveledMap.get(id)
       leveledMap.set(id, {
         taskId: id,
         name: task.name,
         oldStart: existing?.oldStart ?? oldStart,
-        newStart: earliestStart,
+        newStart: effectiveStart,
         delayHours: existing ? existing.delayHours + delayHours : delayHours,
       })
 
-      // Cascade further
+      // Enqueue successors instead of recursing
       const nextSuccs = successors.get(id)
       if (nextSuccs) {
+        const snappedStart = calendar.snapToWorkStart(newFinish)
         for (const nextId of nextSuccs) {
-          cascadeOne(nextId, calendar.snapToWorkStart(newFinish))
+          queue.push({ id: nextId, earliestStart: new Date(snappedStart.getTime()) })
         }
       }
     }
-  }
-
-  const snapped = calendar.snapToWorkStart(predFinish)
-  for (const succId of succIds) {
-    cascadeOne(succId, snapped)
   }
 }
 
