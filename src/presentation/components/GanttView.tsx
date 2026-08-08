@@ -696,11 +696,12 @@ export function GanttView() {
   // Data / filter changes: full reload. Selection-only updates use the effect below.
   useEffect(() => {
     if (!readyRef.current) return
-    // Shallow-compare: skip rebuild when the reducer spreads a new reference
-    // with identical filter/sort/group state (e.g. unrelated dispatch).
-    // Fold the project identity into the snapshot — a project change must
-    // always trigger a rebuild regardless of filter-sort state.
-    const snapshot = `${project.tasks.length}:${JSON.stringify(taskFilterSort)}`
+    // Compare individual fields to avoid JSON.stringify of the entire
+    // filter/sort/group state on every render. Stringify only the filters
+    // array (typically tiny) — sort and groupBy are flat scalar fields.
+    const taskCount = project.tasks.length
+    const fss = taskFilterSort
+    const snapshot = `${taskCount}:${JSON.stringify(fss.filters)}:${fss.sort?.column ?? ''}:${fss.sort?.direction ?? ''}:${fss.groupBy}`
     if (snapshot === prevFilterSortRef.current) return
     prevFilterSortRef.current = snapshot
     applyProjectToGantt(project, selectedTaskIdRef.current)

@@ -156,7 +156,9 @@ export function filterGanttData(
 }
 
 /** Filter Gantt data using TaskFilterSortState (workspace-level AutoFilter).
- *  Includes ancestor summary tasks so the tree structure stays intact. */
+ *  Includes ancestor summary tasks so the tree structure stays intact.
+ *  Reuses {@link toGanttData} for the DTO mapping so there is a single
+ *  source of truth for the task→Gantt row transformation. */
 export function filterGanttDataByState(
   project: Project,
   state: TaskFilterSortState,
@@ -174,46 +176,12 @@ export function filterGanttDataByState(
     }
   }
 
-  // Build Gantt DTOs for the union (matching tasks + ancestor summaries)
-  const keptTasks = project.tasks.filter((t) => keep.has(String(t.id)))
-  const data: GanttTaskDto[] = keptTasks.map((task, index) => {
-    const hours = task.milestone ? 0 : Math.max(task.duration.toHours(), 1)
-    const start = formatGanttDateTime(task.start)
-    const end = task.milestone ? start : formatGanttDateTime(task.finish)
-    return {
-      id: task.id,
-      text: task.name,
-      start_date: start,
-      end_date: end,
-      duration: hours,
-      progress: task.percentComplete / 100,
-      parent: task.parentId ?? 0,
-      open: true,
-      type: task.milestone ? 'milestone' : task.summary ? 'project' : 'task',
-      critical: task.critical,
-      wbs: task.wbs,
-      resources: formatTaskResourceNames(project, task.id),
-      row: index + 1,
-      percent: task.percentComplete,
-      cost: task.cost.format(),
-      predecessors: formatPredecessors(project, task.id),
-      totalSlack: formatSlackHours(task.totalSlackHours),
-      freeSlack: formatSlackHours(task.freeSlackHours),
-    }
-  })
-
-  const links: GanttLinkDto[] = project.dependencies
-    .filter(
-      (dep) =>
-        keep.has(String(dep.predecessorId)) &&
-        keep.has(String(dep.successorId)),
-    )
-    .map((dep) => ({
-      id: dep.id,
-      source: dep.predecessorId,
-      target: dep.successorId,
-      type: LINK_TO_DHTMLX[dep.type],
-    }))
-
-  return { data, links }
+  // Reuse toGanttData for the DTO mapping — same pattern as filterGanttData
+  const full = toGanttData(project)
+  return {
+    data: full.data.filter((d) => keep.has(String(d.id))),
+    links: full.links.filter(
+      (l) => keep.has(String(l.source)) && keep.has(String(l.target)),
+    ),
+  }
 }

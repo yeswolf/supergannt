@@ -225,6 +225,7 @@ function taskMatchesFilter(
 export function applyTaskFilterSort(
   project: Project,
   state: TaskFilterSortState,
+  now?: Date,
 ): TaskViewRow[] {
   // 1. Filter
   let filtered: Task[] = [...project.tasks]
@@ -244,7 +245,7 @@ export function applyTaskFilterSort(
     return filtered.map((task) => ({ type: 'task' as const, task, groupKey: '' }))
   }
 
-  return groupTasks(project, filtered, state.groupBy)
+  return groupTasks(project, filtered, state.groupBy, now)
 }
 
 /** Return only the filtered task list (no grouping). */
@@ -311,11 +312,12 @@ function groupTasks(
   project: Project,
   tasks: Task[],
   field: TaskGroupField,
+  now?: Date,
 ): TaskViewRow[] {
   const groups = new Map<string, Task[]>()
 
   for (const task of tasks) {
-    const key = getGroupKey(project, task, field)
+    const key = getGroupKey(project, task, field, now)
     const list = groups.get(key) ?? []
     list.push(task)
     groups.set(key, list)
@@ -345,6 +347,7 @@ export function getGroupKey(
   project: Project,
   task: Task,
   field: TaskGroupField,
+  now?: Date,
 ): string {
   switch (field) {
     case 'resource': {
@@ -354,7 +357,7 @@ export function getGroupKey(
     case 'status': {
       if (task.percentComplete === 0) return 'Not Started'
       if (task.percentComplete === 100) return 'Complete'
-      if (task.finish.getTime() < Date.now()) return 'Late'
+      if (task.finish.getTime() < (now ?? new Date()).getTime()) return 'Late'
       return 'In Progress'
     }
     case 'outlineLevel':
