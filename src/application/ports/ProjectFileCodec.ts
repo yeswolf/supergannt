@@ -16,4 +16,10 @@ export interface ProjectFileCodec {
    *  Used to disambiguate when multiple codecs claim the same file extension
    *  (e.g. `csv-tasks` vs `csv-resources`, both .csv). */
   handlesExportFormat?(format: string): boolean
+  /** Optional: content-aware import disambiguation.  When multiple codecs
+   *  claim the same file extension, this method (if present) is called with
+   *  the file content to decide which codec should handle the import.
+   *  Used by {@link CsvCodec} to distinguish task vs resource CSVs by
+   *  inspecting column headers. */
+  canHandleImport?(content: string | ArrayBuffer, fileName: string): boolean
 }

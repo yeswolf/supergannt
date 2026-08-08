@@ -22,16 +22,23 @@ export class FileUseCases {
     private readonly repository: ProjectRepository,
   ) {}
 
-  private codecFor(fileName: string): ProjectFileCodec {
-    const codec = this.codecs.find((c) => c.canHandle(fileName))
-    if (!codec) {
+  private async codecFor(content: string | ArrayBuffer, fileName: string): Promise<ProjectFileCodec> {
+    const candidates = this.codecs.filter((c) => c.canHandle(fileName))
+    if (candidates.length === 0) {
       throw new Error(`Unsupported file type: ${fileName}`)
     }
-    return codec
+    // When multiple codecs claim the same extension, try content-aware
+    // disambiguation via canHandleImport first.
+    if (candidates.length > 1) {
+      for (const c of candidates) {
+        if (c.canHandleImport?.(content, fileName)) return c
+      }
+    }
+    return candidates[0]!
   }
 
   async openFile(content: string | ArrayBuffer, fileName: string): Promise<Project> {
-    const codec = this.codecFor(fileName)
+    const codec = await this.codecFor(content, fileName)
     const parsed = await codec.parse(content, fileName)
     const refreshed = refreshProject(parsed.with({ fileName, dirty: false }))
     await this.repository.saveDraft(refreshed)

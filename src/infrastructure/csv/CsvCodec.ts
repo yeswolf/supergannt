@@ -1,5 +1,5 @@
 import type { ProjectFileCodec, SerializedProjectFile } from '../../application/ports/ProjectFileCodec'
-import type { Project } from '../../domain/entities/Project'
+import { Project } from '../../domain/entities/Project'
 import { Task } from '../../domain/entities/Task'
 import type { TaskConstraintType } from '../../domain/entities/Task'
 import { Resource } from '../../domain/entities/Resource'
@@ -66,7 +66,25 @@ function detectEncoding(buffer: ArrayBuffer): string {
   if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
     return 'utf-16be'
   }
-  return 'utf-8'
+  // No BOM detected.  Try UTF-8; if the result contains replacement
+  // characters (0xFFFD) then the input is probably a legacy 8-bit
+  // encoding such as windows-1252 — common for CSVs saved from Excel
+  // on Western European locales.
+  try {
+    const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(buffer)
+    if (utf8Text.includes('�')) {
+      // Fall back to windows-1252.  TextDecoder may throw in runtimes that
+      // don't ship this encoding (e.g. embedded JS engines).
+      try {
+        return 'windows-1252'
+      } catch {
+        return 'utf-8'
+      }
+    }
+    return 'utf-8'
+  } catch {
+    return 'utf-8'
+  }
 }
 
 function decodeContent(buffer: ArrayBuffer, encoding: string): string {
@@ -310,8 +328,12 @@ const FALLBACK_DURATION_UNIT = 'd' as const
  *  number without a unit suffix is ambiguous (hours vs days), so the
  *  exporter always appends `d`.  If you change the fallback unit here you
  *  must also update the exporter.
+ *
+ *  @returns A Duration, or `null` when the value is unparseable.
+ *           Callers must check for null before using the result;
+ *           {@link parseTaskRow} handles this by falling back to a default.
  */
-function parseDurationValue(value: string): Duration | 'invalid' {
+function parseDurationValue(value: string): Duration | null {
   const trimmed = value.trim()
   if (!trimmed) return Duration.zero()
   // Try Duration.parse first
@@ -323,7 +345,7 @@ function parseDurationValue(value: string): Duration | 'invalid' {
     if (Number.isFinite(n)) {
       return Duration.of(n, FALLBACK_DURATION_UNIT)
     }
-    return 'invalid'
+    return null
   }
 }
 
@@ -459,6 +481,25 @@ export class CsvCodec implements ProjectFileCodec {
     return format === `csv-${this.entityType}s`
   }
 
+  /** Content-aware import disambiguation.  Inspects column headers to
+   *  determine whether this codec instance (task or resource) should
+   *  handle the file.  Called by {@link FileUseCases.codecFor} when
+   *  multiple codecs claim the same extension. */
+  canHandleImport(content: string | ArrayBuffer, _fileName: string): boolean {
+    const buffer =
+      typeof content === 'string'
+        ? new TextEncoder().encode(content).buffer
+        : content instanceof ArrayBuffer
+          ? content
+          : new Uint8Array(content).buffer
+
+    const encoding = detectEncoding(buffer)
+    const text = decodeContent(buffer, encoding)
+    const { headers } = parseCsv(text)
+    const detectedType = detectEntityType(headers)
+    return detectedType === this.entityType
+  }
+
   /**
    * Parse CSV content into a Project containing imported tasks or resources.
    * For import into an existing project, use {@link importFromCsv} instead.
@@ -499,7 +540,9 @@ export class CsvCodec implements ProjectFileCodec {
 
     const result = this.parseRows(rows, headers, mappings, this.dateFormat, effectiveType)
 
-    const now = new Date()
+    // Use epoch for project-level date defaults so repeat imports are
+    // stable, matching parseTaskRow's date-defaulting behaviour.
+    const epoch = new Date(0)
     const calendarId = asCalendarId(this.ids.calendarId())
     const calendar = WorkCalendar.standard(calendarId)
 
@@ -508,8 +551,8 @@ export class CsvCodec implements ProjectFileCodec {
       name: 'Imported CSV',
       title: 'Imported CSV',
       manager: '',
-      startDate: result.tasks.length > 0 ? result.tasks[0]!.start : now,
-      finishDate: result.tasks.length > 0 ? result.tasks[result.tasks.length - 1]!.finish : now,
+      startDate: result.tasks.length > 0 ? result.tasks[0]!.start : epoch,
+      finishDate: result.tasks.length > 0 ? result.tasks[result.tasks.length - 1]!.finish : epoch,
       statusDate: null,
       currency: 'USD',
       calendarId,
@@ -660,8 +703,9 @@ export class CsvCodec implements ProjectFileCodec {
     content: string | ArrayBuffer,
     options: CsvImportOptions,
     ids: IdGenerator,
-    existingTasks: Task[] = [],
+    existingTasks?: Task[],
   ): CsvImportResult {
+    const resolvedExistingTasks = existingTasks ?? []
     // When content is already a string (e.g. from serialize()), skip the
     // encode → detect → decode round-trip.  Binary input from user file
     // uploads still goes through full encoding detection.
@@ -707,7 +751,7 @@ export class CsvCodec implements ProjectFileCodec {
       mappings,
       options.dateFormat,
       options.entityType,
-      existingTasks,
+      resolvedExistingTasks,
     )
 
     return result
@@ -801,8 +845,9 @@ export class CsvCodec implements ProjectFileCodec {
     mappings: CsvColumnMapping[],
     dateFormat: DateFormat,
     entityType: CsvEntityType,
-    existingTasks: Task[] = [],
+    existingTasks?: Task[],
   ): CsvImportResult {
+    const resolvedExistingTasks = existingTasks ?? []
     const errors: CsvImportError[] = []
     const entities: (Task | Resource)[] = []
     const dependencies: Dependency[] = []
@@ -863,7 +908,7 @@ export class CsvCodec implements ProjectFileCodec {
     const resources = entities.filter((e): e is Resource => e instanceof Resource)
 
     // Resolve predecessors from the predecessor column
-    const allTasks = [...existingTasks, ...tasks]
+    const allTasks = [...resolvedExistingTasks, ...tasks]
     // Build a WBS→Task map once to avoid O(n²) scans in parsePredecessorToken.
     const wbsMap = new Map<string, Task>()
     for (const t of allTasks) {
@@ -950,14 +995,16 @@ export class CsvCodec implements ProjectFileCodec {
     }
 
     const startRaw = values.get('start')
-    const start = startRaw ? parseDateWithFormat(startRaw, dateFormat) ?? new Date() : new Date()
+    // Default missing dates to epoch (stable across imports) rather than
+    // wall-clock time, so that repeat imports produce the same data.
+    const start = startRaw ? parseDateWithFormat(startRaw, dateFormat) ?? new Date(0) : new Date(0)
 
     const finishRaw = values.get('finish')
     const finish = finishRaw ? parseDateWithFormat(finishRaw, dateFormat) ?? start : start
 
     const durationRaw = values.get('duration')
     const duration = parseDurationValue(durationRaw ?? '')
-    if (duration === 'invalid') {
+    if (duration === null) {
       errors.push({ row: rowIdx + 2, column: 'duration', message: `Duration value "${durationRaw}" is not parseable — using default 1 day` })
     }
 
@@ -982,9 +1029,9 @@ export class CsvCodec implements ProjectFileCodec {
         wbs,
         start,
         finish,
-        duration: (typeof duration !== 'string' && duration.toHours() > 0) ? duration : Duration.hours(8),
+        duration: (duration !== null && duration.toHours() > 0) ? duration : Duration.hours(8),
         percentComplete: Math.max(0, Math.min(100, percentComplete)),
-        milestone: milestone || (typeof duration !== 'string' && duration.toHours() === 0),
+        milestone: milestone || (duration !== null && duration.toHours() === 0),
         summary,
         critical: false,
         totalSlackHours: null,
@@ -995,7 +1042,7 @@ export class CsvCodec implements ProjectFileCodec {
         constraintDate,
         fixedCost: Money.of(fixedCost, currency),
         cost: Money.of(fixedCost, currency),
-        workHours: typeof duration !== 'string' ? duration.toHours() : 0,
+        workHours: duration !== null ? duration.toHours() : 0,
         schedulingType: 'fixedUnits',
         effortDriven: true,
         parentId: null,
