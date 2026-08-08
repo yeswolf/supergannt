@@ -148,6 +148,9 @@ export function FilterBar({
             placeholder="Min"
             value={numMin}
             onChange={(e) => setNumMin(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addFilter()
+            }}
           />
           <span className={styles.rangeSep}>–</span>
           <input
@@ -156,6 +159,9 @@ export function FilterBar({
             placeholder="Max"
             value={numMax}
             onChange={(e) => setNumMax(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addFilter()
+            }}
           />
         </>
       )
@@ -168,6 +174,9 @@ export function FilterBar({
             className={`${styles.controlBase} ${styles.filterInput}`}
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addFilter()
+            }}
           />
           <span className={styles.rangeSep}>–</span>
           <input
@@ -175,6 +184,9 @@ export function FilterBar({
             className={`${styles.controlBase} ${styles.filterInput}`}
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addFilter()
+            }}
           />
         </>
       )

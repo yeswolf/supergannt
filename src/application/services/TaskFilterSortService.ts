@@ -185,10 +185,6 @@ function getTaskFieldValue(
       return task.freeSlackHours ?? NULL_SLACK_SENTINEL
     case 'cost':
       return task.cost.amount
-    case 'resources':
-      return ''
-    case 'predecessors':
-      return ''
     case 'milestone':
       return task.milestone
     case 'critical':

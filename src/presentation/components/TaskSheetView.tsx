@@ -132,7 +132,15 @@ export function TaskSheetView() {
                   <tr
                     key={`gh-${row.groupKey}`}
                     className={fStyles.groupHeader}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleGroup(row.groupKey)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleGroup(row.groupKey)
+                      }
+                    }}
                   >
                     <td colSpan={columns.length}>
                       <span className={fStyles.groupToggle}>
