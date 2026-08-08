@@ -180,6 +180,13 @@ export function ResourceLevelingDialog() {
             </div>
           )}
 
+          {taskCount > 0 && afterCount > 0 && (
+            <p style={{ marginTop: '1rem', color: 'var(--msp-warning)' }}>
+              {taskCount} task(s) delayed, {afterCount} overallocation(s) remain.
+              Leveling could not fully resolve all conflicts.
+            </p>
+          )}
+
           {resolved === 0 && beforeCount === 0 && (
             <p style={{ marginTop: '1rem', color: 'var(--msp-success)' }}>
               No resource overallocations found. Nothing to level.

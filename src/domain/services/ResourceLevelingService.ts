@@ -48,7 +48,7 @@ export interface LevelingResult {
  * Known limitations (by design):
  * - Does NOT split tasks, change assignments, or modify resource max units.
  * - Uses a greedy heuristic — optimal packing is not guaranteed.
- * - Multi-resource tasks are only delayed when ALL their resources are
+ * - Multi-resource tasks are delayed when ANY of their resources are
  *   overallocated on the same day.
  *
  * Does respect: task priorities, dependency chains (via successor cascade),
@@ -72,8 +72,8 @@ export function levelResources(
     assignmentsByTask.set(a.taskId, list)
   }
 
-  // Count overallocations before
-  const beforeCount = countOverallocations(tasks, resources, assignmentsByTask, calendar)
+  // Count overallocations before (respects scope for accurate counts)
+  const beforeCount = countOverallocations(tasks, resources, assignmentsByTask, calendar, scopeSet)
   if (beforeCount === 0) {
     return {
       tasks: [...tasks],
@@ -122,14 +122,14 @@ export function levelResources(
     working = result.tasks
 
     // Check if all overallocations resolved
-    const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar)
+    const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar, scopeSet)
     if (afterCount === 0) break
 
     // If no progress, stop
     if (!result.anyProgress) break
   }
 
-  const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar)
+  const afterCount = countOverallocations(working, resources, assignmentsByTask, calendar, scopeSet)
 
   // Sort leveled list by delay (most delayed first) for display
   const leveledList = [...leveledMap.values()].sort(
@@ -488,14 +488,19 @@ function cascadeDelay(
 /**
  * Count the number of resource-period overallocations across the project.
  * Each resource-day where assigned > max counts as one overallocation.
+ * When scope is provided, only tasks within scope are counted.
  */
 function countOverallocations(
   tasks: readonly Task[],
   resources: readonly Resource[],
   assignmentsByTask: Map<TaskId, Assignment[]>,
   calendar: WorkCalendar,
+  scope?: Set<TaskId>,
 ): number {
-  const nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0)
+  let nonSummary = tasks.filter((t) => !t.summary && t.duration.toHours() > 0)
+  if (scope) {
+    nonSummary = nonSummary.filter((t) => scope.has(t.id))
+  }
   if (nonSummary.length === 0) return 0
 
   const startDate = new Date(

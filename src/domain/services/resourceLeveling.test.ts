@@ -375,4 +375,37 @@ describe('ResourceLevelingService', () => {
       result.finishBefore.getTime(),
     )
   })
+
+  it('reports residual overallocations when hard constraints block resolution', () => {
+    const cal = calendar()
+    // Two Must-Start-On tasks on the same day, same resource, both at 100%
+    // = unresolvable without violating one of the constraints
+    const mso1 = task('1', 'MSO Task A', '2026-01-05', 8, {
+      constraintType: 'mustStartOn',
+      constraintDate: day('2026-01-05'),
+      priority: 500,
+    })
+    const mso2 = task('2', 'MSO Task B', '2026-01-05', 8, {
+      constraintType: 'mustStartOn',
+      constraintDate: day('2026-01-05'),
+      priority: 500,
+    })
+    const res = makeResource('R1', 'Alice', 1.0)
+    const assign1 = makeAssignment('a1', '1', 'R1', 1.0)
+    const assign2 = makeAssignment('a2', '2', 'R1', 1.0)
+
+    const result = levelResources(
+      [mso1, mso2],
+      [],
+      [res],
+      [assign1, assign2],
+      cal,
+      { scope: [asTaskId('1'), asTaskId('2')], order: 'priority' },
+    )
+
+    expect(result.overallocationsBefore).toBeGreaterThan(0)
+    // Both are MSO — neither can be moved, so overallocation should persist
+    expect(result.overallocationsAfter).toBeGreaterThan(0)
+    expect(result.leveled).toHaveLength(0)
+  })
 })
